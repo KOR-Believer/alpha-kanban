@@ -12,7 +12,12 @@ import {
 
 import { loadServerConfig, type LoadConfigOptions } from "./config";
 import { CODEX_RUN_ERROR, CodexRunError, CodexRunner } from "./codexRunner";
-import { FILE_ERROR, FileStoreError, MarkdownFileStore } from "./files";
+import {
+  createWorkspaceFileStore,
+  FILE_ERROR,
+  FileStoreError,
+  MarkdownFileStore,
+} from "./files";
 import { TicketMarkdownWriteError } from "./markdown/ticketMarkdown";
 import { WORKSPACE_ERROR, WorkspaceError, WorkspaceService } from "./workspaces";
 
@@ -55,6 +60,99 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
       next(error);
     }
   });
+
+  app.get("/api/workspaces/:workspaceId/files", async (request, response, next) => {
+    try {
+      const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+      response.json({ files: await scopedFileStore.listFiles() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get(
+    "/api/workspaces/:workspaceId/files/:fileId/tickets",
+    async (request, response, next) => {
+      try {
+        const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+        response.json(await scopedFileStore.readTicketDocument(request.params.fileId ?? ""));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.patch(
+    "/api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId",
+    async (request, response, next) => {
+      try {
+        const body = patchTicketRequestSchema.parse(request.body);
+        const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+        response.json(
+          await scopedFileStore.patchTicket(
+            request.params.fileId ?? "",
+            request.params.ticketId ?? "",
+            {
+              status: body.status,
+              progress: body.progress,
+              expectedHash: body.expectedHash,
+              expectedMtimeMs: body.expectedMtimeMs,
+            },
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId/instructions",
+    async (request, response, next) => {
+      try {
+        const body = appendTicketLogRequestSchema.parse(request.body);
+        const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+        response.json(
+          await scopedFileStore.appendInstruction(
+            request.params.fileId ?? "",
+            request.params.ticketId ?? "",
+            {
+              text: body.text,
+              date: body.date,
+              expectedHash: body.expectedHash,
+              expectedMtimeMs: body.expectedMtimeMs,
+            },
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId/progress-notes",
+    async (request, response, next) => {
+      try {
+        const body = appendTicketLogRequestSchema.parse(request.body);
+        const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+        response.json(
+          await scopedFileStore.appendProgressNote(
+            request.params.fileId ?? "",
+            request.params.ticketId ?? "",
+            {
+              text: body.text,
+              date: body.date,
+              expectedHash: body.expectedHash,
+              expectedMtimeMs: body.expectedMtimeMs,
+            },
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   app.get("/api/files", async (_request, response, next) => {
     try {
@@ -212,6 +310,11 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
   app.use(errorHandler);
 
   return { app, config, codexRunner, fileStore, workspaceService };
+
+  async function createScopedFileStore(workspaceId: string): Promise<MarkdownFileStore> {
+    const workspace = await workspaceService.getAvailableWorkspace(workspaceId);
+    return createWorkspaceFileStore(config, workspace);
+  }
 }
 
 const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {

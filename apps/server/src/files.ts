@@ -6,6 +6,7 @@ import type {
   MarkdownFileSummary,
   MarkdownFileType,
   TicketDocumentResponse,
+  WorkspaceSummary,
 } from "@alpha-kanban/shared";
 
 import type { ServerConfig } from "./config";
@@ -49,17 +50,29 @@ export type AppendLogOptions = WriteGuard & {
   date?: string;
 };
 
+type MarkdownFileStoreOptions = {
+  docRoots?: string[];
+  workspaceId?: string;
+  workspaceRoot?: string;
+};
+
 export class MarkdownFileStore {
   readonly config: ServerConfig;
+  readonly docRoots: string[];
+  readonly workspaceId: string;
+  readonly workspaceRoot: string;
 
-  constructor(config: ServerConfig) {
+  constructor(config: ServerConfig, options: MarkdownFileStoreOptions = {}) {
     this.config = config;
+    this.workspaceRoot = options.workspaceRoot ?? config.workspaceRoot;
+    this.workspaceId = options.workspaceId ?? config.workspaceId;
+    this.docRoots = options.docRoots ?? config.docRoots;
   }
 
   async listFiles(): Promise<MarkdownFileSummary[]> {
     const files: MarkdownFileSummary[] = [];
 
-    for (const root of this.config.docRoots) {
+    for (const root of this.docRoots) {
       if (!(await exists(root))) {
         continue;
       }
@@ -122,9 +135,15 @@ export class MarkdownFileStore {
 
   encodeFileId(filePath: string): string {
     const relativePath = normalizeRelativePath(
-      path.relative(this.config.workspaceRoot, filePath),
+      path.relative(this.workspaceRoot, filePath),
     );
-    return Buffer.from(relativePath, "utf8").toString("base64url");
+    return Buffer.from(
+      JSON.stringify({
+        workspaceId: this.workspaceId,
+        path: relativePath,
+      }),
+      "utf8",
+    ).toString("base64url");
   }
 
   resolveFileId(fileId: string): string {
@@ -136,6 +155,8 @@ export class MarkdownFileStore {
       throw new FileStoreError(FILE_ERROR.FORBIDDEN_PATH, "Invalid file id.");
     }
 
+    relativePath = this.decodeFileIdPayload(relativePath);
+
     if (
       !relativePath ||
       path.isAbsolute(relativePath) ||
@@ -144,7 +165,7 @@ export class MarkdownFileStore {
       throw new FileStoreError(FILE_ERROR.FORBIDDEN_PATH, "File id is outside the workspace.");
     }
 
-    const filePath = path.resolve(this.config.workspaceRoot, relativePath);
+    const filePath = path.resolve(this.workspaceRoot, relativePath);
     this.assertAllowedFile(filePath);
 
     return filePath;
@@ -181,14 +202,16 @@ export class MarkdownFileStore {
     ]);
 
     const relativePath = normalizeRelativePath(
-      path.relative(this.config.workspaceRoot, filePath),
+      path.relative(this.workspaceRoot, filePath),
     );
 
     return {
       id: this.encodeFileId(filePath),
+      workspaceId: this.workspaceId,
       type: inferMarkdownFileType(filePath),
       filename: path.basename(filePath),
       relativePath,
+      workspaceRelativePath: relativePath,
       absolutePath: filePath,
       mtimeMs: stat.mtimeMs,
       hash: createHash("sha256").update(markdown).digest("hex"),
@@ -209,7 +232,7 @@ export class MarkdownFileStore {
 
   private assertAllowedFile(filePath: string): void {
     const resolvedFile = path.resolve(filePath);
-    const inDocRoot = this.config.docRoots.some((root) =>
+    const inDocRoot = this.docRoots.some((root) =>
       isPathInside(resolvedFile, root),
     );
 
@@ -217,6 +240,37 @@ export class MarkdownFileStore {
       throw new FileStoreError(FILE_ERROR.FORBIDDEN_PATH, "Path is outside configured docRoots.");
     }
   }
+
+  private decodeFileIdPayload(payload: string): string {
+    try {
+      const decoded = JSON.parse(payload) as unknown;
+      if (!isRecord(decoded)) {
+        return payload;
+      }
+
+      if (decoded.workspaceId !== this.workspaceId) {
+        throw new FileStoreError(FILE_ERROR.FORBIDDEN_PATH, "File id belongs to another workspace.");
+      }
+
+      return typeof decoded.path === "string" ? decoded.path : "";
+    } catch (error) {
+      if (error instanceof FileStoreError) {
+        throw error;
+      }
+      return payload;
+    }
+  }
+}
+
+export function createWorkspaceFileStore(
+  config: ServerConfig,
+  workspace: Pick<WorkspaceSummary, "id" | "root">,
+): MarkdownFileStore {
+  return new MarkdownFileStore(config, {
+    workspaceId: workspace.id,
+    workspaceRoot: workspace.root,
+    docRoots: config.defaultDocRootEntries.map((root) => resolveFromWorkspace(workspace.root, root)),
+  });
 }
 
 function assertFresh(summary: MarkdownFileSummary, guard: WriteGuard): void {
@@ -306,4 +360,14 @@ function isPathInside(filePath: string, root: string): boolean {
 
 function isNodeError(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
+}
+
+function resolveFromWorkspace(workspaceRoot: string, targetPath: string): string {
+  return path.isAbsolute(targetPath)
+    ? path.resolve(targetPath)
+    : path.resolve(workspaceRoot, targetPath);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

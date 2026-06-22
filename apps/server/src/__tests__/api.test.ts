@@ -24,6 +24,8 @@ import {
   filesResponseSchema,
   selectWorkspaceResponseSchema,
   ticketDocumentResponseSchema,
+  type MarkdownFileSummary,
+  type WorkspaceSummary,
   workspacesResponseSchema,
 } from "@alpha-kanban/shared";
 
@@ -39,6 +41,8 @@ describe("API", () => {
   let projectsRoot: string;
   let projectOneRoot: string;
   let realProjectOneRoot: string;
+  let projectTwoRoot: string;
+  let realProjectTwoRoot: string;
   let outsideProjectRoot: string;
   let realOutsideProjectRoot: string;
   let server: Server;
@@ -53,12 +57,17 @@ describe("API", () => {
 
     projectsRoot = path.join(workspaceRoot, "projects");
     projectOneRoot = path.join(projectsRoot, "project-one");
+    projectTwoRoot = path.join(projectsRoot, "project-two");
     outsideProjectRoot = path.join(workspaceRoot, "outside-project");
     mkdirSync(path.join(projectOneRoot, "docs"), { recursive: true });
-    mkdirSync(path.join(projectsRoot, "project-two", ".git"), { recursive: true });
+    mkdirSync(path.join(projectTwoRoot, "docs"), { recursive: true });
+    mkdirSync(path.join(projectTwoRoot, ".git"), { recursive: true });
     mkdirSync(outsideProjectRoot, { recursive: true });
     writeFileSync(path.join(projectOneRoot, "docs", "01_plan.md"), "# Project one\n");
+    writeFileSync(path.join(projectOneRoot, "docs", "02_alpha_kanban_tickets.md"), realTicketDocument);
+    writeFileSync(path.join(projectTwoRoot, "docs", "02_alpha_kanban_tickets.md"), realTicketDocument);
     realProjectOneRoot = realpathSync.native(projectOneRoot);
+    realProjectTwoRoot = realpathSync.native(projectTwoRoot);
     realOutsideProjectRoot = realpathSync.native(outsideProjectRoot);
 
     const fakeCodexPath = path.join(workspaceRoot, "fake-codex.mjs");
@@ -225,7 +234,7 @@ describe("API", () => {
     expect(projectOne?.isAvailable).toBe(true);
     expect(projectOne?.hasDocs).toBe(true);
     expect(projectTwo?.isAvailable).toBe(true);
-    expect(projectTwo?.hasDocs).toBe(false);
+    expect(projectTwo?.hasDocs).toBe(true);
     expect(missing).toEqual({
       id: "w_missing",
       root: missingRoot,
@@ -319,6 +328,116 @@ describe("API", () => {
     expect(response.status).toBe(410);
     const body = apiErrorResponseSchema.parse(await response.json());
     expect(body.error.code).toBe("WORKSPACE_UNAVAILABLE");
+  });
+
+  it("lists workspace-scoped files with collision-free file ids", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const projectTwo = requireWorkspaceByRoot(listed.workspaces, realProjectTwoRoot);
+
+    const projectOneFiles = filesResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/files`),
+    );
+    const projectTwoFiles = filesResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectTwo.id}/files`),
+    );
+    const projectOneTicketFile = projectOneFiles.files.find(
+      (file) => file.workspaceRelativePath === "docs/02_alpha_kanban_tickets.md",
+    );
+    const projectTwoTicketFile = projectTwoFiles.files.find(
+      (file) => file.workspaceRelativePath === "docs/02_alpha_kanban_tickets.md",
+    );
+
+    expect(projectOneFiles.files.some((file) => file.filename === "01_plan.md")).toBe(true);
+    expect(projectTwoFiles.files.some((file) => file.filename === "01_plan.md")).toBe(false);
+    expect(projectOneTicketFile?.workspaceId).toBe(projectOne.id);
+    expect(projectTwoTicketFile?.workspaceId).toBe(projectTwo.id);
+    expect(projectOneTicketFile?.id).toBeDefined();
+    expect(projectTwoTicketFile?.id).toBeDefined();
+    expect(projectOneTicketFile?.id).not.toBe(projectTwoTicketFile?.id);
+    expect(projectOneTicketFile?.relativePath).toBe("docs/02_alpha_kanban_tickets.md");
+    expect(projectTwoTicketFile?.relativePath).toBe("docs/02_alpha_kanban_tickets.md");
+  });
+
+  it("reads and writes tickets only in the selected workspace", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const projectTwo = requireWorkspaceByRoot(listed.workspaces, realProjectTwoRoot);
+    const projectOneFile = await requireWorkspaceTicketFile(projectOne.id);
+    const projectTwoFile = await requireWorkspaceTicketFile(projectTwo.id);
+
+    const patched = ticketDocumentResponseSchema.parse(
+      await patchJson(
+        `/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/tickets/AKB-07`,
+        {
+          expectedHash: projectOneFile.hash,
+          status: "IN_PROGRESS",
+          progress: 50,
+        },
+      ),
+    );
+    const patchedTicket = patched.document.tickets.find((ticket) => ticket.id === "AKB-07");
+    expect(patched.file.workspaceId).toBe(projectOne.id);
+    expect(patchedTicket?.status).toBe("IN_PROGRESS");
+    expect(patchedTicket?.progress).toBe(50);
+
+    const staleResponse = await fetch(
+      `${baseUrl}/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/tickets/AKB-07`,
+      {
+        body: JSON.stringify({
+          expectedHash: projectOneFile.hash,
+          status: "DONE",
+          progress: 100,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "PATCH",
+      },
+    );
+    expect(staleResponse.status).toBe(409);
+    const staleError = apiErrorResponseSchema.parse(await staleResponse.json());
+    expect(staleError.error.code).toBe("STALE_FILE");
+
+    const instructed = ticketDocumentResponseSchema.parse(
+      await postJson(
+        `/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/tickets/AKB-07/instructions`,
+        {
+          date: "2026-06-23",
+          text: "workspace scoped instruction",
+        },
+      ),
+    );
+    expect(
+      instructed.document.tickets
+        .find((ticket) => ticket.id === "AKB-07")
+        ?.userInstructions.at(-1)?.text,
+    ).toBe("workspace scoped instruction");
+
+    const noted = ticketDocumentResponseSchema.parse(
+      await postJson(
+        `/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/tickets/AKB-07/progress-notes`,
+        {
+          date: "2026-06-23",
+          text: "workspace scoped progress",
+        },
+      ),
+    );
+    expect(
+      noted.document.tickets
+        .find((ticket) => ticket.id === "AKB-07")
+        ?.progressNotes.at(-1)?.text,
+    ).toBe("workspace scoped progress");
+
+    const projectTwoDocument = ticketDocumentResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectTwo.id}/files/${projectTwoFile.id}/tickets`),
+    );
+    const projectTwoTicket = projectTwoDocument.document.tickets.find(
+      (ticket) => ticket.id === "AKB-07",
+    );
+    expect(projectTwoTicket?.status).toBe("DONE");
+    expect(projectTwoTicket?.userInstructions.at(-1)?.text).not.toBe(
+      "workspace scoped instruction",
+    );
+    expect(projectTwoTicket?.progressNotes.at(-1)?.text).not.toBe("workspace scoped progress");
   });
 
   it("previews and runs Codex with file-level session state", async () => {
@@ -575,5 +694,25 @@ describe("API", () => {
     }
 
     throw new Error(`Codex run ${runId} did not finish.`);
+  }
+
+  function requireWorkspaceByRoot(
+    workspaces: WorkspaceSummary[],
+    root: string,
+  ): WorkspaceSummary {
+    const workspace = workspaces.find((item) => item.root === root);
+    expect(workspace).toBeDefined();
+    return workspace as WorkspaceSummary;
+  }
+
+  async function requireWorkspaceTicketFile(workspaceId: string): Promise<MarkdownFileSummary> {
+    const files = filesResponseSchema.parse(
+      await getJson(`/api/workspaces/${workspaceId}/files`),
+    );
+    const file = files.files.find(
+      (item) => item.workspaceRelativePath === "docs/02_alpha_kanban_tickets.md",
+    );
+    expect(file).toBeDefined();
+    return file as MarkdownFileSummary;
   }
 });

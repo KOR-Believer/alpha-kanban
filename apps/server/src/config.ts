@@ -10,6 +10,7 @@ import {
 export type ServerConfig = {
   workspaceRoot: string;
   workspaceId: string;
+  defaultDocRootEntries: string[];
   defaultDocRoots: string[];
   docRoots: string[];
   workspaceRoots: string[];
@@ -43,6 +44,7 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
   return {
     workspaceRoot,
     workspaceId: createWorkspaceId(workspaceRoot),
+    defaultDocRootEntries: defaultDocRoots,
     defaultDocRoots: resolvedDefaultDocRoots,
     docRoots: resolvedDefaultDocRoots,
     workspaceRoots: workspaceRoots.map((root) => resolveFromWorkspace(workspaceRoot, root)),

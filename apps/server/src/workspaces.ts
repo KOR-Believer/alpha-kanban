@@ -136,7 +136,7 @@ export class WorkspaceService {
     return this.createAvailableSummary(realRoot);
   }
 
-  private async selectWorkspaceById(workspaceId: string): Promise<WorkspaceSummary> {
+  async getAvailableWorkspace(workspaceId: string): Promise<WorkspaceSummary> {
     const listed = await this.listWorkspaces();
     const workspace = listed.workspaces.find((item) => item.id === workspaceId);
 
@@ -153,6 +153,12 @@ export class WorkspaceService {
         "Workspace is unavailable.",
       );
     }
+
+    return workspace;
+  }
+
+  private async selectWorkspaceById(workspaceId: string): Promise<WorkspaceSummary> {
+    const workspace = await this.getAvailableWorkspace(workspaceId);
 
     await this.stateStore.recordRecentWorkspace({
       id: workspace.id,

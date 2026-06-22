@@ -54,6 +54,8 @@
 - 기존 v1 document session key인 `docs/foo_tickets.md`는 읽을 수 있고, 다음 state write 시 `workspaceId::docs/foo_tickets.md` 형태로 마이그레이션된다.
 - `apps/server/src/workspaces.ts`는 `workspaceRoots` allowlist를 `realpath` 기준으로 검증하고, `GET /api/workspaces`, `POST /api/workspaces/select`로 candidate listing과 recent workspace 기록을 제공한다.
 - `POST /api/workspaces/select`는 allowlist 밖 absolute path, `..` traversal, allowlist 내부 symlink가 외부를 가리키는 escape를 모두 `WORKSPACE_OUTSIDE_ALLOWLIST`로 거부한다.
+- `apps/server/src/files.ts`는 control app용 legacy `MarkdownFileStore`와 target workspace용 store를 같은 구현으로 생성할 수 있다. Workspace-scoped file summary는 `workspaceId`, `workspaceRelativePath`를 포함하고 file id도 workspace id를 포함해 같은 relative path 충돌을 피한다.
+- `apps/server/src/app.ts`는 `GET /api/workspaces/:workspaceId/files`, workspace-scoped ticket read/write/instruction/progress-note route를 제공한다. 기존 `/api/files` route는 frontend switcher 전환 전 compatibility route로 유지한다.
 - UI는 시작 시 바로 `/api/files`를 호출하고 첫 ticket document를 선택한다. project 선택 단계는 없다.
 - 현재 UI는 app 내부 mutation 후에는 query invalidation으로 갱신되지만, 외부 CLI/editor가 Markdown을 직접 수정한 경우 server push나 watcher 기반 invalidation이 없어 사용자가 새로고침해야 한다.
 - 현재 Codex run 로그는 `.alpha-kanban/runs/*.jsonl`에 저장되지만, UI에 ticket/document/workspace 단위 실행 상태 신호가 없어 실행 중인지, 중단됐는지, 완료됐는지 판단하기 어렵다.

@@ -205,9 +205,11 @@ export type SelectWorkspaceResponse = z.infer<typeof selectWorkspaceResponseSche
 
 export const markdownFileSummarySchema = z.object({
   id: z.string().min(1),
+  workspaceId: z.string().min(1),
   type: markdownFileTypeSchema,
   filename: z.string().min(1),
   relativePath: z.string().min(1),
+  workspaceRelativePath: z.string().min(1),
   absolutePath: z.string().min(1),
   mtimeMs: z.number().nonnegative(),
   hash: z.string().min(1),

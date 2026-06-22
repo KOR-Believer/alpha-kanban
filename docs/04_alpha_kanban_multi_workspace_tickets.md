@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `5 / 12 tickets`
+- 현재 진행률: `6 / 12 tickets`
 
 ## 티켓 상태
 
@@ -101,7 +101,7 @@ Depends on:
 | AKW-00 | DONE | 100% | `alpha-kanban`, `docs` | - |
 | AKW-01 | DONE | 100% | `packages/shared`, `apps/server` | AKW-00 |
 | AKW-02 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01 |
-| AKW-03 | READY | 25% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
+| AKW-03 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | TODO | 0% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
 | AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11 |
@@ -306,8 +306,8 @@ Depends on:
 
 ### AKW-03. Per-workspace Markdown file API와 FileStore 분리
 
-Status: READY
-Progress: 25%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/server`
@@ -348,24 +348,29 @@ Depends on:
 
 완료 기준:
 
-- [ ] selected workspace의 docs만 file list에 나온다.
-- [ ] 같은 relative path를 가진 두 workspace가 서로 다른 file id로 처리된다.
-- [ ] ticket write가 selected workspace 파일에만 반영된다.
-- [ ] stale write protection이 workspace-scoped로 유지된다.
+- [x] selected workspace의 docs만 file list에 나온다.
+- [x] 같은 relative path를 가진 두 workspace가 서로 다른 file id로 처리된다.
+- [x] ticket write가 selected workspace 파일에만 반영된다.
+- [x] stale write protection이 workspace-scoped로 유지된다.
 
 검증:
 
-- [ ] two-workspace file list integration test
-- [ ] two-workspace same relative path collision test
-- [ ] ticket patch/instruction/progress note API test
+- [x] two-workspace file list integration test
+- [x] two-workspace same relative path collision test
+- [x] ticket patch/instruction/progress note API test
 
 사용자 지시:
 
 - 2026-06-22: workspace를 골라 그 project에 있는 docs를 리스팅하고 그 project에 진행을 지시하는 구조가 필요하다.
+- 2026-06-23: AKW-02를 커밋한 뒤 AKW-03 구현을 진행한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-23: `MarkdownFileStore`를 workspace root/docRoots/workspaceId 기준으로 인스턴스화할 수 있게 확장하고, file summary에 `workspaceId`, `workspaceRelativePath`를 포함했다.
+- 2026-06-23: `GET /api/workspaces/:workspaceId/files`, ticket read, status patch, 사용자 지시 append, 진행 메모 append route를 workspace-scoped로 추가했다. 기존 `/api/files` route는 UI 전환 전 compatibility route로 유지한다.
+- 2026-06-23: 두 workspace가 같은 `docs/02_alpha_kanban_tickets.md`를 가질 때 file id가 충돌하지 않고, patch/instruction/progress-note가 selected workspace에만 반영되며 stale hash guard가 유지되는 API 통합 테스트를 추가했다.
+- 2026-06-23: `pnpm --filter @alpha-kanban/server test` 통과를 확인했다.
 
 ### AKW-04. Project switcher와 recent workspace UX 구현
 
