@@ -1,0 +1,19 @@
+{
+  "name": "alpha-kanban",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.3.0",
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"pnpm --filter @alpha-kanban/server dev\" \"pnpm --filter @alpha-kanban/web dev\"",
+    "build": "pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/server build && pnpm --filter @alpha-kanban/web build",
+    "typecheck": "pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/server typecheck && pnpm --filter @alpha-kanban/web typecheck",
+    "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "concurrently": "^10.0.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
