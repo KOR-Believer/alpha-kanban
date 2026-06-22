@@ -4,6 +4,7 @@ import {
   APP_NAME,
   apiErrorResponseSchema,
   cancelCodexRunResponseSchema,
+  codexDocumentRunSummaryResponseSchema,
   codexPromptPreviewResponseSchema,
   codexRunEventSchema,
   codexRunResponseSchema,
@@ -12,10 +13,14 @@ import {
   healthResponseSchema,
   ticketDocumentResponseSchema,
   type ApiErrorResponse,
+  type CodexDocumentRunSummaryResponse,
   type CodexPromptPreviewResponse,
   type CodexRunEvent,
+  type CodexRunSignalStatus,
   type CodexRunSnapshot,
+  type CodexRunSummary,
   type MarkdownFileSummary,
+  type TicketChecklistItem,
   type TicketDocumentResponse,
   type TicketItem,
   type TicketProgress,
@@ -67,6 +72,7 @@ class ClientApiError extends Error {
 }
 
 const ticketDocumentKey = (fileId?: string) => ["ticket-document", fileId] as const;
+const codexRunSummaryKey = (fileId?: string) => ["codex-run-summary", fileId] as const;
 
 async function requestJson<T>(
   url: string,
@@ -105,6 +111,13 @@ async function fetchFiles() {
 
 async function fetchTicketDocument(fileId: string) {
   return requestJson(`/api/files/${fileId}/tickets`, ticketDocumentResponseSchema);
+}
+
+async function fetchCodexRunSummary(fileId: string) {
+  return requestJson(
+    `/api/files/${fileId}/codex-run-summary`,
+    codexDocumentRunSummaryResponseSchema,
+  );
 }
 
 async function patchTicket(
@@ -181,6 +194,12 @@ export function App() {
     queryFn: () => fetchTicketDocument(selectedFileId ?? ""),
     queryKey: ticketDocumentKey(selectedFileId),
   });
+  const codexRunSummaryQuery = useQuery({
+    enabled: Boolean(selectedFileId),
+    queryFn: () => fetchCodexRunSummary(selectedFileId ?? ""),
+    queryKey: codexRunSummaryKey(selectedFileId),
+    refetchInterval: 5_000,
+  });
   const ticketsByStatus = useMemo(() => {
     const grouped = new Map<TicketStatus, TicketItem[]>(
       BOARD_STATUSES.map((status) => [status, []]),
@@ -192,9 +211,21 @@ export function App() {
 
     return grouped;
   }, [ticketQuery.data?.document.tickets]);
+  const runSummaryByTicket = useMemo(() => {
+    const summaries = new Map<string, CodexRunSummary>();
+
+    for (const runSummary of codexRunSummaryQuery.data?.runs ?? []) {
+      summaries.set(runSummary.ticketId, runSummary);
+    }
+
+    return summaries;
+  }, [codexRunSummaryQuery.data?.runs]);
   const selectedTicket = ticketQuery.data?.document.tickets.find(
     (ticket) => ticket.id === selectedTicketId,
   );
+  const selectedTicketRunSummary = selectedTicketId
+    ? runSummaryByTicket.get(selectedTicketId)
+    : undefined;
 
   useEffect(() => {
     if (!selectedFileId && ticketFiles[0]) {
@@ -209,6 +240,10 @@ export function App() {
   async function replaceDocument(data: TicketDocumentResponse): Promise<void> {
     queryClient.setQueryData(ticketDocumentKey(selectedFileId), data);
     await queryClient.invalidateQueries({ queryKey: ["files"] });
+  }
+
+  async function refetchRunSummary(): Promise<void> {
+    await queryClient.invalidateQueries({ queryKey: codexRunSummaryKey(selectedFileId) });
   }
 
   async function handlePatchTicket(
@@ -290,6 +325,7 @@ export function App() {
             <BoardSummary
               file={ticketQuery.data?.file}
               isLoading={ticketQuery.isLoading}
+              runSummary={codexRunSummaryQuery.data}
               ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
             />
           </header>
@@ -300,6 +336,7 @@ export function App() {
               isError={ticketQuery.isError}
               isLoading={ticketQuery.isLoading || filesQuery.isLoading}
               onTicketSelect={setSelectedTicketId}
+              runSummaryByTicket={runSummaryByTicket}
               selectedFileId={selectedFileId}
               ticketsByStatus={ticketsByStatus}
             />
@@ -319,7 +356,10 @@ export function App() {
             await ticketQuery.refetch();
             await queryClient.invalidateQueries({ queryKey: ["files"] });
           }}
+          onRunStatusChange={refetchRunSummary}
           ticket={selectedTicket}
+          ticketRunSummary={selectedTicketRunSummary}
+          documentRunSummary={codexRunSummaryQuery.data}
         />
       ) : null}
     </>
@@ -393,10 +433,12 @@ function HealthPill({ status }: { status: "error" | "pending" | "success" }) {
 function BoardSummary({
   file,
   isLoading,
+  runSummary,
   ticketCount,
 }: {
   file?: MarkdownFileSummary;
   isLoading: boolean;
+  runSummary?: CodexDocumentRunSummaryResponse;
   ticketCount: number;
 }) {
   if (isLoading) {
@@ -414,6 +456,7 @@ function BoardSummary({
 
   return (
     <div className="flex flex-wrap justify-end gap-2 max-[720px]:justify-start">
+      {runSummary?.latestRun ? <RunSignalBadge run={runSummary.latestRun} /> : null}
       <Badge variant="outline">{ticketCount} tickets</Badge>
       <Badge variant="muted">{new Date(file.mtimeMs).toLocaleDateString()}</Badge>
     </div>
@@ -425,6 +468,7 @@ function BoardContent({
   isError,
   isLoading,
   onTicketSelect,
+  runSummaryByTicket,
   selectedFileId,
   ticketsByStatus,
 }: {
@@ -432,6 +476,7 @@ function BoardContent({
   isError: boolean;
   isLoading: boolean;
   onTicketSelect: (ticketId: string) => void;
+  runSummaryByTicket: Map<string, CodexRunSummary>;
   selectedFileId?: string;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
 }) {
@@ -459,6 +504,7 @@ function BoardContent({
         <KanbanColumn
           key={status}
           onTicketSelect={onTicketSelect}
+          runSummaryByTicket={runSummaryByTicket}
           status={status}
           tickets={ticketsByStatus.get(status) ?? []}
         />
@@ -497,10 +543,12 @@ function BoardState({
 
 function KanbanColumn({
   onTicketSelect,
+  runSummaryByTicket,
   status,
   tickets,
 }: {
   onTicketSelect: (ticketId: string) => void;
+  runSummaryByTicket: Map<string, CodexRunSummary>;
   status: TicketStatus;
   tickets: TicketItem[];
 }) {
@@ -522,14 +570,27 @@ function KanbanColumn({
           </div>
         ) : null}
         {tickets.map((ticket) => (
-          <TicketCard key={ticket.id} onSelect={() => onTicketSelect(ticket.id)} ticket={ticket} />
+          <TicketCard
+            key={ticket.id}
+            onSelect={() => onTicketSelect(ticket.id)}
+            runSummary={runSummaryByTicket.get(ticket.id)}
+            ticket={ticket}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function TicketCard({ onSelect, ticket }: { onSelect: () => void; ticket: TicketItem }) {
+function TicketCard({
+  onSelect,
+  runSummary,
+  ticket,
+}: {
+  onSelect: () => void;
+  runSummary?: CodexRunSummary;
+  ticket: TicketItem;
+}) {
   return (
     <article className="rounded-md border border-neutral-200 bg-white shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-colors hover:border-neutral-300">
       <button
@@ -539,7 +600,10 @@ function TicketCard({ onSelect, ticket }: { onSelect: () => void; ticket: Ticket
         type="button"
       >
         <div className="flex items-start justify-between gap-2">
-          <Badge variant="outline">{ticket.id}</Badge>
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            <Badge variant="outline">{ticket.id}</Badge>
+            {runSummary ? <RunSignalBadge compact run={runSummary} /> : null}
+          </div>
           <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge>
         </div>
         <h4 className="mt-2 line-clamp-3 break-words text-sm font-medium leading-5 text-neutral-950">
@@ -562,6 +626,7 @@ function TicketCard({ onSelect, ticket }: { onSelect: () => void; ticket: Ticket
 }
 
 function TicketDetailDrawer({
+  documentRunSummary,
   documentHash,
   documentMtimeMs,
   fileId,
@@ -569,8 +634,11 @@ function TicketDetailDrawer({
   onPatchTicket,
   onReload,
   onRunDocumentChange,
+  onRunStatusChange,
   ticket,
+  ticketRunSummary,
 }: {
+  documentRunSummary?: CodexDocumentRunSummaryResponse;
   documentHash: string;
   documentMtimeMs: number;
   fileId: string;
@@ -582,7 +650,9 @@ function TicketDetailDrawer({
   ) => Promise<void>;
   onReload: () => Promise<unknown>;
   onRunDocumentChange: () => Promise<unknown>;
+  onRunStatusChange: () => Promise<unknown>;
   ticket: TicketItem;
+  ticketRunSummary?: CodexRunSummary;
 }) {
   const [statusDraft, setStatusDraft] = useState<TicketStatus>(ticket.status);
   const [progressDraft, setProgressDraft] = useState<TicketProgress>(ticket.progress);
@@ -601,10 +671,27 @@ function TicketDetailDrawer({
     setProgressDraft(ticket.progress);
     setRunDraft("");
     setPreview(null);
-    setRun(null);
-    setRunEvents([]);
     setError(null);
   }, [ticket.id, ticket.progress, ticket.status]);
+
+  useEffect(() => {
+    if (!ticketRunSummary?.id) {
+      setRun(null);
+      setRunEvents([]);
+      return;
+    }
+
+    if (run?.id === ticketRunSummary.id) {
+      return;
+    }
+
+    void fetchCodexRun(ticketRunSummary.id)
+      .then((response) => {
+        setRun(response.run);
+        setRunEvents(response.run.events);
+      })
+      .catch((nextError: unknown) => setError(normalizeClientError(nextError)));
+  }, [run?.id, ticketRunSummary?.id]);
 
   useEffect(() => {
     if (!run?.id || run.status !== "running") {
@@ -622,6 +709,8 @@ function TicketDetailDrawer({
         void fetchCodexRun(run.id).then((response) => {
           setRun(response.run);
           setRunEvents(response.run.events);
+          void onRunStatusChange();
+          void onRunDocumentChange();
         });
       }
     });
@@ -685,9 +774,17 @@ function TicketDetailDrawer({
         statePath: "",
       });
       await onRunDocumentChange();
+      await onRunStatusChange();
       setRunDraft("");
     } catch (nextError) {
-      setError(normalizeClientError(nextError));
+      const normalizedError = normalizeClientError(nextError);
+      setError(normalizedError);
+      if (
+        normalizedError instanceof ClientApiError &&
+        normalizedError.code === "CODEX_DOCUMENT_RUN_ACTIVE"
+      ) {
+        await onRunStatusChange();
+      }
     } finally {
       setIsStartingRun(false);
     }
@@ -703,6 +800,7 @@ function TicketDetailDrawer({
       const response = await cancelCodexRun(run.id);
       setRun(response.run);
       setRunEvents(response.run.events);
+      await onRunStatusChange();
     } catch (nextError) {
       setError(normalizeClientError(nextError));
     } finally {
@@ -712,6 +810,8 @@ function TicketDetailDrawer({
 
   const canSaveStatus = statusDraft !== ticket.status || progressDraft !== ticket.progress;
   const latestErrorCode = error instanceof ClientApiError ? error.code : undefined;
+  const activeRun = documentRunSummary?.activeRun;
+  const canStartCodexRun = documentRunSummary?.canStartRun ?? true;
 
   return (
     <div
@@ -804,8 +904,16 @@ function TicketDetailDrawer({
             <CanonicalSection title="현재 문제" items={ticket.currentProblem} />
             <CanonicalSection title="구현 범위" items={ticket.implementationScope} />
             <CanonicalSection title="제외 범위" items={ticket.outOfScope} />
-            <CanonicalSection title="완료 기준" items={ticket.completionCriteria} />
-            <CanonicalSection title="검증" items={ticket.validation} />
+            <CanonicalSection
+              title="완료 기준"
+              items={ticket.completionCriteria}
+              checklistItems={ticket.completionCriteriaItems}
+            />
+            <CanonicalSection
+              title="검증"
+              items={ticket.validation}
+              checklistItems={ticket.validationItems}
+            />
 
             <section className="grid gap-3 border-t border-neutral-200 pt-5">
               <div className="flex items-center justify-between gap-3">
@@ -851,7 +959,7 @@ function TicketDetailDrawer({
                   )}
                   Preview prompt
                 </Button>
-                <Button disabled={isStartingRun} onClick={runCodex} size="sm">
+                <Button disabled={isStartingRun || !canStartCodexRun} onClick={runCodex} size="sm">
                   {isStartingRun ? (
                     <Loader2 className="size-3 animate-spin" aria-hidden="true" />
                   ) : (
@@ -870,6 +978,12 @@ function TicketDetailDrawer({
                   </Button>
                 ) : null}
               </div>
+              {activeRun ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <RunSignalBadge compact run={activeRun} />
+                  <span className="font-medium">Active run on {activeRun.ticketId}</span>
+                </div>
+              ) : null}
               {preview ? <PromptPreview preview={preview} /> : null}
               {run ? <RunLog events={runEvents} run={run} /> : null}
             </section>
@@ -922,7 +1036,48 @@ function ErrorBanner({
   );
 }
 
-function CanonicalSection({ items, title }: { items: string[]; title: string }) {
+function CanonicalSection({
+  checklistItems,
+  items,
+  title,
+}: {
+  checklistItems?: TicketChecklistItem[];
+  items: string[];
+  title: string;
+}) {
+  if (checklistItems && checklistItems.length > 0) {
+    return (
+      <section className="grid gap-2">
+        <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+        <ul className="grid gap-2 text-sm leading-6 text-neutral-700">
+          {checklistItems.map((item) => (
+            <li className="grid grid-cols-[18px_minmax(0,1fr)] gap-2" key={item.index}>
+              {item.checked === null ? (
+                <span className="mt-2 size-1.5 rounded-full bg-neutral-300" aria-hidden="true" />
+              ) : (
+                <input
+                  aria-label={item.text}
+                  checked={item.checked}
+                  className="mt-1 size-4 rounded border-neutral-300 accent-neutral-900"
+                  onChange={() => undefined}
+                  type="checkbox"
+                />
+              )}
+              <span
+                className={[
+                  "break-words",
+                  item.checked === true ? "text-neutral-500 line-through decoration-neutral-400" : "",
+                ].join(" ")}
+              >
+                {item.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
   return (
     <section className="grid gap-2">
       <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
@@ -1013,6 +1168,39 @@ function RunLog({ events, run }: { events: CodexRunEvent[]; run: CodexRunSnapsho
   );
 }
 
+function RunSignalBadge({
+  compact = false,
+  run,
+}: {
+  compact?: boolean;
+  run: CodexRunSummary;
+}) {
+  const isActive = run.status === "queued" || run.status === "running";
+  const label = runSignalLabel(run.status);
+
+  return (
+    <span
+      className={[
+        "inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border px-1.5 text-xs font-medium",
+        runSignalClassName(run.status),
+      ].join(" ")}
+      title={`${label} on ${run.ticketId}`}
+    >
+      {isActive ? (
+        <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
+      ) : (
+        <span
+          className={["size-2 shrink-0 rounded-full", runSignalDotClassName(run.status)].join(
+            " ",
+          )}
+          aria-hidden="true"
+        />
+      )}
+      <span className="truncate">{compact ? label : `${label}: ${run.ticketId}`}</span>
+    </span>
+  );
+}
+
 function PropertyRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 grid-cols-[62px_minmax(0,1fr)] gap-2">
@@ -1035,6 +1223,45 @@ function StatusDot({ status }: { status: TicketStatus }) {
   }[status];
 
   return <span className={`size-2 rounded-full ${className}`} aria-hidden="true" />;
+}
+
+function runSignalLabel(status: CodexRunSignalStatus): string {
+  return {
+    cancelled: "Cancelled",
+    failed: "Failed",
+    idle: "Idle",
+    needs_auth: "Needs auth",
+    queued: "Queued",
+    running: "Running",
+    succeeded: "Succeeded",
+    unknown: "Unknown",
+  }[status];
+}
+
+function runSignalClassName(status: CodexRunSignalStatus): string {
+  return {
+    cancelled: "border-neutral-200 bg-neutral-50 text-neutral-600",
+    failed: "border-red-200 bg-red-50 text-red-700",
+    idle: "border-neutral-200 bg-neutral-50 text-neutral-500",
+    needs_auth: "border-amber-200 bg-amber-50 text-amber-800",
+    queued: "border-blue-200 bg-blue-50 text-blue-700",
+    running: "border-blue-200 bg-blue-50 text-blue-700",
+    succeeded: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    unknown: "border-neutral-300 bg-neutral-100 text-neutral-700",
+  }[status];
+}
+
+function runSignalDotClassName(status: CodexRunSignalStatus): string {
+  return {
+    cancelled: "bg-neutral-400",
+    failed: "bg-red-500",
+    idle: "bg-neutral-300",
+    needs_auth: "bg-amber-500",
+    queued: "bg-blue-500",
+    running: "bg-blue-500",
+    succeeded: "bg-emerald-500",
+    unknown: "bg-neutral-500",
+  }[status];
 }
 
 function priorityVariant(priority: string) {

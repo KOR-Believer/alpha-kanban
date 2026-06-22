@@ -34,6 +34,17 @@ export const ticketLogEntrySchema = z.object({
 
 export type TicketLogEntry = z.infer<typeof ticketLogEntrySchema>;
 
+export const ticketChecklistItemSchema = z.object({
+  text: z.string(),
+  checked: z.boolean().nullable(),
+  raw: z.string(),
+  index: z.number().int().nonnegative(),
+  lineStart: z.number().int().positive(),
+  lineEnd: z.number().int().positive(),
+});
+
+export type TicketChecklistItem = z.infer<typeof ticketChecklistItemSchema>;
+
 export const ticketSourceRangeSchema = z.object({
   startLine: z.number().int().positive(),
   endLine: z.number().int().positive(),
@@ -77,7 +88,9 @@ export const ticketItemSchema = z.object({
   implementationScope: z.array(z.string()),
   outOfScope: z.array(z.string()),
   completionCriteria: z.array(z.string()),
+  completionCriteriaItems: z.array(ticketChecklistItemSchema),
   validation: z.array(z.string()),
+  validationItems: z.array(ticketChecklistItemSchema),
   userInstructions: z.array(ticketLogEntrySchema),
   progressNotes: z.array(ticketLogEntrySchema),
   hasUserInstructionsSection: z.boolean(),
@@ -102,6 +115,50 @@ export type TicketDocument = z.infer<typeof ticketDocumentSchema>;
 export const markdownFileTypeSchema = z.enum(["tickets", "plan", "inventory", "markdown"]);
 
 export type MarkdownFileType = z.infer<typeof markdownFileTypeSchema>;
+
+export const alphaKanbanConfigFileSchema = z.object({
+  workspaceRoots: z.array(z.string().min(1)).optional(),
+  defaultDocRoots: z.array(z.string().min(1)).optional(),
+  docRoots: z.array(z.string().min(1)).optional(),
+  codexCommand: z.string().min(1).optional(),
+});
+
+export type AlphaKanbanConfigFile = z.infer<typeof alphaKanbanConfigFileSchema>;
+
+export const recentWorkspaceSchema = z.object({
+  id: z.string().min(1),
+  root: z.string().min(1),
+  label: z.string().min(1),
+  lastOpenedAt: z.string().datetime(),
+});
+
+export type RecentWorkspace = z.infer<typeof recentWorkspaceSchema>;
+
+export const workspaceScopedDocumentKeySchema = z
+  .string()
+  .min(1)
+  .regex(/^[^:]+::.+$/);
+
+export type WorkspaceScopedDocumentKey = z.infer<typeof workspaceScopedDocumentKeySchema>;
+
+export const codexDocumentStateSchema = z.object({
+  codexSessionId: z.string().min(1).optional(),
+  relatedDocuments: z.array(z.string()).default([]),
+  parentTicketId: z.string().min(1).optional(),
+  lastTicketId: z.string().min(1).optional(),
+  updatedAt: z.string().datetime(),
+});
+
+export type CodexDocumentState = z.infer<typeof codexDocumentStateSchema>;
+
+export const alphaKanbanStateSchema = z.object({
+  version: z.literal(2),
+  recentWorkspaces: z.array(recentWorkspaceSchema).default([]),
+  lastWorkspaceId: z.string().min(1).optional(),
+  documents: z.record(z.string(), codexDocumentStateSchema).default({}),
+});
+
+export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;
 
 export const markdownFileSummarySchema = z.object({
   id: z.string().min(1),
@@ -234,6 +291,48 @@ export const codexRunSnapshotSchema = z.object({
 });
 
 export type CodexRunSnapshot = z.infer<typeof codexRunSnapshotSchema>;
+
+export const codexRunSignalStatusSchema = z.enum([
+  "idle",
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "needs_auth",
+  "unknown",
+]);
+
+export type CodexRunSignalStatus = z.infer<typeof codexRunSignalStatusSchema>;
+
+export const codexRunSummarySchema = z.object({
+  id: z.string().min(1),
+  fileId: z.string().min(1),
+  ticketId: z.string().min(1),
+  status: codexRunSignalStatusSchema,
+  rawStatus: codexRunStatusSchema,
+  instructionSummary: z.string().optional(),
+  startedAt: z.string().datetime(),
+  finishedAt: z.string().datetime().optional(),
+  logPath: z.string().min(1),
+  eventCount: z.number().int().nonnegative(),
+  latestEvent: codexRunEventSchema.optional(),
+});
+
+export type CodexRunSummary = z.infer<typeof codexRunSummarySchema>;
+
+export const codexDocumentRunSummaryResponseSchema = z.object({
+  fileId: z.string().min(1),
+  status: codexRunSignalStatusSchema,
+  canStartRun: z.boolean(),
+  activeRun: codexRunSummarySchema.optional(),
+  latestRun: codexRunSummarySchema.optional(),
+  runs: z.array(codexRunSummarySchema),
+});
+
+export type CodexDocumentRunSummaryResponse = z.infer<
+  typeof codexDocumentRunSummaryResponseSchema
+>;
 
 export const createCodexRunResponseSchema = z.object({
   run: codexRunSnapshotSchema,

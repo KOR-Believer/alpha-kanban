@@ -134,6 +134,16 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     }
   });
 
+  app.get("/api/files/:fileId/codex-run-summary", (request, response, next) => {
+    try {
+      const fileId = request.params.fileId ?? "";
+      fileStore.resolveFileId(fileId);
+      response.json(codexRunner.getDocumentRunSummary(fileId));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/api/codex/runs/:runId", (request, response, next) => {
     try {
       response.json({ run: codexRunner.getRun(request.params.runId ?? "") });
@@ -231,6 +241,8 @@ function normalizeError(error: unknown): {
 
 function codexRunErrorStatus(code: string): number {
   switch (code) {
+    case CODEX_RUN_ERROR.DOCUMENT_RUN_ACTIVE:
+      return 409;
     case CODEX_RUN_ERROR.RUN_NOT_FOUND:
       return 404;
     case CODEX_RUN_ERROR.NOT_RUNNING:

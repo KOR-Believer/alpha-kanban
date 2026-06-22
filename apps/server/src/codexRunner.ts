@@ -4,10 +4,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import type {
+  CodexDocumentRunSummaryResponse,
   CodexPromptPreviewRequest,
   CodexPromptPreviewResponse,
   CodexRunEvent,
+  CodexRunSignalStatus,
   CodexRunSnapshot,
+  CodexRunSummary,
   CodexRunStatus,
   CreateCodexRunRequest,
 } from "@alpha-kanban/shared";
@@ -17,6 +20,7 @@ import { CodexStateStore } from "./codexState";
 import type { MarkdownFileStore } from "./files";
 
 export const CODEX_RUN_ERROR = {
+  DOCUMENT_RUN_ACTIVE: "CODEX_DOCUMENT_RUN_ACTIVE",
   RUN_NOT_FOUND: "CODEX_RUN_NOT_FOUND",
   NOT_RUNNING: "CODEX_RUN_NOT_RUNNING",
 } as const;
@@ -101,6 +105,16 @@ export class CodexRunner {
   }
 
   async startRun(request: CreateCodexRunRequest): Promise<CodexRunSnapshot> {
+    if (!request.dryRun) {
+      const activeRun = this.findActiveRunForFile(request.fileId);
+      if (activeRun) {
+        throw new CodexRunError(
+          CODEX_RUN_ERROR.DOCUMENT_RUN_ACTIVE,
+          `Document already has an active Codex run (${activeRun.id}) for ${activeRun.ticketId}.`,
+        );
+      }
+    }
+
     const instructionDraft = normalizeInstructionDraft(request);
     const instructionSummary = summarizeInstructionDraft(instructionDraft);
 
@@ -162,6 +176,24 @@ export class CodexRunner {
 
   getRun(runId: string): CodexRunSnapshot {
     return this.snapshot(this.requireRun(runId));
+  }
+
+  getDocumentRunSummary(fileId: string): CodexDocumentRunSummaryResponse {
+    const runs = [...this.runs.values()]
+      .filter((run) => run.fileId === fileId)
+      .map((run) => this.runSummary(run))
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    const activeRun = runs.find((run) => isActiveRunStatus(run.rawStatus));
+    const latestRun = runs.at(-1);
+
+    return {
+      fileId,
+      status: activeRun?.status ?? latestRun?.status ?? "idle",
+      canStartRun: !activeRun,
+      activeRun,
+      latestRun,
+      runs,
+    };
   }
 
   subscribe(runId: string, subscriber: RunSubscriber): () => void {
@@ -359,6 +391,28 @@ export class CodexRunner {
     return run;
   }
 
+  private findActiveRunForFile(fileId: string): MutableRun | undefined {
+    return [...this.runs.values()].find(
+      (run) => run.fileId === fileId && isActiveRunStatus(run.status),
+    );
+  }
+
+  private runSummary(run: MutableRun): CodexRunSummary {
+    return {
+      id: run.id,
+      fileId: run.fileId,
+      ticketId: run.ticketId,
+      status: signalStatus(run),
+      rawStatus: run.status,
+      instructionSummary: run.instructionSummary,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      logPath: run.logPath,
+      eventCount: run.events.length,
+      latestEvent: run.events.at(-1),
+    };
+  }
+
   private snapshot(run: MutableRun): CodexRunSnapshot {
     const {
       child: _child,
@@ -454,6 +508,29 @@ function classifyFailure(stderr: string): string {
     return "Codex CLI could not be started or found.";
   }
   return "Codex run failed.";
+}
+
+function isActiveRunStatus(status: CodexRunStatus): boolean {
+  return status === "queued" || status === "running";
+}
+
+function signalStatus(run: MutableRun): CodexRunSignalStatus {
+  if (run.status === "running" && !run.child) {
+    return "unknown";
+  }
+
+  if (
+    run.status === "failed" &&
+    hasAuthSignal(`${run.stderrBuffer}\n${run.events.map((event) => event.message).join("\n")}`)
+  ) {
+    return "needs_auth";
+  }
+
+  return run.status;
+}
+
+function hasAuthSignal(value: string): boolean {
+  return /not\s+logged\s+in|auth|authentication|api key|sign in/i.test(value);
 }
 
 function summarizeJsonEvent(data: unknown): string {

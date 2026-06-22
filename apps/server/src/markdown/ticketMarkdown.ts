@@ -2,6 +2,7 @@ import {
   ticketProgressSchema,
   ticketStatusSchema,
   type ProgressBoardRow,
+  type TicketChecklistItem,
   type TicketDocument,
   type TicketDocumentStatus,
   type TicketItem,
@@ -385,6 +386,8 @@ function parseTicket(
   const status = parseTicketStatus(fields.get("Status")?.value) ?? "TODO";
   const progress = parseTicketProgress(fields.get("Progress")?.value) ?? 0;
   const userInstructionField = fields.get("사용자 지시");
+  const completionCriteriaItems = parseChecklistField(lines, fields.get("완료 기준"));
+  const validationItems = parseChecklistField(lines, fields.get("검증"));
 
   return {
     id,
@@ -402,8 +405,10 @@ function parseTicket(
     currentProblem: parseListField(lines, fields.get("현재 문제")),
     implementationScope: parseListField(lines, fields.get("구현 범위")),
     outOfScope: parseListField(lines, fields.get("제외 범위")),
-    completionCriteria: parseListField(lines, fields.get("완료 기준")),
-    validation: parseListField(lines, fields.get("검증")),
+    completionCriteria: completionCriteriaItems.map((item) => item.text),
+    completionCriteriaItems,
+    validation: validationItems.map((item) => item.text),
+    validationItems,
     userInstructions: parseLogEntries(lines, userInstructionField),
     progressNotes: parseLogEntries(lines, fields.get("진행 메모")),
     hasUserInstructionsSection: Boolean(userInstructionField),
@@ -501,6 +506,49 @@ function parseListField(
       continue;
     }
     items.push(item);
+  }
+
+  return items;
+}
+
+function parseChecklistField(
+  lines: string[],
+  field: FieldPosition | undefined,
+): TicketChecklistItem[] {
+  if (!field) {
+    return [];
+  }
+
+  const items: TicketChecklistItem[] = [];
+
+  for (let index = field.contentStart; index < field.contentEnd; index += 1) {
+    const raw = lines[index]?.trim() ?? "";
+    if (!raw) {
+      continue;
+    }
+
+    const checkbox = raw.match(/^-\s+\[([ xX])\]\s+(.+?)\s*$/);
+    if (checkbox) {
+      items.push({
+        text: checkbox[2]?.trim() ?? "",
+        checked: (checkbox[1] ?? "").toLowerCase() === "x",
+        raw,
+        index: items.length,
+        lineStart: index + 1,
+        lineEnd: index + 1,
+      });
+      continue;
+    }
+
+    const bullet = raw.match(/^-\s+(.+?)\s*$/);
+    items.push({
+      text: bullet?.[1]?.trim() ?? raw,
+      checked: null,
+      raw,
+      index: items.length,
+      lineStart: index + 1,
+      lineEnd: index + 1,
+    });
   }
 
   return items;

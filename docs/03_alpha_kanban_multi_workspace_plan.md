@@ -27,6 +27,8 @@
 - 설정된 workspace root allowlist 아래의 project를 선택할 수 있게 한다.
 - 선택된 project의 `docs` 등 configured doc roots에서 `*_tickets.md`, `*_plan.md`, `*_inventory.md`를 리스팅한다.
 - ticket board, detail drawer, Markdown write, `Run with Codex`가 모두 선택된 target project 기준으로 동작하게 한다.
+- Codex CLI 실행이 진행 중인지, 끝났는지, 실패했는지 사용자가 터미널 로그를 보지 않아도 알 수 있는 상태 신호를 제공한다.
+- 외부 Codex CLI, Cursor, editor가 Markdown 문서를 직접 수정했을 때 UI가 stale 상태를 인지하고 갱신할 수 있게 한다.
 - 선택된 ticket, 선택된 Markdown document, 선택된 workspace 전체를 구분해 각각 다른 대화/실행 입력 surface를 제공한다.
 - recent project, last selected project, project별 last selected ticket document, Codex session id를 local-only state에 저장한다.
 - 기존 Alpha Kanban 자기 문서 dogfooding 흐름은 target project 중 하나로 유지한다.
@@ -48,6 +50,8 @@
 - `apps/server/src/codexRunner.ts`는 Codex process `cwd`를 config의 `workspaceRoot`로 고정하고, prompt에도 같은 root를 project path로 넣는다.
 - `.alpha-kanban/state.json`은 이미 local-only Codex session state 용도로 사용되고 있으며 gitignore 대상이다.
 - UI는 시작 시 바로 `/api/files`를 호출하고 첫 ticket document를 선택한다. project 선택 단계는 없다.
+- 현재 UI는 app 내부 mutation 후에는 query invalidation으로 갱신되지만, 외부 CLI/editor가 Markdown을 직접 수정한 경우 server push나 watcher 기반 invalidation이 없어 사용자가 새로고침해야 한다.
+- 현재 Codex run 로그는 `.alpha-kanban/runs/*.jsonl`에 저장되지만, UI에 ticket/document/workspace 단위 실행 상태 신호가 없어 실행 중인지, 중단됐는지, 완료됐는지 판단하기 어렵다.
 - 기존 본 프로젝트 티켓 문서는 `docs/02_alpha_kanban_tickets.md` 기준 `8 / 8 tickets`로 완료 상태다.
 
 ## 제안 아키텍처
@@ -171,6 +175,41 @@ Workspace Chat    -> selected project 전체 docs에 대한 질문/논의와 새
 6. Codex session id는 `.alpha-kanban/state.json`의 `workspaceId::ticketRelativePath` 단위로 저장한다.
 7. run log는 control app의 `.alpha-kanban/runs/`에 저장하되, log entry에는 target workspace와 ticket file relative path를 포함한다.
 
+### 8. Run status signal model
+
+자세한 terminal log는 debug 용도로 유지하되, 제품 UX에는 간단한 실행 상태 신호를 제공한다.
+
+```text
+Idle
+Running
+Succeeded
+Failed
+Canceled
+Needs auth
+Unknown / stale
+```
+
+- ticket card에는 해당 ticket에 active run이 있을 때만 작은 dot/badge를 표시한다.
+- selected document 안에 active run이 있으면 board header 또는 document header에 document-level run indicator를 표시한다.
+- workspace switcher 이후에는 selected workspace 어딘가에 active run이 있을 때 workspace-level indicator로 확장한다.
+- detail drawer를 닫았다 다시 열어도 active run summary는 다시 볼 수 있어야 한다.
+- full terminal log replay는 필수 제품 기능이 아니라 debug affordance로 둔다. 우선순위는 status summary와 failure/auth/cancel 신호다.
+- MVP의 실행 정책은 같은 plan/ticket Markdown document session 안에서 active run 하나만 허용한다.
+- 새 run 요청 시 같은 document에 `queued` 또는 `running` run이 있으면 서버가 거부하고 기존 active run summary를 반환한다.
+- Codex가 실행 중 내부적으로 subagent나 병렬 tool call을 사용하는 것은 하나의 outer run으로 취급한다.
+- 향후 병렬 실행 확장을 위해 run history는 여러 개 저장할 수 있게 두되, 제품 UX의 기본 action은 document-scoped single active run으로 유지한다.
+
+### 9. Markdown change sync model
+
+외부 CLI/editor가 target Markdown을 수정하는 것은 정상 workflow로 취급한다. Alpha Kanban은 이를 감지하거나 최소한 stale 상태를 명확히 보여줘야 한다.
+
+- server는 selected workspace의 configured doc roots에 대해 Markdown file watcher를 운영한다.
+- file watcher는 `*_tickets.md`, `*_plan.md`, `*_inventory.md`, 일반 `.md` 변경을 감지한다.
+- 변경 이벤트는 SSE 또는 websocket으로 UI에 전달한다.
+- UI는 현재 열린 file이 바뀌면 query를 invalidate/refetch하거나, 사용자가 편집 중이면 stale banner와 `Reload` action을 보여준다.
+- focus regain, manual refresh button, 짧은 interval polling은 watcher가 놓친 변경을 보완하는 fallback으로 둔다.
+- 외부 변경과 UI stale write guard는 같은 정책으로 연결되어야 한다. 오래된 hash/mtime으로 write하면 `STALE_FILE`을 유지한다.
+
 ## 보안/운영 원칙
 
 - allowlist는 OS 권한이 아니라 Alpha Kanban 앱 내부 policy boundary다.
@@ -181,6 +220,9 @@ Workspace Chat    -> selected project 전체 docs에 대한 질문/논의와 새
 - target workspace path, ticket path, instruction draft는 shell interpolation에 사용하지 않는다.
 - local server는 계속 `127.0.0.1` bind를 기본으로 유지한다.
 - stale write protection은 workspace별 file hash/mtime 기준으로 유지한다.
+- file watcher는 allowlist와 selected workspace doc roots 내부만 감시한다.
+- run status indicator는 local app state와 in-memory active run registry를 표시할 뿐, Codex process를 암묵적으로 cancel하거나 재시작하지 않는다.
+- 같은 document session의 active run은 하나만 허용해 Markdown 동시 쓰기와 Codex session context 섞임을 피한다.
 
 ## 에러 정책
 
@@ -192,6 +234,8 @@ Workspace Chat    -> selected project 전체 docs에 대한 질문/논의와 새
 - `FILE_NOT_FOUND`: selected workspace의 Markdown 파일이 삭제되었다.
 - `STALE_FILE`: selected workspace의 Markdown 파일이 사용자가 열어둔 이후 변경되었다.
 - `CODEX_RUN_FAILED`: target workspace cwd에서 Codex process가 실패했다.
+- `RUN_STATUS_UNKNOWN`: UI가 알고 있는 active run과 server registry/log state가 불일치한다.
+- `FILE_CHANGED_EXTERNALLY`: 현재 열려 있는 Markdown 파일이 외부 process에 의해 변경되어 refetch가 필요하다.
 
 ## 검증 계획
 
@@ -202,6 +246,8 @@ API:
 - 같은 relative ticket path를 가진 두 workspace가 독립 file id/session id를 갖는지 검증한다.
 - workspace별 file scan, ticket read, status/progress patch, instruction append, progress note append를 검증한다.
 - Codex prompt preview와 run이 target workspace cwd/path를 사용하는지 mocked process로 검증한다.
+- active run registry가 running/succeeded/failed/canceled/auth-required 상태를 ticket/document/workspace scope로 요약하는지 검증한다.
+- Markdown watcher가 외부 파일 변경을 감지하고 workspace/file-scoped event를 내보내는지 검증한다.
 
 UI:
 
@@ -209,6 +255,8 @@ UI:
 - recent workspace가 있으면 바로 해당 project board가 열리는지 확인한다.
 - project switcher로 target project를 바꾸면 file list와 board가 workspace scope로 갱신되는지 확인한다.
 - selected project가 unavailable일 때 recover UI가 표시되는지 확인한다.
+- Codex 실행 중/완료/실패 상태가 ticket card, document header, workspace scope에서 명확히 표시되는지 확인한다.
+- 외부 CLI/editor가 Markdown을 바꾼 뒤 현재 board/detail이 stale 상태를 표시하거나 자동 refetch되는지 확인한다.
 - desktop/mobile viewport에서 sidebar switcher와 board가 겹치지 않는지 확인한다.
 
 Manual smoke:
@@ -216,6 +264,8 @@ Manual smoke:
 - `alpha-kanban` 자신을 target workspace로 선택해 기존 문서가 계속 동작하는지 확인한다.
 - 다른 project의 `docs/*_tickets.md`를 선택해 board/detail/write가 그 project 파일에만 반영되는지 확인한다.
 - `Run with Codex` preview가 target project root와 target ticket file을 표시하는지 확인한다.
+- 별도 CLI에서 selected Markdown을 수정한 뒤 UI가 변경 감지 신호 또는 refresh를 제공하는지 확인한다.
+- Codex run 중 drawer를 닫았다 다시 열어도 run status indicator가 유지되는지 확인한다.
 
 ## Open Questions
 

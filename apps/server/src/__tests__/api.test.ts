@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   apiErrorResponseSchema,
+  codexDocumentRunSummaryResponseSchema,
   codexPromptPreviewResponseSchema,
   codexRunResponseSchema,
   createCodexRunResponseSchema,
@@ -44,6 +45,10 @@ describe("API", () => {
         "  process.exit(9);",
         "}",
         "console.log(JSON.stringify({ type: 'session', thread_id: 'fake-thread-id' }));",
+        "if (process.argv.join(' ').includes('auth-fail')) {",
+        "  console.error('not logged in');",
+        "  process.exit(1);",
+        "}",
         "if (process.argv.join(' ').includes('slow-cancel')) {",
         "  setTimeout(() => process.exit(0), 10000);",
         "} else {",
@@ -248,6 +253,75 @@ describe("API", () => {
 
     const finished = await waitForRun(created.run.id);
     expect(finished.run.status).toBe("cancelled");
+  });
+
+  it("summarizes document run state and blocks a second active run", async () => {
+    const files = filesResponseSchema.parse(await getJson("/api/files"));
+    const file = files.files[0];
+    expect(file).toBeDefined();
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "slow-cancel",
+      }),
+    );
+
+    const summary = codexDocumentRunSummaryResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/codex-run-summary`),
+    );
+    expect(summary.status).toBe("running");
+    expect(summary.canStartRun).toBe(false);
+    expect(summary.activeRun?.id).toBe(created.run.id);
+    expect(summary.activeRun?.ticketId).toBe("AKB-05");
+
+    const duplicateResponse = await fetch(`${baseUrl}/api/codex/runs`, {
+      body: JSON.stringify({
+        fileId: file?.id,
+        ticketId: "AKB-06",
+        instructionDraft: "duplicate active run",
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(duplicateResponse.status).toBe(409);
+    const duplicateError = apiErrorResponseSchema.parse(await duplicateResponse.json());
+    expect(duplicateError.error.code).toBe("CODEX_DOCUMENT_RUN_ACTIVE");
+
+    await postJson(`/api/codex/runs/${created.run.id}/cancel`, {});
+    const finished = await waitForRun(created.run.id);
+    expect(finished.run.status).toBe("cancelled");
+
+    const afterCancel = codexDocumentRunSummaryResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/codex-run-summary`),
+    );
+    expect(afterCancel.canStartRun).toBe(true);
+    expect(afterCancel.activeRun).toBeUndefined();
+    expect(afterCancel.latestRun?.status).toBe("cancelled");
+  });
+
+  it("maps Codex authentication failures to a needs_auth run signal", async () => {
+    const files = filesResponseSchema.parse(await getJson("/api/files"));
+    const file = files.files[0];
+    expect(file).toBeDefined();
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "auth-fail",
+      }),
+    );
+    const finished = await waitForRun(created.run.id);
+    expect(finished.run.status).toBe("failed");
+
+    const summary = codexDocumentRunSummaryResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/codex-run-summary`),
+    );
+    expect(summary.status).toBe("needs_auth");
+    expect(summary.latestRun?.status).toBe("needs_auth");
+    expect(summary.latestRun?.rawStatus).toBe("failed");
   });
 
   it("creates a Codex dry run without spawning the CLI", async () => {

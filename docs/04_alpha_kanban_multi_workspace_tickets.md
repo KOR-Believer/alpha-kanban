@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `1 / 9 tickets`
+- 현재 진행률: `1 / 11 tickets`
 
 ## 티켓 상태
 
@@ -36,6 +36,8 @@
 - `사용자 지시`와 `진행 메모`는 append-only log로 다루고, 같은 날짜의 항목 순서는 문서 라인 순서로 해석한다.
 - `Run with Codex`는 selected target workspace를 cwd로 사용한다.
 - ticket 실행 입력, document-level chat, workspace-level chat은 scope가 다르므로 UI와 prompt boundary를 분리한다.
+- 자세한 terminal log는 debug affordance로 유지하고, 제품 UX에는 run status indicator를 우선 제공한다.
+- 외부 CLI/editor가 Markdown을 직접 수정할 수 있으므로 UI는 file change 감지, stale 표시, refetch 정책을 가져야 한다.
 
 ## Ticket Template
 
@@ -101,9 +103,11 @@ Depends on:
 | AKW-03 | READY | 25% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | TODO | 0% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
-| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08 |
+| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10 |
 | AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
 | AKW-08 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-02, AKW-03, AKW-04, AKW-05, AKW-07 |
+| AKW-09 | IN_PROGRESS | 75% | `apps/server`, `apps/web`, `packages/shared` | AKW-05 |
+| AKW-10 | TODO | 0% | `apps/server`, `apps/web`, `packages/shared` | AKW-03, AKW-04 |
 
 ## Ticket List
 
@@ -155,7 +159,7 @@ Depends on:
 검증:
 
 - [x] 기존 `docs/02_alpha_kanban_tickets.md`가 `8 / 8 tickets` 완료 상태임을 확인한다.
-- [x] 새 티켓 문서 top-level 진행률이 `1 / 9 tickets`로 Progress Board와 일치한다.
+- [x] 새 티켓 문서 top-level 진행률이 `1 / 11 tickets`로 Progress Board와 일치한다.
 
 사용자 지시:
 
@@ -224,6 +228,7 @@ Depends on:
 사용자 지시:
 
 - 2026-06-22: recent는 대상 project docs/config가 아니라 Alpha Kanban local state JSON에 유지한다.
+- 2026-06-22: Codex 실행 지시: 테스트겸 web ui로 명령해볼게 01 구현 시작해줘.
 
 진행 메모:
 
@@ -503,6 +508,8 @@ Depends on:
 - `AKW-05`
 - `AKW-07`
 - `AKW-08`
+- `AKW-09`
+- `AKW-10`
 
 목표:
 
@@ -511,13 +518,14 @@ Depends on:
 현재 문제:
 
 - 기존 검증은 Alpha Kanban 자기 docs와 sample fixture 중심이다.
-- target workspace 선택, recent state, workspace-scoped session, Codex cwd routing을 묶은 regression check가 없다.
+- target workspace 선택, recent state, workspace-scoped session, Codex cwd routing, run status indicator, 외부 Markdown 변경 감지를 묶은 regression check가 없다.
 
 구현 범위:
 
 - README의 config/state 설명을 multi-workspace 기준으로 갱신한다.
 - sample 또는 test fixture로 두 개 workspace를 구성한다.
 - API, UI, Codex mocked integration 검증을 실행한다.
+- run status indicator와 external Markdown change sync 동작을 통합 smoke에 포함한다.
 - manual smoke checklist를 업데이트한다.
 - 기존 `docs/01`, `docs/02`는 MVP 완료 기록으로 유지하고 새 phase 문서를 현재 상태로 갱신한다.
 
@@ -534,6 +542,7 @@ Depends on:
 - [ ] `pnpm build`가 통과한다.
 - [ ] 브라우저 smoke에서 project switcher, file list, ticket detail, prompt preview가 동작한다.
 - [ ] 브라우저 smoke에서 document chat과 workspace chat entry가 scope에 맞게 동작한다.
+- [ ] 브라우저 smoke에서 run status indicator와 external file change refresh/stale UI가 동작한다.
 - [ ] README와 티켓 문서가 실제 구현 상태와 일치한다.
 
 검증:
@@ -542,6 +551,8 @@ Depends on:
 - [ ] desktop browser smoke
 - [ ] mobile browser smoke
 - [ ] document/workspace chat smoke
+- [ ] run status indicator smoke
+- [ ] external Markdown change smoke
 - [ ] manual checklist
 
 사용자 지시:
@@ -685,6 +696,152 @@ Depends on:
 사용자 지시:
 
 - 2026-06-22: workspace chat은 project switcher 아래 sidebar entry에서 열고, project 전체 docs를 기준으로 질문하거나 새 plan/ticket 생성을 논의하는 방향이 좋다.
+
+진행 메모:
+
+- 2026-06-22: 초안 작성.
+
+### AKW-09. Codex run status indicator와 active run 신호 구현
+
+Status: IN_PROGRESS
+Progress: 75%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P0
+Type: UX / Feature
+Depends on:
+
+- `AKW-05`
+
+목표:
+
+- 사용자가 자세한 terminal log를 보지 않아도 Codex CLI 실행이 진행 중인지, 완료됐는지, 실패했는지 알 수 있는 시각적 신호를 제공한다.
+- 같은 plan/ticket Markdown document session에서는 단일 active run만 허용해 session context와 Markdown write 충돌을 피한다.
+
+현재 문제:
+
+- 현재 run 로그는 `.alpha-kanban/runs/*.jsonl`에 남지만 UI에서 실행 중인지 아닌지 판단하기 어렵다.
+- drawer나 side panel을 닫으면 SSE stream을 놓쳐 사용자가 run 상태를 잃어버린 것처럼 느낀다.
+- 제품 UX에 필요한 것은 full terminal replay보다 ticket/document/workspace scope의 compact status signal이다.
+
+구현 범위:
+
+- active run registry 또는 run summary API를 제공한다.
+- run summary는 `idle`, `running`, `succeeded`, `failed`, `canceled`, `needs_auth`, `unknown` 상태를 구분한다.
+- 같은 document에 `queued` 또는 `running` run이 있으면 새 run 요청을 거부하고 기존 active run을 안내한다.
+- run history는 여러 개 기록하되, UI primary action은 document-scoped single active run 정책을 따른다.
+- Codex 내부 subagent/병렬 tool call은 하나의 outer run 상태로 표시한다.
+- ticket card에 해당 ticket의 active run dot/badge를 표시한다.
+- selected document header 또는 board header에 document-level running/failure indicator를 표시한다.
+- workspace switcher 이후 workspace-level indicator로 확장할 수 있게 response shape를 설계한다.
+- drawer 재오픈 시 active run summary를 다시 조회해 상태를 표시한다.
+- full terminal log는 debug/view log affordance로 숨기고, 상태 신호와 실패 요약을 우선한다.
+
+제외 범위:
+
+- full terminal replay를 제품 필수 UI로 구현
+- 닫힌 run을 자동 재시작
+- 상태 indicator 클릭만으로 자동 cancel
+- 같은 document 안에서 여러 ticket run을 UI가 직접 병렬 실행하는 기능
+
+완료 기준:
+
+- [x] run 중인 ticket card에 running indicator가 표시된다.
+- [x] selected document 안에 run 중인 ticket이 있으면 document-level indicator가 표시된다.
+- [x] 같은 document에 active run이 있으면 추가 run 요청이 막히고 기존 active run이 안내된다.
+- [x] run 성공/실패/취소/auth-required 상태가 구분된다.
+- [x] drawer를 닫았다 다시 열어도 active run summary를 볼 수 있다.
+- [x] terminal log replay가 없어도 사용자가 run 상태를 판단할 수 있다.
+
+검증:
+
+- [x] active run summary API test
+- [x] mocked Codex running/succeeded/failed/canceled test
+- [x] desktop browser smoke
+- [ ] drawer reopen smoke
+
+사용자 지시:
+
+- 2026-06-22: 자세한 터미널은 디버그 용도라 최종 제품에는 없어도 되지만, 이 티켓이 CLI 세션에서 진행 중인지 아닌지 알 수 있는 시각적 신호등은 있으면 좋겠다.
+- 2026-06-22: MVP는 같은 md 파일 document session 안에서 단일 active run으로 구현하고, Codex 내부 subagent/병렬 도구 사용은 하나의 outer run으로 취급한다.
+- 2026-06-22: 완료 기준이나 검증 같은 Markdown checkbox가 UI에서 체크 상태로 렌더링되지 않아 어디까지 진행됐는지 알기 어렵다.
+- 2026-06-22: AKW-09 진행사항이 완료 기준 checkbox에 반영되어 있지 않다.
+
+진행 메모:
+
+- 2026-06-22: 초안 작성.
+- 2026-06-22: 단일 active run 정책을 plan과 ticket 본문에 반영하고 AKW-09 구현을 시작한다.
+- 2026-06-22: `packages/shared`에 run signal/summary schema를 추가하고, `apps/server`에 document run summary API와 document-scoped single active run guard를 구현했다.
+- 2026-06-22: `apps/web`에 document header/ticket card run badge, active run 안내, drawer reopen 시 run snapshot 재조회 연결을 구현했다.
+- 2026-06-22: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright desktop smoke. 남은 확인: AKW-05 target workspace routing 이후 실제 active run drawer reopen smoke.
+- 2026-06-22: Markdown checkbox marker를 `completionCriteriaItems`와 `validationItems`로 구조화해 API 응답에 보존하고, ticket detail의 완료 기준/검증 섹션에서 checked/unchecked 상태로 렌더링되게 수정했다.
+- 2026-06-22: AKW-09 완료 기준 checkbox를 구현 완료 상태에 맞게 checked로 갱신했다. 티켓은 `IN_PROGRESS 75%` 유지하며, 남은 항목은 실제 active run 기반 drawer reopen smoke다.
+
+### AKW-10. 외부 Markdown 변경 감지와 UI refresh/stale 정책 구현
+
+Status: TODO
+Progress: 0%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P0
+Type: Feature / API / UX
+Depends on:
+
+- `AKW-03`
+- `AKW-04`
+
+목표:
+
+- UI 밖의 Codex CLI, Cursor, editor가 Markdown 파일을 직접 수정해도 Alpha Kanban이 변경을 감지하고 board/detail을 갱신하거나 stale 상태를 표시한다.
+
+현재 문제:
+
+- 현재 UI는 app 내부 mutation에는 query invalidation/refetch를 수행하지만, 외부 process가 `.md` 파일을 수정하면 자동 갱신되지 않는다.
+- 사용자는 CLI가 문서를 수정했는지 확인하려면 새로고침해야 한다.
+- 오래된 화면에서 status/progress를 저장하면 stale write guard가 막기는 하지만, 변경 사실을 미리 알려주지 않는다.
+
+구현 범위:
+
+- selected workspace의 configured doc roots에 Markdown file watcher를 추가한다.
+- watcher는 allowlist 내부 doc roots만 감시한다.
+- file changed event를 SSE 또는 websocket으로 UI에 전달한다.
+- UI는 현재 selected file 변경 시 query invalidate/refetch 또는 stale banner를 표시한다.
+- 사용자가 detail drawer에서 편집 중이면 자동 덮어쓰기 대신 `File changed externally` banner와 `Reload` action을 제공한다.
+- window focus regain refetch와 manual refresh button을 fallback으로 둔다.
+- `STALE_FILE` 에러 UI와 watcher 기반 stale UI의 메시지를 일관되게 맞춘다.
+
+제외 범위:
+
+- workspace 전체 코드 변경 감시
+- Markdown conflict merge editor
+- target project Git 자동 commit/pull
+
+완료 기준:
+
+- [ ] 외부 CLI/editor가 selected ticket document를 수정하면 UI가 변경을 감지한다.
+- [ ] board/detail query가 자동 refetch되거나 stale banner가 표시된다.
+- [ ] detail 편집 중 외부 변경이 생기면 사용자가 reload/keep editing을 판단할 수 있다.
+- [ ] watcher는 allowlist/doc roots 밖 파일을 감시하지 않는다.
+- [ ] stale write guard와 UI 메시지가 같은 정책을 따른다.
+
+검증:
+
+- [ ] file watcher unit/integration test
+- [ ] external Markdown change API/SSE test
+- [ ] focus refetch fallback smoke
+- [ ] desktop browser stale banner smoke
+
+사용자 지시:
+
+- 2026-06-22: CLI가 Markdown을 갱신했을 때 UI가 자동 갱신되는지, 아니면 새로고침해야 하는지 문제가 있다. 이 문제를 먼저 티켓과 플랜에 반영한다.
 
 진행 메모:
 

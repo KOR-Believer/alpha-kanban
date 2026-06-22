@@ -117,6 +117,18 @@ describe("ticketMarkdown", () => {
     expect(ticket?.hasUserInstructionsSection).toBe(false);
     expect(ticket?.userInstructions).toEqual([]);
     expect(ticket?.progressNotes).toHaveLength(1);
+    expect(ticket?.completionCriteriaItems).toEqual([
+      expect.objectContaining({
+        checked: false,
+        text: "User instruction section can be inserted.",
+      }),
+    ]);
+    expect(ticket?.validationItems).toEqual([
+      expect.objectContaining({
+        checked: false,
+        text: "Serializer smoke",
+      }),
+    ]);
     expect(ticket?.missingFields).toEqual([]);
   });
 
