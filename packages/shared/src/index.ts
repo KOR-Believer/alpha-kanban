@@ -151,11 +151,19 @@ export const codexDocumentStateSchema = z.object({
 
 export type CodexDocumentState = z.infer<typeof codexDocumentStateSchema>;
 
+export const codexRunReadStateSchema = z.object({
+  readAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export type CodexRunReadState = z.infer<typeof codexRunReadStateSchema>;
+
 export const alphaKanbanStateSchema = z.object({
   version: z.literal(2),
   recentWorkspaces: z.array(recentWorkspaceSchema).default([]),
   lastWorkspaceId: z.string().min(1).optional(),
   documents: z.record(z.string(), codexDocumentStateSchema).default({}),
+  runResults: z.record(z.string(), codexRunReadStateSchema).default({}),
 });
 
 export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;

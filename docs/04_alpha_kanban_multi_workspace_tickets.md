@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `3 / 12 tickets`
+- 현재 진행률: `4 / 12 tickets`
 
 ## 티켓 상태
 
@@ -99,7 +99,7 @@ Depends on:
 | Ticket | Status | Progress | Repository | Depends on |
 | --- | --- | ---: | --- | --- |
 | AKW-00 | DONE | 100% | `alpha-kanban`, `docs` | - |
-| AKW-01 | READY | 25% | `packages/shared`, `apps/server` | AKW-00 |
+| AKW-01 | DONE | 100% | `packages/shared`, `apps/server` | AKW-00 |
 | AKW-02 | READY | 25% | `apps/server`, `packages/shared` | AKW-01 |
 | AKW-03 | READY | 25% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | TODO | 0% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
@@ -176,8 +176,8 @@ Depends on:
 
 ### AKW-01. Config/state schema를 multi-workspace 기준으로 확장
 
-Status: READY
-Progress: 25%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `packages/shared`
@@ -216,16 +216,16 @@ Depends on:
 
 완료 기준:
 
-- [ ] server config가 `workspaceRoots`와 `defaultDocRoots`를 구분한다.
-- [ ] local state가 recent workspace와 workspace-scoped document session을 저장할 수 있다.
-- [ ] 기존 state 파일이 있어도 server boot가 실패하지 않는다.
-- [ ] target project에는 state 파일을 쓰지 않는다.
+- [x] server config가 `workspaceRoots`와 `defaultDocRoots`를 구분한다.
+- [x] local state가 recent workspace와 workspace-scoped document session을 저장할 수 있다.
+- [x] 기존 state 파일이 있어도 server boot가 실패하지 않는다.
+- [x] target project에는 state 파일을 쓰지 않는다.
 
 검증:
 
-- [ ] config loader unit test
-- [ ] state migration unit test
-- [ ] backward compatibility test
+- [x] config loader unit test
+- [x] state migration unit test
+- [x] backward compatibility test
 
 사용자 지시:
 
@@ -235,6 +235,9 @@ Depends on:
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-22: `packages/shared` state schema를 v2 기준으로 확장해 `recentWorkspaces`, `lastWorkspaceId`, workspace-scoped `documents`, `runResults`를 함께 표현하도록 정리했다.
+- 2026-06-22: `apps/server/src/codexState.ts`가 legacy v1 document key를 `${workspaceId}::relativePath`로 마이그레이션하고, recent workspace와 run read-state를 control app `.alpha-kanban/state.json`에만 저장하도록 구현했다.
+- 2026-06-22: `apps/server/src/__tests__/config.test.ts`, `apps/server/src/__tests__/codexState.test.ts`, API 통합 테스트를 추가/수정했고 `pnpm --filter @alpha-kanban/server test` 통과를 확인했다.
 
 ### AKW-02. Workspace discovery와 allowlist path 검증 API 구현
 

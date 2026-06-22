@@ -46,9 +46,12 @@
 
 - 현재 `alpha-kanban.config.json`은 `docRoots: ["docs", "examples"]`, `workspaceRoots: ["."]`, `codexCommand: "codex"`를 가진다.
 - `apps/server/src/config.ts`는 server 실행 root를 `workspaceRoot`로 잡고, `docRoots`와 `workspaceRoots`를 모두 이 root 기준 절대 경로로 변환한다.
+- `apps/server/src/config.ts`는 `defaultDocRoots`와 `workspaceRoots`를 분리해 읽으며, 기존 `docRoots`는 backward-compatible alias로 유지한다.
 - `apps/server/src/files.ts`는 현재 config의 `docRoots`만 scan하고, file id도 단일 `workspaceRoot` 상대 경로를 기반으로 만든다.
 - `apps/server/src/codexRunner.ts`는 Codex process `cwd`를 config의 `workspaceRoot`로 고정하고, prompt에도 같은 root를 project path로 넣는다.
 - `.alpha-kanban/state.json`은 이미 local-only Codex session state 용도로 사용되고 있으며 gitignore 대상이다.
+- `packages/shared`와 `apps/server/src/codexState.ts`는 state schema v2를 사용한다. Recent workspace, last workspace, workspace-scoped document session, run read-state는 control app `.alpha-kanban/state.json`에 저장한다.
+- 기존 v1 document session key인 `docs/foo_tickets.md`는 읽을 수 있고, 다음 state write 시 `workspaceId::docs/foo_tickets.md` 형태로 마이그레이션된다.
 - UI는 시작 시 바로 `/api/files`를 호출하고 첫 ticket document를 선택한다. project 선택 단계는 없다.
 - 현재 UI는 app 내부 mutation 후에는 query invalidation으로 갱신되지만, 외부 CLI/editor가 Markdown을 직접 수정한 경우 server push나 watcher 기반 invalidation이 없어 사용자가 새로고침해야 한다.
 - 현재 Codex run 로그는 `.alpha-kanban/runs/*.jsonl`에 저장되지만, UI에 ticket/document/workspace 단위 실행 상태 신호가 없어 실행 중인지, 중단됐는지, 완료됐는지 판단하기 어렵다.

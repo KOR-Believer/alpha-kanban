@@ -195,9 +195,11 @@ describe("API", () => {
     ) as {
       documents: Record<string, { codexSessionId?: string }>;
     };
-    expect(state.documents["docs/02_alpha_kanban_tickets.md"]?.codexSessionId).toBe(
-      "fake-thread-id",
+    const documentKey = Object.keys(state.documents).find((key) =>
+      key.endsWith("::docs/02_alpha_kanban_tickets.md"),
     );
+    expect(documentKey).toMatch(/^w_[a-f0-9]{16}::docs\/02_alpha_kanban_tickets\.md$/);
+    expect(state.documents[documentKey ?? ""]?.codexSessionId).toBe("fake-thread-id");
 
     const noted = ticketDocumentResponseSchema.parse(
       await getJson(`/api/files/${file?.id}/tickets`),
