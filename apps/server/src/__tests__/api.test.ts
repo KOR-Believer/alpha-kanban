@@ -1,4 +1,13 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
@@ -13,7 +22,9 @@ import {
   codexRunSummarySchema,
   createCodexRunResponseSchema,
   filesResponseSchema,
+  selectWorkspaceResponseSchema,
   ticketDocumentResponseSchema,
+  workspacesResponseSchema,
 } from "@alpha-kanban/shared";
 
 import { createServerApp } from "../app";
@@ -25,6 +36,11 @@ const realTicketDocument = readFileSync(
 
 describe("API", () => {
   let workspaceRoot: string;
+  let projectsRoot: string;
+  let projectOneRoot: string;
+  let realProjectOneRoot: string;
+  let outsideProjectRoot: string;
+  let realOutsideProjectRoot: string;
   let server: Server;
   let baseUrl: string;
 
@@ -34,6 +50,17 @@ describe("API", () => {
     await import("node:fs/promises").then(({ mkdir }) => mkdir(docsDir));
     writeFileSync(path.join(docsDir, "02_alpha_kanban_tickets.md"), realTicketDocument);
     writeFileSync(path.join(workspaceRoot, "outside.md"), "# outside\n");
+
+    projectsRoot = path.join(workspaceRoot, "projects");
+    projectOneRoot = path.join(projectsRoot, "project-one");
+    outsideProjectRoot = path.join(workspaceRoot, "outside-project");
+    mkdirSync(path.join(projectOneRoot, "docs"), { recursive: true });
+    mkdirSync(path.join(projectsRoot, "project-two", ".git"), { recursive: true });
+    mkdirSync(outsideProjectRoot, { recursive: true });
+    writeFileSync(path.join(projectOneRoot, "docs", "01_plan.md"), "# Project one\n");
+    realProjectOneRoot = realpathSync.native(projectOneRoot);
+    realOutsideProjectRoot = realpathSync.native(outsideProjectRoot);
+
     const fakeCodexPath = path.join(workspaceRoot, "fake-codex.mjs");
     writeFileSync(
       fakeCodexPath,
@@ -63,6 +90,7 @@ describe("API", () => {
     const { app } = createServerApp({
       workspaceRoot,
       docRoots: ["docs"],
+      workspaceRoots: ["projects"],
       codexCommand: fakeCodexPath,
     });
 
@@ -157,6 +185,140 @@ describe("API", () => {
 
     const body = apiErrorResponseSchema.parse(await response.json());
     expect(body.error.code).toBe("FORBIDDEN_PATH");
+  });
+
+  it("lists available workspace candidates and unavailable recent workspaces", async () => {
+    const missingRoot = path.join(projectsRoot, "missing-project");
+    mkdirSync(path.join(workspaceRoot, ".alpha-kanban"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".alpha-kanban", "state.json"),
+      JSON.stringify(
+        {
+          version: 2,
+          recentWorkspaces: [
+            {
+              id: "w_missing",
+              root: missingRoot,
+              label: "missing-project",
+              lastOpenedAt: "2026-06-22T00:00:00.000Z",
+            },
+          ],
+          lastWorkspaceId: "w_missing",
+          documents: {},
+          runResults: {},
+        },
+        null,
+        2,
+      ),
+    );
+
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = listed.workspaces.find(
+      (workspace) => workspace.root === realProjectOneRoot,
+    );
+    const projectTwo = listed.workspaces.find((workspace) =>
+      workspace.root.endsWith("/project-two"),
+    );
+    const missing = listed.workspaces.find((workspace) => workspace.id === "w_missing");
+
+    expect(listed.lastWorkspaceId).toBe("w_missing");
+    expect(projectOne?.isAvailable).toBe(true);
+    expect(projectOne?.hasDocs).toBe(true);
+    expect(projectTwo?.isAvailable).toBe(true);
+    expect(projectTwo?.hasDocs).toBe(false);
+    expect(missing).toEqual({
+      id: "w_missing",
+      root: missingRoot,
+      label: "missing-project",
+      isAvailable: false,
+      hasDocs: false,
+      lastOpenedAt: "2026-06-22T00:00:00.000Z",
+    });
+    expect(listed.workspaces.some((workspace) => workspace.root === realOutsideProjectRoot)).toBe(
+      false,
+    );
+  });
+
+  it("selects an allowlisted workspace and records it as recent state", async () => {
+    const selected = selectWorkspaceResponseSchema.parse(
+      await postJson("/api/workspaces/select", { root: projectOneRoot }),
+    );
+
+    expect(selected.workspace.root).toBe(realProjectOneRoot);
+    expect(selected.workspace.isAvailable).toBe(true);
+    expect(selected.workspace.hasDocs).toBe(true);
+
+    const state = JSON.parse(
+      readFileSync(path.join(workspaceRoot, ".alpha-kanban", "state.json"), "utf8"),
+    ) as {
+      lastWorkspaceId?: string;
+      recentWorkspaces?: Array<{ id: string; root: string }>;
+    };
+
+    expect(state.lastWorkspaceId).toBe(selected.workspace.id);
+    expect(state.recentWorkspaces?.[0]).toMatchObject({
+      id: selected.workspace.id,
+      root: realProjectOneRoot,
+    });
+  });
+
+  it("rejects workspace path traversal and symlink escapes outside the allowlist", async () => {
+    const traversalResponse = await fetch(`${baseUrl}/api/workspaces/select`, {
+      body: JSON.stringify({ root: path.join(projectsRoot, "..", "outside-project") }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(traversalResponse.status).toBe(403);
+    const traversalError = apiErrorResponseSchema.parse(await traversalResponse.json());
+    expect(traversalError.error.code).toBe("WORKSPACE_OUTSIDE_ALLOWLIST");
+
+    const symlinkRoot = path.join(projectsRoot, "escaped-link");
+    symlinkSync(outsideProjectRoot, symlinkRoot, "dir");
+    const symlinkResponse = await fetch(`${baseUrl}/api/workspaces/select`, {
+      body: JSON.stringify({ root: symlinkRoot }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(symlinkResponse.status).toBe(403);
+    const symlinkError = apiErrorResponseSchema.parse(await symlinkResponse.json());
+    expect(symlinkError.error.code).toBe("WORKSPACE_OUTSIDE_ALLOWLIST");
+  });
+
+  it("rejects selecting an unavailable recent workspace", async () => {
+    mkdirSync(path.join(workspaceRoot, ".alpha-kanban"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".alpha-kanban", "state.json"),
+      JSON.stringify(
+        {
+          version: 2,
+          recentWorkspaces: [
+            {
+              id: "w_missing",
+              root: path.join(projectsRoot, "missing-project"),
+              label: "missing-project",
+              lastOpenedAt: "2026-06-22T00:00:00.000Z",
+            },
+          ],
+          lastWorkspaceId: "w_missing",
+          documents: {},
+          runResults: {},
+        },
+        null,
+        2,
+      ),
+    );
+
+    const response = await fetch(`${baseUrl}/api/workspaces/select`, {
+      body: JSON.stringify({ workspaceId: "w_missing" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(410);
+    const body = apiErrorResponseSchema.parse(await response.json());
+    expect(body.error.code).toBe("WORKSPACE_UNAVAILABLE");
   });
 
   it("previews and runs Codex with file-level session state", async () => {

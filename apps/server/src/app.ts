@@ -7,12 +7,14 @@ import {
   codexPromptPreviewRequestSchema,
   createCodexRunRequestSchema,
   patchTicketRequestSchema,
+  selectWorkspaceRequestSchema,
 } from "@alpha-kanban/shared";
 
 import { loadServerConfig, type LoadConfigOptions } from "./config";
 import { CODEX_RUN_ERROR, CodexRunError, CodexRunner } from "./codexRunner";
 import { FILE_ERROR, FileStoreError, MarkdownFileStore } from "./files";
 import { TicketMarkdownWriteError } from "./markdown/ticketMarkdown";
+import { WORKSPACE_ERROR, WorkspaceError, WorkspaceService } from "./workspaces";
 
 export type CreateServerAppOptions = LoadConfigOptions;
 export type ServerApp = {
@@ -20,10 +22,12 @@ export type ServerApp = {
   config: ReturnType<typeof loadServerConfig>;
   codexRunner: CodexRunner;
   fileStore: MarkdownFileStore;
+  workspaceService: WorkspaceService;
 };
 
 export function createServerApp(options: CreateServerAppOptions = {}): ServerApp {
   const config = loadServerConfig(options);
+  const workspaceService = new WorkspaceService(config);
   const fileStore = new MarkdownFileStore(config);
   const codexRunner = new CodexRunner(config, fileStore);
   const app = express();
@@ -33,6 +37,23 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.get("/api/health", (_request, response) => {
     response.json(createHealthResponse("server"));
+  });
+
+  app.get("/api/workspaces", async (_request, response, next) => {
+    try {
+      response.json(await workspaceService.listWorkspaces());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/workspaces/select", async (request, response, next) => {
+    try {
+      const body = selectWorkspaceRequestSchema.parse(request.body);
+      response.json({ workspace: await workspaceService.selectWorkspace(body) });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/api/files", async (_request, response, next) => {
@@ -190,7 +211,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.use(errorHandler);
 
-  return { app, config, codexRunner, fileStore };
+  return { app, config, codexRunner, fileStore, workspaceService };
 }
 
 const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
@@ -221,6 +242,14 @@ function normalizeError(error: unknown): {
       code: error.code,
       message: error.message,
       status: fileErrorStatus(error.code),
+    };
+  }
+
+  if (error instanceof WorkspaceError) {
+    return {
+      code: error.code,
+      message: error.message,
+      status: workspaceErrorStatus(error.code),
     };
   }
 
@@ -268,6 +297,19 @@ function fileErrorStatus(code: string): number {
       return 403;
     case FILE_ERROR.STALE_FILE:
       return 409;
+    default:
+      return 500;
+  }
+}
+
+function workspaceErrorStatus(code: string): number {
+  switch (code) {
+    case WORKSPACE_ERROR.WORKSPACE_NOT_FOUND:
+      return 404;
+    case WORKSPACE_ERROR.WORKSPACE_OUTSIDE_ALLOWLIST:
+      return 403;
+    case WORKSPACE_ERROR.WORKSPACE_UNAVAILABLE:
+      return 410;
     default:
       return 500;
   }

@@ -168,6 +168,41 @@ export const alphaKanbanStateSchema = z.object({
 
 export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;
 
+export const workspaceSummarySchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  root: z.string().min(1),
+  isAvailable: z.boolean(),
+  hasDocs: z.boolean(),
+  lastOpenedAt: z.string().datetime().optional(),
+});
+
+export type WorkspaceSummary = z.infer<typeof workspaceSummarySchema>;
+
+export const workspacesResponseSchema = z.object({
+  workspaces: z.array(workspaceSummarySchema),
+  lastWorkspaceId: z.string().min(1).optional(),
+});
+
+export type WorkspacesResponse = z.infer<typeof workspacesResponseSchema>;
+
+export const selectWorkspaceRequestSchema = z
+  .object({
+    root: z.string().min(1).optional(),
+    workspaceId: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.root || value.workspaceId), {
+    message: "root or workspaceId is required",
+  });
+
+export type SelectWorkspaceRequest = z.infer<typeof selectWorkspaceRequestSchema>;
+
+export const selectWorkspaceResponseSchema = z.object({
+  workspace: workspaceSummarySchema,
+});
+
+export type SelectWorkspaceResponse = z.infer<typeof selectWorkspaceResponseSchema>;
+
 export const markdownFileSummarySchema = z.object({
   id: z.string().min(1),
   type: markdownFileTypeSchema,

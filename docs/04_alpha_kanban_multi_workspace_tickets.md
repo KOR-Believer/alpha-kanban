@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `4 / 12 tickets`
+- 현재 진행률: `5 / 12 tickets`
 
 ## 티켓 상태
 
@@ -100,7 +100,7 @@ Depends on:
 | --- | --- | ---: | --- | --- |
 | AKW-00 | DONE | 100% | `alpha-kanban`, `docs` | - |
 | AKW-01 | DONE | 100% | `packages/shared`, `apps/server` | AKW-00 |
-| AKW-02 | READY | 25% | `apps/server`, `packages/shared` | AKW-01 |
+| AKW-02 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01 |
 | AKW-03 | READY | 25% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | TODO | 0% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
@@ -241,8 +241,8 @@ Depends on:
 
 ### AKW-02. Workspace discovery와 allowlist path 검증 API 구현
 
-Status: READY
-Progress: 25%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/server`
@@ -281,24 +281,28 @@ Depends on:
 
 완료 기준:
 
-- [ ] allowlist 내부 project만 API에 반환된다.
-- [ ] allowlist 밖 absolute path는 거부된다.
-- [ ] symlink가 allowlist 밖을 가리키면 거부된다.
-- [ ] recent workspace가 삭제된 경우 unavailable 상태로 표현된다.
+- [x] allowlist 내부 project만 API에 반환된다.
+- [x] allowlist 밖 absolute path는 거부된다.
+- [x] symlink가 allowlist 밖을 가리키면 거부된다.
+- [x] recent workspace가 삭제된 경우 unavailable 상태로 표현된다.
 
 검증:
 
-- [ ] API integration test
-- [ ] symlink/path traversal test
-- [ ] unavailable recent workspace test
+- [x] API integration test
+- [x] symlink/path traversal test
+- [x] unavailable recent workspace test
 
 사용자 지시:
 
 - 2026-06-22: allowlist는 OS 접근권한이 아니라 앱 내부 workspace root 정책으로 이해한다.
+- 2026-06-22: AKW-02 구현을 진행한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-22: `packages/shared`에 workspace list/select DTO를 추가하고, `apps/server/src/workspaces.ts`에 allowlist realpath 검증, candidate discovery, recent unavailable 병합 정책을 구현했다.
+- 2026-06-22: `GET /api/workspaces`, `POST /api/workspaces/select`와 `WORKSPACE_NOT_FOUND`, `WORKSPACE_OUTSIDE_ALLOWLIST`, `WORKSPACE_UNAVAILABLE` 에러 매핑을 추가했다.
+- 2026-06-22: API 통합 테스트로 allowlist listing, select recent 기록, path traversal 차단, symlink escape 차단, unavailable recent 선택 거부를 검증했고 `pnpm --filter @alpha-kanban/server test` 통과를 확인했다.
 
 ### AKW-03. Per-workspace Markdown file API와 FileStore 분리
 
