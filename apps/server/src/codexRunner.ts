@@ -178,10 +178,14 @@ export class CodexRunner {
     return this.snapshot(this.requireRun(runId));
   }
 
-  getDocumentRunSummary(fileId: string): CodexDocumentRunSummaryResponse {
+  async getDocumentRunSummary(fileId: string): Promise<CodexDocumentRunSummaryResponse> {
+    const documentRuns = [...this.runs.values()].filter((run) => run.fileId === fileId);
+    const readAtByRunId = await this.stateStore.getRunReadAtMap(
+      documentRuns.map((run) => run.id),
+    );
     const runs = [...this.runs.values()]
       .filter((run) => run.fileId === fileId)
-      .map((run) => this.runSummary(run))
+      .map((run) => this.runSummary(run, readAtByRunId.get(run.id)))
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
     const activeRun = runs.find((run) => isActiveRunStatus(run.rawStatus));
     const latestRun = runs.at(-1);
@@ -194,6 +198,12 @@ export class CodexRunner {
       latestRun,
       runs,
     };
+  }
+
+  async markRunRead(runId: string): Promise<CodexRunSummary> {
+    const run = this.requireRun(runId);
+    const readState = await this.stateStore.markRunRead(run.id);
+    return this.runSummary(run, readState.readAt);
   }
 
   subscribe(runId: string, subscriber: RunSubscriber): () => void {
@@ -397,7 +407,7 @@ export class CodexRunner {
     );
   }
 
-  private runSummary(run: MutableRun): CodexRunSummary {
+  private runSummary(run: MutableRun, readAt?: string): CodexRunSummary {
     return {
       id: run.id,
       fileId: run.fileId,
@@ -407,6 +417,8 @@ export class CodexRunner {
       instructionSummary: run.instructionSummary,
       startedAt: run.startedAt,
       finishedAt: run.finishedAt,
+      readAt,
+      isUnread: isFinishedRunStatus(run.status) && !readAt,
       logPath: run.logPath,
       eventCount: run.events.length,
       latestEvent: run.events.at(-1),
@@ -512,6 +524,10 @@ function classifyFailure(stderr: string): string {
 
 function isActiveRunStatus(status: CodexRunStatus): boolean {
   return status === "queued" || status === "running";
+}
+
+function isFinishedRunStatus(status: CodexRunStatus): boolean {
+  return !isActiveRunStatus(status);
 }
 
 function signalStatus(run: MutableRun): CodexRunSignalStatus {

@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `1 / 11 tickets`
+- 현재 진행률: `3 / 12 tickets`
 
 ## 티켓 상태
 
@@ -37,6 +37,7 @@
 - `Run with Codex`는 selected target workspace를 cwd로 사용한다.
 - ticket 실행 입력, document-level chat, workspace-level chat은 scope가 다르므로 UI와 prompt boundary를 분리한다.
 - 자세한 terminal log는 debug affordance로 유지하고, 제품 UX에는 run status indicator를 우선 제공한다.
+- 완료/실패 run 결과는 시간 기반으로 사라지지 않고, 사용자가 명시적으로 읽음 처리할 때까지 unread badge로 유지한다.
 - 외부 CLI/editor가 Markdown을 직접 수정할 수 있으므로 UI는 file change 감지, stale 표시, refetch 정책을 가져야 한다.
 
 ## Ticket Template
@@ -103,11 +104,12 @@ Depends on:
 | AKW-03 | READY | 25% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | TODO | 0% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
-| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10 |
+| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11 |
 | AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
 | AKW-08 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-02, AKW-03, AKW-04, AKW-05, AKW-07 |
-| AKW-09 | IN_PROGRESS | 75% | `apps/server`, `apps/web`, `packages/shared` | AKW-05 |
+| AKW-09 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared` | AKW-05 |
 | AKW-10 | TODO | 0% | `apps/server`, `apps/web`, `packages/shared` | AKW-03, AKW-04 |
+| AKW-11 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared` | AKW-09 |
 
 ## Ticket List
 
@@ -510,6 +512,7 @@ Depends on:
 - `AKW-08`
 - `AKW-09`
 - `AKW-10`
+- `AKW-11`
 
 목표:
 
@@ -518,7 +521,7 @@ Depends on:
 현재 문제:
 
 - 기존 검증은 Alpha Kanban 자기 docs와 sample fixture 중심이다.
-- target workspace 선택, recent state, workspace-scoped session, Codex cwd routing, run status indicator, 외부 Markdown 변경 감지를 묶은 regression check가 없다.
+- target workspace 선택, recent state, workspace-scoped session, Codex cwd routing, run status indicator, run result read state, 외부 Markdown 변경 감지를 묶은 regression check가 없다.
 
 구현 범위:
 
@@ -526,6 +529,7 @@ Depends on:
 - sample 또는 test fixture로 두 개 workspace를 구성한다.
 - API, UI, Codex mocked integration 검증을 실행한다.
 - run status indicator와 external Markdown change sync 동작을 통합 smoke에 포함한다.
+- run result unread/read badge 동작을 통합 smoke에 포함한다.
 - manual smoke checklist를 업데이트한다.
 - 기존 `docs/01`, `docs/02`는 MVP 완료 기록으로 유지하고 새 phase 문서를 현재 상태로 갱신한다.
 
@@ -543,6 +547,7 @@ Depends on:
 - [ ] 브라우저 smoke에서 project switcher, file list, ticket detail, prompt preview가 동작한다.
 - [ ] 브라우저 smoke에서 document chat과 workspace chat entry가 scope에 맞게 동작한다.
 - [ ] 브라우저 smoke에서 run status indicator와 external file change refresh/stale UI가 동작한다.
+- [ ] 브라우저 smoke에서 unread run result badge와 mark-read flow가 동작한다.
 - [ ] README와 티켓 문서가 실제 구현 상태와 일치한다.
 
 검증:
@@ -552,6 +557,7 @@ Depends on:
 - [ ] mobile browser smoke
 - [ ] document/workspace chat smoke
 - [ ] run status indicator smoke
+- [ ] run result read state smoke
 - [ ] external Markdown change smoke
 - [ ] manual checklist
 
@@ -562,6 +568,76 @@ Depends on:
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+
+### AKW-11. Run result unread badge와 read state 저장 구현
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P0
+Type: Feature / API / UX
+Depends on:
+
+- `AKW-09`
+
+목표:
+
+- 완료/실패한 Codex run 결과를 사용자가 놓치지 않도록 unread result badge로 유지하고, 명시적 읽음 처리 후 카드에서 숨긴다.
+
+현재 문제:
+
+- 현재 ticket card는 ticket별 latest run summary를 그대로 표시하므로 `succeeded` badge가 ticket 상태와 무관하게 계속 따라다닌다.
+- badge를 즉시 제거하면 사용자가 완료/실패 결과를 읽기 전에 놓칠 수 있다.
+- 시간 기반 만료는 장기 휴식 후 돌아오는 workflow에 맞지 않는다.
+- run result read state가 서버 state로 저장되지 않아 브라우저/새로고침 간 일관 정책이 없다.
+
+구현 범위:
+
+- `.alpha-kanban/state.json`에 `runId -> readAt` read state를 저장한다.
+- document run summary API가 finished run의 `readAt`과 `isUnread` 정보를 반환한다.
+- finished run 중 unread result만 ticket card badge에 표시한다.
+- active run은 read state와 무관하게 항상 표시한다.
+- ticket detail drawer에 latest run result `Mark as read` action을 제공한다.
+- mark-read API를 추가하고 read 처리 후 run summary query를 갱신한다.
+- read 처리된 finished run은 카드 badge에서 사라지지만 drawer run history/latest run에서는 확인 가능하게 유지한다.
+
+제외 범위:
+
+- 시간 기반 자동 만료
+- run history 전체 목록 UI
+- 서버 재시작 후 JSONL 로그를 읽어 run registry를 복원하는 기능
+
+완료 기준:
+
+- [x] finished run이 unread이면 ticket card에 result badge가 표시된다.
+- [x] active run은 read 여부와 무관하게 ticket card에 표시된다.
+- [x] 사용자가 `Mark as read`를 누르면 `readAt`이 서버 state에 저장된다.
+- [x] read 처리된 finished run badge는 ticket card에서 사라진다.
+- [x] 새로고침 후에도 read 처리 상태가 유지된다.
+
+검증:
+
+- [x] state store readAt unit/API test
+- [x] mark-read API test
+- [x] ticket card unread badge UI smoke
+- [x] drawer mark-read smoke
+
+사용자 지시:
+
+- 2026-06-22: 완료/실패 run 결과는 시간으로 자동 삭제하지 말고, 서버 `.alpha-kanban/state.json`에 read state를 저장해 명시적 읽음 처리로 관리한다.
+
+진행 메모:
+
+- 2026-06-22: 초안 작성 후 구현 시작.
+- 2026-06-22: `packages/shared`의 run summary에 `readAt`, `isUnread`를 추가하고 mark-read 응답 schema를 추가했다.
+- 2026-06-22: `apps/server`에서 `.alpha-kanban/state.json`의 `runResults[runId].readAt` 저장/조회와 `POST /api/codex/runs/:runId/read`를 구현했다.
+- 2026-06-22: `apps/web`에서 ticket card/document header는 active 또는 unread run만 표시하고, drawer의 `Mark as read`가 readAt 저장 후 badge를 제거하도록 구현했다.
+- 2026-06-22: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright UI smoke. Dry run으로 unread succeeded badge를 만들고 `Mark as read` 후 카드/header/drawer badge 제거와 state.json `readAt` 저장을 확인했다.
 
 ### AKW-07. Document-level chat panel 구현
 
@@ -703,8 +779,8 @@ Depends on:
 
 ### AKW-09. Codex run status indicator와 active run 신호 구현
 
-Status: IN_PROGRESS
-Progress: 75%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/server`
@@ -762,7 +838,7 @@ Depends on:
 - [x] active run summary API test
 - [x] mocked Codex running/succeeded/failed/canceled test
 - [x] desktop browser smoke
-- [ ] drawer reopen smoke
+- [x] drawer reopen smoke
 
 사용자 지시:
 
@@ -770,6 +846,7 @@ Depends on:
 - 2026-06-22: MVP는 같은 md 파일 document session 안에서 단일 active run으로 구현하고, Codex 내부 subagent/병렬 도구 사용은 하나의 outer run으로 취급한다.
 - 2026-06-22: 완료 기준이나 검증 같은 Markdown checkbox가 UI에서 체크 상태로 렌더링되지 않아 어디까지 진행됐는지 알기 어렵다.
 - 2026-06-22: AKW-09 진행사항이 완료 기준 checkbox에 반영되어 있지 않다.
+- 2026-06-22: 샘플 티켓 run으로 drawer reopen/run status smoke가 확인되었고, 샘플 변경은 reset한다.
 
 진행 메모:
 
@@ -780,6 +857,7 @@ Depends on:
 - 2026-06-22: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright desktop smoke. 남은 확인: AKW-05 target workspace routing 이후 실제 active run drawer reopen smoke.
 - 2026-06-22: Markdown checkbox marker를 `completionCriteriaItems`와 `validationItems`로 구조화해 API 응답에 보존하고, ticket detail의 완료 기준/검증 섹션에서 checked/unchecked 상태로 렌더링되게 수정했다.
 - 2026-06-22: AKW-09 완료 기준 checkbox를 구현 완료 상태에 맞게 checked로 갱신했다. 티켓은 `IN_PROGRESS 75%` 유지하며, 남은 항목은 실제 active run 기반 drawer reopen smoke다.
+- 2026-06-22: 샘플 티켓 run에서 새로고침 후 running 상태 추적과 종료 후 succeeded 전환을 확인했다. `examples/sample_tickets.md` 변경은 smoke 후 reset했으며, AKW-09를 DONE 처리했다.
 
 ### AKW-10. 외부 Markdown 변경 감지와 UI refresh/stale 정책 구현
 

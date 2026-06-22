@@ -314,6 +314,8 @@ export const codexRunSummarySchema = z.object({
   instructionSummary: z.string().optional(),
   startedAt: z.string().datetime(),
   finishedAt: z.string().datetime().optional(),
+  readAt: z.string().datetime().optional(),
+  isUnread: z.boolean(),
   logPath: z.string().min(1),
   eventCount: z.number().int().nonnegative(),
   latestEvent: codexRunEventSchema.optional(),
@@ -349,6 +351,12 @@ export const cancelCodexRunResponseSchema = z.object({
 });
 
 export type CancelCodexRunResponse = z.infer<typeof cancelCodexRunResponseSchema>;
+
+export const markCodexRunReadResponseSchema = z.object({
+  run: codexRunSummarySchema,
+});
+
+export type MarkCodexRunReadResponse = z.infer<typeof markCodexRunReadResponseSchema>;
 
 export const apiErrorResponseSchema = z.object({
   error: z.object({

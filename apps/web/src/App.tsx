@@ -8,6 +8,7 @@ import {
   codexPromptPreviewResponseSchema,
   codexRunEventSchema,
   codexRunResponseSchema,
+  markCodexRunReadResponseSchema,
   createCodexRunResponseSchema,
   filesResponseSchema,
   healthResponseSchema,
@@ -29,6 +30,7 @@ import {
 import {
   AlertCircle,
   Bot,
+  Check,
   CircleDot,
   FileText,
   FolderKanban,
@@ -171,6 +173,13 @@ async function cancelCodexRun(runId: string) {
   });
 }
 
+async function markCodexRunRead(runId: string) {
+  return requestJson(`/api/codex/runs/${runId}/read`, markCodexRunReadResponseSchema, {
+    body: JSON.stringify({}),
+    method: "POST",
+  });
+}
+
 export function App() {
   const queryClient = useQueryClient();
   const [selectedFileId, setSelectedFileId] = useState<string | undefined>();
@@ -215,7 +224,9 @@ export function App() {
     const summaries = new Map<string, CodexRunSummary>();
 
     for (const runSummary of codexRunSummaryQuery.data?.runs ?? []) {
-      summaries.set(runSummary.ticketId, runSummary);
+      if (shouldShowRunOnTicketCard(runSummary)) {
+        summaries.set(runSummary.ticketId, runSummary);
+      }
     }
 
     return summaries;
@@ -357,6 +368,7 @@ export function App() {
             await queryClient.invalidateQueries({ queryKey: ["files"] });
           }}
           onRunStatusChange={refetchRunSummary}
+          onRunRead={refetchRunSummary}
           ticket={selectedTicket}
           ticketRunSummary={selectedTicketRunSummary}
           documentRunSummary={codexRunSummaryQuery.data}
@@ -456,7 +468,7 @@ function BoardSummary({
 
   return (
     <div className="flex flex-wrap justify-end gap-2 max-[720px]:justify-start">
-      {runSummary?.latestRun ? <RunSignalBadge run={runSummary.latestRun} /> : null}
+      {runSummary ? <DocumentRunSignalBadge runSummary={runSummary} /> : null}
       <Badge variant="outline">{ticketCount} tickets</Badge>
       <Badge variant="muted">{new Date(file.mtimeMs).toLocaleDateString()}</Badge>
     </div>
@@ -634,6 +646,7 @@ function TicketDetailDrawer({
   onPatchTicket,
   onReload,
   onRunDocumentChange,
+  onRunRead,
   onRunStatusChange,
   ticket,
   ticketRunSummary,
@@ -650,6 +663,7 @@ function TicketDetailDrawer({
   ) => Promise<void>;
   onReload: () => Promise<unknown>;
   onRunDocumentChange: () => Promise<unknown>;
+  onRunRead: () => Promise<unknown>;
   onRunStatusChange: () => Promise<unknown>;
   ticket: TicketItem;
   ticketRunSummary?: CodexRunSummary;
@@ -664,6 +678,7 @@ function TicketDetailDrawer({
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isStartingRun, setIsStartingRun] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [error, setError] = useState<ClientApiError | Error | null>(null);
 
   useEffect(() => {
@@ -805,6 +820,23 @@ function TicketDetailDrawer({
       setError(normalizeClientError(nextError));
     } finally {
       setIsCancelling(false);
+    }
+  }
+
+  async function markRunRead(): Promise<void> {
+    if (!ticketRunSummary) {
+      return;
+    }
+
+    setIsMarkingRead(true);
+    setError(null);
+    try {
+      await markCodexRunRead(ticketRunSummary.id);
+      await onRunRead();
+    } catch (nextError) {
+      setError(normalizeClientError(nextError));
+    } finally {
+      setIsMarkingRead(false);
     }
   }
 
@@ -982,6 +1014,22 @@ function TicketDetailDrawer({
                 <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   <RunSignalBadge compact run={activeRun} />
                   <span className="font-medium">Active run on {activeRun.ticketId}</span>
+                </div>
+              ) : null}
+              {ticketRunSummary?.isUnread ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <RunSignalBadge compact run={ticketRunSummary} />
+                    <span className="truncate font-medium">Unread run result</span>
+                  </div>
+                  <Button disabled={isMarkingRead} onClick={markRunRead} size="sm" variant="outline">
+                    {isMarkingRead ? (
+                      <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Check className="size-3" aria-hidden="true" />
+                    )}
+                    Mark as read
+                  </Button>
                 </div>
               ) : null}
               {preview ? <PromptPreview preview={preview} /> : null}
@@ -1168,6 +1216,21 @@ function RunLog({ events, run }: { events: CodexRunEvent[]; run: CodexRunSnapsho
   );
 }
 
+function DocumentRunSignalBadge({
+  runSummary,
+}: {
+  runSummary: CodexDocumentRunSummaryResponse;
+}) {
+  const unreadRuns = runSummary.runs.filter((run) => run.isUnread);
+  const displayRun = runSummary.activeRun ?? unreadRuns.at(-1);
+
+  if (!displayRun) {
+    return null;
+  }
+
+  return <RunSignalBadge run={displayRun} />;
+}
+
 function RunSignalBadge({
   compact = false,
   run,
@@ -1199,6 +1262,10 @@ function RunSignalBadge({
       <span className="truncate">{compact ? label : `${label}: ${run.ticketId}`}</span>
     </span>
   );
+}
+
+function shouldShowRunOnTicketCard(run: CodexRunSummary): boolean {
+  return run.status === "queued" || run.status === "running" || run.isUnread;
 }
 
 function PropertyRow({ label, value }: { label: string; value: string }) {

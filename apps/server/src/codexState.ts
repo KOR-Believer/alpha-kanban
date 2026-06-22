@@ -10,14 +10,21 @@ export type CodexDocumentState = {
   updatedAt: string;
 };
 
+export type CodexRunReadState = {
+  readAt: string;
+  updatedAt: string;
+};
+
 type AlphaKanbanState = {
   version: 1;
   documents: Record<string, CodexDocumentState>;
+  runResults: Record<string, CodexRunReadState>;
 };
 
 const EMPTY_STATE: AlphaKanbanState = {
   version: 1,
   documents: {},
+  runResults: {},
 };
 
 export class CodexStateStore {
@@ -55,6 +62,40 @@ export class CodexStateStore {
     return next;
   }
 
+  async getRunReadAt(runId: string): Promise<string | undefined> {
+    const state = await this.readState();
+    return state.runResults[runId]?.readAt;
+  }
+
+  async getRunReadAtMap(runIds: string[]): Promise<Map<string, string>> {
+    const state = await this.readState();
+    const result = new Map<string, string>();
+
+    for (const runId of runIds) {
+      const readAt = state.runResults[runId]?.readAt;
+      if (readAt) {
+        result.set(runId, readAt);
+      }
+    }
+
+    return result;
+  }
+
+  async markRunRead(runId: string): Promise<CodexRunReadState> {
+    const state = await this.readState();
+    const now = new Date().toISOString();
+    const current = state.runResults[runId];
+    const next: CodexRunReadState = {
+      readAt: current?.readAt ?? now,
+      updatedAt: now,
+    };
+
+    state.runResults[runId] = next;
+    await this.writeState(state);
+
+    return next;
+  }
+
   private async readState(): Promise<AlphaKanbanState> {
     try {
       const parsed = JSON.parse(await fs.readFile(this.statePath, "utf8")) as AlphaKanbanState;
@@ -62,10 +103,11 @@ export class CodexStateStore {
       return {
         version: 1,
         documents: parsed.documents ?? {},
+        runResults: parsed.runResults ?? {},
       };
     } catch (error) {
       if (isNodeError(error, "ENOENT")) {
-        return { ...EMPTY_STATE, documents: {} };
+        return { ...EMPTY_STATE, documents: {}, runResults: {} };
       }
       throw error;
     }

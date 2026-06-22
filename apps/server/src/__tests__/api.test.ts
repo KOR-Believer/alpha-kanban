@@ -10,6 +10,7 @@ import {
   codexDocumentRunSummaryResponseSchema,
   codexPromptPreviewResponseSchema,
   codexRunResponseSchema,
+  codexRunSummarySchema,
   createCodexRunResponseSchema,
   filesResponseSchema,
   ticketDocumentResponseSchema,
@@ -299,6 +300,26 @@ describe("API", () => {
     expect(afterCancel.canStartRun).toBe(true);
     expect(afterCancel.activeRun).toBeUndefined();
     expect(afterCancel.latestRun?.status).toBe("cancelled");
+    expect(afterCancel.latestRun?.isUnread).toBe(true);
+
+    const read = codexRunSummarySchema.parse(
+      (await postJson(`/api/codex/runs/${created.run.id}/read`, {})).run,
+    );
+    expect(read.readAt).toBeDefined();
+    expect(read.isUnread).toBe(false);
+
+    const stateAfterRead = JSON.parse(
+      readFileSync(path.join(workspaceRoot, ".alpha-kanban", "state.json"), "utf8"),
+    ) as {
+      runResults?: Record<string, { readAt?: string }>;
+    };
+    expect(stateAfterRead.runResults?.[created.run.id]?.readAt).toBe(read.readAt);
+
+    const afterRead = codexDocumentRunSummaryResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/codex-run-summary`),
+    );
+    expect(afterRead.latestRun?.readAt).toBe(read.readAt);
+    expect(afterRead.latestRun?.isUnread).toBe(false);
   });
 
   it("maps Codex authentication failures to a needs_auth run signal", async () => {

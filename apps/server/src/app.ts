@@ -134,11 +134,11 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     }
   });
 
-  app.get("/api/files/:fileId/codex-run-summary", (request, response, next) => {
+  app.get("/api/files/:fileId/codex-run-summary", async (request, response, next) => {
     try {
       const fileId = request.params.fileId ?? "";
       fileStore.resolveFileId(fileId);
-      response.json(codexRunner.getDocumentRunSummary(fileId));
+      response.json(await codexRunner.getDocumentRunSummary(fileId));
     } catch (error) {
       next(error);
     }
@@ -175,6 +175,14 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
   app.post("/api/codex/runs/:runId/cancel", async (request, response, next) => {
     try {
       response.json({ run: await codexRunner.cancelRun(request.params.runId ?? "") });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/codex/runs/:runId/read", async (request, response, next) => {
+    try {
+      response.json({ run: await codexRunner.markRunRead(request.params.runId ?? "") });
     } catch (error) {
       next(error);
     }

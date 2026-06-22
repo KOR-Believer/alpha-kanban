@@ -198,6 +198,10 @@ Unknown / stale
 - 새 run 요청 시 같은 document에 `queued` 또는 `running` run이 있으면 서버가 거부하고 기존 active run summary를 반환한다.
 - Codex가 실행 중 내부적으로 subagent나 병렬 tool call을 사용하는 것은 하나의 outer run으로 취급한다.
 - 향후 병렬 실행 확장을 위해 run history는 여러 개 저장할 수 있게 두되, 제품 UX의 기본 action은 document-scoped single active run으로 유지한다.
+- `succeeded`, `failed`, `cancelled`, `needs_auth` 같은 finished run은 사용자가 명시적으로 읽음 처리하기 전까지 unread result로 남긴다.
+- unread/read state는 browser localStorage가 아니라 control app의 `.alpha-kanban/state.json`에 `runId -> readAt` 형태로 저장한다.
+- 시간 기반 자동 만료는 사용하지 않는다. 주말이나 장기 휴식 후에도 읽지 않은 결과는 계속 보여야 한다.
+- ticket card에는 active run 또는 unread finished result만 표시하고, read 처리된 finished run은 drawer history에서만 확인한다.
 
 ### 9. Markdown change sync model
 
@@ -223,6 +227,7 @@ Unknown / stale
 - file watcher는 allowlist와 selected workspace doc roots 내부만 감시한다.
 - run status indicator는 local app state와 in-memory active run registry를 표시할 뿐, Codex process를 암묵적으로 cancel하거나 재시작하지 않는다.
 - 같은 document session의 active run은 하나만 허용해 Markdown 동시 쓰기와 Codex session context 섞임을 피한다.
+- run result read state는 control app의 local state로 취급하고 target project repository에는 쓰지 않는다.
 
 ## 에러 정책
 
