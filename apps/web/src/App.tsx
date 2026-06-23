@@ -13,6 +13,8 @@ import {
   filesResponseSchema,
   healthResponseSchema,
   ticketDocumentResponseSchema,
+  selectWorkspaceResponseSchema,
+  workspacesResponseSchema,
   type ApiErrorResponse,
   type CodexDocumentRunSummaryResponse,
   type CodexPromptPreviewResponse,
@@ -26,6 +28,7 @@ import {
   type TicketItem,
   type TicketProgress,
   type TicketStatus,
+  type WorkspaceSummary,
 } from "@alpha-kanban/shared";
 import {
   AlertCircle,
@@ -73,8 +76,11 @@ class ClientApiError extends Error {
   }
 }
 
-const ticketDocumentKey = (fileId?: string) => ["ticket-document", fileId] as const;
-const codexRunSummaryKey = (fileId?: string) => ["codex-run-summary", fileId] as const;
+const filesKey = (workspaceId?: string) => ["files", workspaceId] as const;
+const ticketDocumentKey = (workspaceId?: string, fileId?: string) =>
+  ["ticket-document", workspaceId, fileId] as const;
+const codexRunSummaryKey = (workspaceId?: string, fileId?: string) =>
+  ["codex-run-summary", workspaceId, fileId] as const;
 
 async function requestJson<T>(
   url: string,
@@ -107,12 +113,26 @@ async function fetchHealth() {
   return requestJson("/api/health", healthResponseSchema);
 }
 
-async function fetchFiles() {
-  return requestJson("/api/files", filesResponseSchema);
+async function fetchWorkspaces() {
+  return requestJson("/api/workspaces", workspacesResponseSchema);
 }
 
-async function fetchTicketDocument(fileId: string) {
-  return requestJson(`/api/files/${fileId}/tickets`, ticketDocumentResponseSchema);
+async function selectWorkspace(workspaceId: string) {
+  return requestJson("/api/workspaces/select", selectWorkspaceResponseSchema, {
+    body: JSON.stringify({ workspaceId }),
+    method: "POST",
+  });
+}
+
+async function fetchFiles(workspaceId: string) {
+  return requestJson(`/api/workspaces/${workspaceId}/files`, filesResponseSchema);
+}
+
+async function fetchTicketDocument(workspaceId: string, fileId: string) {
+  return requestJson(
+    `/api/workspaces/${workspaceId}/files/${fileId}/tickets`,
+    ticketDocumentResponseSchema,
+  );
 }
 
 async function fetchCodexRunSummary(fileId: string) {
@@ -123,6 +143,7 @@ async function fetchCodexRunSummary(fileId: string) {
 }
 
 async function patchTicket(
+  workspaceId: string,
   fileId: string,
   ticketId: string,
   body: {
@@ -132,10 +153,14 @@ async function patchTicket(
     status?: TicketStatus;
   },
 ) {
-  return requestJson(`/api/files/${fileId}/tickets/${ticketId}`, ticketDocumentResponseSchema, {
-    body: JSON.stringify(body),
-    method: "PATCH",
-  });
+  return requestJson(
+    `/api/workspaces/${workspaceId}/files/${fileId}/tickets/${ticketId}`,
+    ticketDocumentResponseSchema,
+    {
+      body: JSON.stringify(body),
+      method: "PATCH",
+    },
+  );
 }
 
 async function previewCodexPrompt(body: {
@@ -182,6 +207,7 @@ async function markCodexRunRead(runId: string) {
 
 export function App() {
   const queryClient = useQueryClient();
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | undefined>();
   const [selectedFileId, setSelectedFileId] = useState<string | undefined>();
   const [selectedTicketId, setSelectedTicketId] = useState<string | undefined>();
   const healthQuery = useQuery({
@@ -189,9 +215,18 @@ export function App() {
     queryFn: fetchHealth,
     refetchInterval: 30_000,
   });
+  const workspacesQuery = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: fetchWorkspaces,
+  });
+  const selectedWorkspace = workspacesQuery.data?.workspaces.find(
+    (workspace) => workspace.id === selectedWorkspaceId,
+  );
+  const canLoadWorkspace = Boolean(selectedWorkspaceId && selectedWorkspace?.isAvailable);
   const filesQuery = useQuery({
-    queryKey: ["files"],
-    queryFn: fetchFiles,
+    enabled: canLoadWorkspace,
+    queryKey: filesKey(selectedWorkspaceId),
+    queryFn: () => fetchFiles(selectedWorkspaceId ?? ""),
   });
   const ticketFiles = useMemo(
     () => filesQuery.data?.files.filter((file) => file.type === "tickets") ?? [],
@@ -199,14 +234,15 @@ export function App() {
   );
   const selectedFile = ticketFiles.find((file) => file.id === selectedFileId);
   const ticketQuery = useQuery({
-    enabled: Boolean(selectedFileId),
-    queryFn: () => fetchTicketDocument(selectedFileId ?? ""),
-    queryKey: ticketDocumentKey(selectedFileId),
+    enabled: Boolean(canLoadWorkspace && selectedFileId),
+    queryFn: () => fetchTicketDocument(selectedWorkspaceId ?? "", selectedFileId ?? ""),
+    queryKey: ticketDocumentKey(selectedWorkspaceId, selectedFileId),
   });
+  const codexRoutingEnabled = false;
   const codexRunSummaryQuery = useQuery({
-    enabled: Boolean(selectedFileId),
+    enabled: Boolean(codexRoutingEnabled && selectedFileId),
     queryFn: () => fetchCodexRunSummary(selectedFileId ?? ""),
-    queryKey: codexRunSummaryKey(selectedFileId),
+    queryKey: codexRunSummaryKey(selectedWorkspaceId, selectedFileId),
     refetchInterval: 5_000,
   });
   const ticketsByStatus = useMemo(() => {
@@ -239,22 +275,46 @@ export function App() {
     : undefined;
 
   useEffect(() => {
-    if (!selectedFileId && ticketFiles[0]) {
+    if (selectedWorkspaceId || !workspacesQuery.data) {
+      return;
+    }
+
+    const lastWorkspace = workspacesQuery.data.workspaces.find(
+      (workspace) =>
+        workspace.id === workspacesQuery.data.lastWorkspaceId && workspace.isAvailable,
+    );
+    if (lastWorkspace) {
+      setSelectedWorkspaceId(lastWorkspace.id);
+    }
+  }, [selectedWorkspaceId, workspacesQuery.data]);
+
+  useEffect(() => {
+    if (selectedWorkspaceId && !selectedFileId && ticketFiles[0]) {
       setSelectedFileId(ticketFiles[0].id);
     }
-  }, [selectedFileId, ticketFiles]);
+  }, [selectedFileId, selectedWorkspaceId, ticketFiles]);
 
   useEffect(() => {
     setSelectedTicketId(undefined);
   }, [selectedFileId]);
 
   async function replaceDocument(data: TicketDocumentResponse): Promise<void> {
-    queryClient.setQueryData(ticketDocumentKey(selectedFileId), data);
-    await queryClient.invalidateQueries({ queryKey: ["files"] });
+    queryClient.setQueryData(ticketDocumentKey(selectedWorkspaceId, selectedFileId), data);
+    await queryClient.invalidateQueries({ queryKey: filesKey(selectedWorkspaceId) });
   }
 
   async function refetchRunSummary(): Promise<void> {
-    await queryClient.invalidateQueries({ queryKey: codexRunSummaryKey(selectedFileId) });
+    await queryClient.invalidateQueries({
+      queryKey: codexRunSummaryKey(selectedWorkspaceId, selectedFileId),
+    });
+  }
+
+  async function handleWorkspaceSelect(workspaceId: string): Promise<void> {
+    await selectWorkspace(workspaceId);
+    setSelectedFileId(undefined);
+    setSelectedTicketId(undefined);
+    setSelectedWorkspaceId(workspaceId);
+    await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
   }
 
   async function handlePatchTicket(
@@ -262,12 +322,12 @@ export function App() {
     status: TicketStatus,
     progress: TicketProgress,
   ): Promise<void> {
-    if (!selectedFileId || !ticketQuery.data) {
+    if (!selectedWorkspaceId || !selectedFileId || !ticketQuery.data) {
       return;
     }
 
     await replaceDocument(
-      await patchTicket(selectedFileId, ticketId, {
+      await patchTicket(selectedWorkspaceId, selectedFileId, ticketId, {
         status,
         progress,
         expectedHash: ticketQuery.data.file.hash,
@@ -288,8 +348,15 @@ export function App() {
               <FolderKanban className="size-5 text-neutral-700" aria-hidden="true" />
               <h1 className="text-base font-semibold tracking-normal">{APP_NAME}</h1>
             </div>
-            <p className="mt-1 text-xs text-neutral-500">Local plan-ticketing workspace</p>
+            <p className="mt-1 text-xs text-neutral-500">Plan-ticketing workspace</p>
           </div>
+
+          <ProjectSwitcher
+            isLoading={workspacesQuery.isLoading}
+            onSelect={handleWorkspaceSelect}
+            selectedWorkspaceId={selectedWorkspaceId}
+            workspaces={workspacesQuery.data?.workspaces ?? []}
+          />
 
           <div className="border-b border-neutral-200 p-3">
             <div className="flex h-9 items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500">
@@ -299,6 +366,10 @@ export function App() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {!selectedWorkspaceId ? <SidebarState label="Select a project" /> : null}
+            {selectedWorkspace && !selectedWorkspace.isAvailable ? (
+              <SidebarState label="Project unavailable" tone="error" />
+            ) : null}
             {filesQuery.isLoading ? <SidebarState label="Loading files" /> : null}
             {filesQuery.isError ? (
               <SidebarState label="Could not load files" tone="error" />
@@ -327,11 +398,18 @@ export function App() {
           <header className="flex min-h-20 items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-4 max-[720px]:flex-col max-[720px]:items-start">
             <div>
               <p className="text-xs font-medium uppercase tracking-normal text-neutral-500">
-                {selectedFile?.relativePath ?? "Select a ticket document"}
+                {selectedWorkspace?.root ?? "Select a project"}
               </p>
               <h2 id="workspace-title" className="mt-1 text-xl font-semibold tracking-normal">
-                {ticketQuery.data?.document.title ?? "Ticket board"}
+                {ticketQuery.data?.document.title ??
+                  selectedFile?.workspaceRelativePath ??
+                  "Ticket board"}
               </h2>
+              {selectedFile ? (
+                <p className="mt-1 text-xs text-neutral-500">
+                  {selectedFile.workspaceRelativePath}
+                </p>
+              ) : null}
             </div>
             <BoardSummary
               file={ticketQuery.data?.file}
@@ -345,10 +423,13 @@ export function App() {
             <BoardContent
               error={ticketQuery.error}
               isError={ticketQuery.isError}
-              isLoading={ticketQuery.isLoading || filesQuery.isLoading}
+              isLoading={ticketQuery.isLoading || filesQuery.isLoading || workspacesQuery.isLoading}
               onTicketSelect={setSelectedTicketId}
               runSummaryByTicket={runSummaryByTicket}
               selectedFileId={selectedFileId}
+              selectedWorkspace={selectedWorkspace}
+              workspaceError={workspacesQuery.error}
+              workspacesError={workspacesQuery.isError}
               ticketsByStatus={ticketsByStatus}
             />
           </div>
@@ -359,6 +440,7 @@ export function App() {
         <TicketDetailDrawer
           documentHash={ticketQuery.data.file.hash}
           documentMtimeMs={ticketQuery.data.file.mtimeMs}
+          codexDisabledReason="Workspace-scoped Codex routing is implemented in AKW-05."
           fileId={selectedFileId}
           onClose={() => setSelectedTicketId(undefined)}
           onPatchTicket={handlePatchTicket}
@@ -401,6 +483,114 @@ function FileButton({
         <span className="block truncate text-sm font-medium">{file.filename}</span>
         <span className="block truncate text-xs text-neutral-500">{file.relativePath}</span>
       </span>
+    </button>
+  );
+}
+
+function ProjectSwitcher({
+  isLoading,
+  onSelect,
+  selectedWorkspaceId,
+  workspaces,
+}: {
+  isLoading: boolean;
+  onSelect: (workspaceId: string) => Promise<void>;
+  selectedWorkspaceId?: string;
+  workspaces: WorkspaceSummary[];
+}) {
+  const recentWorkspaces = workspaces.filter((workspace) => workspace.lastOpenedAt);
+  const discoveredWorkspaces = workspaces.filter((workspace) => !workspace.lastOpenedAt);
+
+  return (
+    <section className="border-b border-neutral-200 px-3 py-3" aria-label="Projects">
+      <div className="mb-2 flex items-center justify-between gap-2 px-2">
+        <h2 className="text-xs font-semibold uppercase tracking-normal text-neutral-500">
+          Projects
+        </h2>
+        {isLoading ? <Loader2 className="size-3 animate-spin text-neutral-500" /> : null}
+      </div>
+      <div className="grid max-h-56 gap-3 overflow-y-auto">
+        {recentWorkspaces.length > 0 ? (
+          <WorkspaceGroup
+            label="Recent"
+            onSelect={onSelect}
+            selectedWorkspaceId={selectedWorkspaceId}
+            workspaces={recentWorkspaces}
+          />
+        ) : null}
+        <WorkspaceGroup
+          label={recentWorkspaces.length > 0 ? "Discovered" : "Available"}
+          onSelect={onSelect}
+          selectedWorkspaceId={selectedWorkspaceId}
+          workspaces={discoveredWorkspaces}
+        />
+        {!isLoading && workspaces.length === 0 ? (
+          <p className="px-2 py-3 text-sm text-neutral-500">No projects found</p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceGroup({
+  label,
+  onSelect,
+  selectedWorkspaceId,
+  workspaces,
+}: {
+  label: string;
+  onSelect: (workspaceId: string) => Promise<void>;
+  selectedWorkspaceId?: string;
+  workspaces: WorkspaceSummary[];
+}) {
+  if (workspaces.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-1">
+      <p className="px-2 text-[11px] font-medium uppercase tracking-normal text-neutral-400">
+        {label}
+      </p>
+      {workspaces.map((workspace) => (
+        <WorkspaceButton
+          isSelected={workspace.id === selectedWorkspaceId}
+          key={workspace.id}
+          onSelect={() => onSelect(workspace.id)}
+          workspace={workspace}
+        />
+      ))}
+    </div>
+  );
+}
+
+function WorkspaceButton({
+  isSelected,
+  onSelect,
+  workspace,
+}: {
+  isSelected: boolean;
+  onSelect: () => Promise<void>;
+  workspace: WorkspaceSummary;
+}) {
+  return (
+    <button
+      className={[
+        "grid min-h-14 min-w-0 gap-1 rounded-md px-2 py-2 text-left transition-colors",
+        isSelected ? "bg-neutral-100 text-neutral-950" : "text-neutral-700 hover:bg-neutral-50",
+        workspace.isAvailable ? "" : "opacity-70",
+      ].join(" ")}
+      disabled={!workspace.isAvailable}
+      onClick={() => void onSelect()}
+      type="button"
+    >
+      <span className="flex min-w-0 items-center justify-between gap-2">
+        <span className="truncate text-sm font-medium">{workspace.label}</span>
+        <Badge variant={workspace.isAvailable ? "muted" : "warning"}>
+          {workspace.isAvailable ? (workspace.hasDocs ? "docs" : "empty") : "missing"}
+        </Badge>
+      </span>
+      <span className="truncate text-xs text-neutral-500">{workspace.root}</span>
     </button>
   );
 }
@@ -482,7 +672,10 @@ function BoardContent({
   onTicketSelect,
   runSummaryByTicket,
   selectedFileId,
+  selectedWorkspace,
   ticketsByStatus,
+  workspaceError,
+  workspacesError,
 }: {
   error: Error | null;
   isError: boolean;
@@ -490,14 +683,46 @@ function BoardContent({
   onTicketSelect: (ticketId: string) => void;
   runSummaryByTicket: Map<string, CodexRunSummary>;
   selectedFileId?: string;
+  selectedWorkspace?: WorkspaceSummary;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
+  workspaceError: Error | null;
+  workspacesError: boolean;
 }) {
-  if (!selectedFileId) {
-    return <BoardState title="No ticket document selected" />;
-  }
-
   if (isLoading) {
     return <BoardState isLoading title="Loading ticket board" />;
+  }
+
+  if (workspacesError) {
+    return (
+      <BoardState
+        icon="error"
+        title="Could not load projects"
+        description={workspaceError?.message ?? "Unknown API error"}
+      />
+    );
+  }
+
+  if (!selectedWorkspace) {
+    return (
+      <BoardState
+        title="Select a project"
+        description="Choose a workspace from the project switcher to load ticket documents."
+      />
+    );
+  }
+
+  if (!selectedWorkspace.isAvailable) {
+    return (
+      <BoardState
+        icon="error"
+        title="Project unavailable"
+        description="Select another available project from the project switcher."
+      />
+    );
+  }
+
+  if (!selectedFileId) {
+    return <BoardState title="No ticket document selected" />;
   }
 
   if (isError) {
@@ -638,6 +863,7 @@ function TicketCard({
 }
 
 function TicketDetailDrawer({
+  codexDisabledReason,
   documentRunSummary,
   documentHash,
   documentMtimeMs,
@@ -651,6 +877,7 @@ function TicketDetailDrawer({
   ticket,
   ticketRunSummary,
 }: {
+  codexDisabledReason?: string;
   documentRunSummary?: CodexDocumentRunSummaryResponse;
   documentHash: string;
   documentMtimeMs: number;
@@ -843,7 +1070,8 @@ function TicketDetailDrawer({
   const canSaveStatus = statusDraft !== ticket.status || progressDraft !== ticket.progress;
   const latestErrorCode = error instanceof ClientApiError ? error.code : undefined;
   const activeRun = documentRunSummary?.activeRun;
-  const canStartCodexRun = documentRunSummary?.canStartRun ?? true;
+  const canUseCodex = !codexDisabledReason;
+  const canStartCodexRun = canUseCodex && (documentRunSummary?.canStartRun ?? true);
 
   return (
     <div
@@ -968,11 +1196,17 @@ function TicketDetailDrawer({
                 <Bot className="size-4 text-neutral-600" aria-hidden="true" />
                 <h3 className="text-sm font-semibold text-neutral-900">Run with Codex</h3>
               </div>
+              {codexDisabledReason ? (
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+                  {codexDisabledReason}
+                </div>
+              ) : null}
               <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                 <label className="grid gap-2 text-xs font-medium text-neutral-500">
                   Execution draft
                   <textarea
                     className="min-h-28 resize-y rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-normal leading-6 text-neutral-900 outline-none focus:border-neutral-400"
+                    disabled={!canUseCodex}
                     onChange={(event) => {
                       setRunDraft(event.target.value);
                       setPreview(null);
@@ -983,7 +1217,12 @@ function TicketDetailDrawer({
                 </label>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button disabled={isPreviewing} onClick={loadPreview} size="sm" variant="outline">
+                <Button
+                  disabled={isPreviewing || !canUseCodex}
+                  onClick={loadPreview}
+                  size="sm"
+                  variant="outline"
+                >
                   {isPreviewing ? (
                     <Loader2 className="size-3 animate-spin" aria-hidden="true" />
                   ) : (

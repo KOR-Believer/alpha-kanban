@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `6 / 12 tickets`
+- 현재 진행률: `7 / 12 tickets`
 
 ## 티켓 상태
 
@@ -102,7 +102,7 @@ Depends on:
 | AKW-01 | DONE | 100% | `packages/shared`, `apps/server` | AKW-00 |
 | AKW-02 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01 |
 | AKW-03 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
-| AKW-04 | TODO | 0% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
+| AKW-04 | DONE | 100% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
 | AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11 |
 | AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
@@ -374,8 +374,8 @@ Depends on:
 
 ### AKW-04. Project switcher와 recent workspace UX 구현
 
-Status: TODO
-Progress: 0%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/web`
@@ -416,25 +416,30 @@ Depends on:
 
 완료 기준:
 
-- [ ] last workspace가 있으면 앱 진입 시 해당 project board가 열린다.
-- [ ] workspace가 없으면 project selection empty state가 표시된다.
-- [ ] switcher에서 project를 바꾸면 ticket documents와 board가 바뀐다.
-- [ ] selected project가 unavailable이면 복구 가능한 UI가 표시된다.
-- [ ] UI가 Notion-like flat board 구조를 유지한다.
+- [x] last workspace가 있으면 앱 진입 시 해당 project board가 열린다.
+- [x] workspace가 없으면 project selection empty state가 표시된다.
+- [x] switcher에서 project를 바꾸면 ticket documents와 board가 바뀐다.
+- [x] selected project가 unavailable이면 복구 가능한 UI가 표시된다.
+- [x] UI가 Notion-like flat board 구조를 유지한다.
 
 검증:
 
-- [ ] component/API mocked smoke
-- [ ] desktop browser smoke
-- [ ] mobile browser smoke
+- [x] component/API mocked smoke
+- [x] desktop browser smoke
+- [x] mobile browser smoke
 
 사용자 지시:
 
 - 2026-06-22: 운영 UX 기준으로는 프로젝트 선택 UI가 먼저 있고, 마지막 선택 프로젝트가 있으면 바로 그 칸반으로 들어가는 방식이 좋다.
+- 2026-06-23: AKW-04 구현을 진행한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-23: `apps/web/src/App.tsx`가 `/api/workspaces`, `/api/workspaces/select`, `/api/workspaces/:workspaceId/files`를 사용하도록 변경하고, 좌측 상단 project switcher와 no-selection empty state를 추가했다.
+- 2026-06-23: last workspace가 유효하면 reload 시 바로 board로 진입하고, project 변경 시 selected file/ticket과 query cache가 workspace scope로 초기화되도록 구현했다.
+- 2026-06-23: selected workspace root와 selected ticket document path를 board header에 표시하고, workspace-scoped Codex 실행은 AKW-05 전까지 drawer에서 명시적으로 비활성화했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright desktop/mobile smoke. Desktop에서 no-last empty state, project switcher, last workspace reload, project 전환을 확인했고 mobile `390x844`에서 switcher/file list/board header가 겹치지 않음을 확인했다.
 
 ### AKW-05. Codex runner를 target workspace cwd/session 기준으로 라우팅
 
