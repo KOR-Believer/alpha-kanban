@@ -20,9 +20,12 @@ import {
   codexPromptPreviewResponseSchema,
   codexRunResponseSchema,
   codexRunSummarySchema,
+  codexTicketChatResponseSchema,
   createCodexRunResponseSchema,
+  documentSetsResponseSchema,
   filesResponseSchema,
   selectWorkspaceResponseSchema,
+  markdownDocumentResponseSchema,
   ticketDocumentResponseSchema,
   type MarkdownFileSummary,
   type WorkspaceSummary,
@@ -66,6 +69,25 @@ describe("API", () => {
     mkdirSync(outsideProjectRoot, { recursive: true });
     writeFileSync(path.join(projectOneRoot, "docs", "01_plan.md"), "# Project one\n");
     writeFileSync(path.join(projectOneRoot, "docs", "02_alpha_kanban_tickets.md"), realTicketDocument);
+    writeFileSync(
+      path.join(projectOneRoot, "docs", "18_feature_plan.md"),
+      [
+        "# Feature Plan",
+        "",
+        "## 목표",
+        "",
+        "- Link tickets: `19_feature_tickets.md`",
+      ].join("\n"),
+    );
+    writeFileSync(path.join(projectOneRoot, "docs", "19_feature_tickets.md"), realTicketDocument);
+    writeFileSync(
+      path.join(projectOneRoot, "docs", "31_feature_inventory.md"),
+      "# Feature Inventory\n\n## Matrix\n\n- observed\n",
+    );
+    writeFileSync(
+      path.join(projectOneRoot, "docs", "70_lone_inventory.md"),
+      "# Lone Inventory\n",
+    );
     writeFileSync(path.join(projectTwoRoot, "docs", "02_alpha_kanban_tickets.md"), realTicketDocument);
     realProjectOneRoot = realpathSync.native(projectOneRoot);
     realProjectTwoRoot = realpathSync.native(projectTwoRoot);
@@ -82,6 +104,7 @@ describe("API", () => {
         "  console.error('unexpected stdin input');",
         "  process.exit(9);",
         "}",
+        "console.log(JSON.stringify({ type: 'cwd', cwd: process.cwd(), argv: process.argv.slice(2) }));",
         "console.log(JSON.stringify({ type: 'session', thread_id: 'fake-thread-id' }));",
         "if (process.argv.join(' ').includes('auth-fail')) {",
         "  console.error('not logged in');",
@@ -436,6 +459,61 @@ describe("API", () => {
     expect(projectTwoTicketFile?.relativePath).toBe("docs/02_alpha_kanban_tickets.md");
   });
 
+  it("groups workspace markdown files into document sets by directory and slug", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+
+    const response = documentSetsResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/document-sets`),
+    );
+    const featureSet = response.sets.find((documentSet) => documentSet.slug === "feature");
+    const loneInventorySet = response.sets.find(
+      (documentSet) => documentSet.slug === "lone",
+    );
+
+    expect(featureSet).toBeDefined();
+    expect(featureSet?.directory).toBe("docs");
+    expect(featureSet?.sequenceNumber).toBe(18);
+    expect(featureSet?.types).toEqual(["plan", "tickets", "inventory"]);
+    expect(featureSet?.documents.map((file) => file.workspaceRelativePath)).toEqual([
+      "docs/18_feature_plan.md",
+      "docs/19_feature_tickets.md",
+      "docs/31_feature_inventory.md",
+    ]);
+    expect(featureSet?.primaryFile.workspaceRelativePath).toBe("docs/19_feature_tickets.md");
+    expect(featureSet?.ticketProgress?.totalTickets).toBeGreaterThan(0);
+    expect(featureSet?.ticketProgress?.doneTickets).toBeDefined();
+
+    expect(loneInventorySet).toBeDefined();
+    expect(loneInventorySet?.types).toEqual(["inventory"]);
+    expect(loneInventorySet?.primaryFile.workspaceRelativePath).toBe(
+      "docs/70_lone_inventory.md",
+    );
+  });
+
+  it("reads generic markdown documents with outline metadata", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const documentSets = documentSetsResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/document-sets`),
+    );
+    const planFile = documentSets.sets
+      .find((documentSet) => documentSet.slug === "feature")
+      ?.documents.find((file) => file.type === "plan");
+    expect(planFile).toBeDefined();
+
+    const markdown = markdownDocumentResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/files/${planFile?.id}/markdown`),
+    );
+
+    expect(markdown.file.type).toBe("plan");
+    expect(markdown.markdown).toContain("# Feature Plan");
+    expect(markdown.outline).toEqual([
+      { level: 1, line: 1, title: "Feature Plan" },
+      { level: 2, line: 3, title: "목표" },
+    ]);
+  });
+
   it("reads and writes tickets only in the selected workspace", async () => {
     const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
     const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
@@ -517,6 +595,136 @@ describe("API", () => {
     expect(projectTwoTicket?.progressNotes.at(-1)?.text).not.toBe("workspace scoped progress");
   });
 
+  it("previews and runs Codex in the selected workspace", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const projectTwo = requireWorkspaceByRoot(listed.workspaces, realProjectTwoRoot);
+    const projectOneFile = await requireWorkspaceTicketFile(projectOne.id);
+    const projectTwoFile = await requireWorkspaceTicketFile(projectTwo.id);
+
+    const preview = codexPromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/codex/prompt-preview`, {
+        fileId: projectOneFile.id,
+        ticketId: "AKB-05",
+        instructionDraft: "workspace fake instruction",
+      }),
+    );
+    expect(preview.prompt).toContain(`${realProjectOneRoot} 프로젝트`);
+    expect(preview.prompt).toContain(
+      `Ticket file: ${path.join(realProjectOneRoot, "docs", "02_alpha_kanban_tickets.md")}`,
+    );
+    expect(preview.prompt).toContain("Selected ticket: AKB-05");
+    expect(preview.resumeSessionId).toBeUndefined();
+
+    const scopedPreview = codexPromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/codex/prompt-preview`, {
+        fileId: projectOneFile.id,
+        ticketId: "AKB-05",
+        instructionDraft: "@t:AKB-06 다른 티켓 상태도 같이 봐줘",
+      }),
+    );
+    expect(scopedPreview.scopeResolution).toMatchObject({
+      scope: "ticket",
+      targetFileId: projectOneFile.id,
+      targetTicketId: "AKB-06",
+      cleanedMessage: "다른 티켓 상태도 같이 봐줘",
+    });
+    expect(scopedPreview.prompt).toContain("Resolved scope:");
+    expect(scopedPreview.prompt).toContain("- Target ticket id: AKB-06");
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/codex/runs`, {
+        fileId: projectOneFile.id,
+        ticketId: "AKB-05",
+        instructionDraft: "workspace fake instruction",
+      }),
+    );
+    const finished = await waitForRun(created.run.id);
+    expect(finished.run.status).toBe("succeeded");
+    const cwdEvent = finished.run.events.find((event) => event.message === "cwd");
+    expect((cwdEvent?.data as { cwd?: string } | undefined)?.cwd).toBe(realProjectOneRoot);
+
+    const summary = codexDocumentRunSummaryResponseSchema.parse(
+      await getJson(
+        `/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/codex-run-summary`,
+      ),
+    );
+    expect(summary.latestRun?.id).toBe(created.run.id);
+
+    const state = JSON.parse(
+      readFileSync(path.join(workspaceRoot, ".alpha-kanban", "state.json"), "utf8"),
+    ) as {
+      documents: Record<string, { codexSessionId?: string }>;
+    };
+    expect(
+      state.documents[`${projectOne.id}::docs/02_alpha_kanban_tickets.md`]?.codexSessionId,
+    ).toBe("fake-thread-id");
+    expect(state.documents[`${projectTwo.id}::docs/02_alpha_kanban_tickets.md`]).toBeUndefined();
+
+    const resumedPreview = codexPromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/codex/prompt-preview`, {
+        fileId: projectOneFile.id,
+        ticketId: "AKB-06",
+      }),
+    );
+    expect(resumedPreview.resumeSessionId).toBe("fake-thread-id");
+    expect(resumedPreview.args.slice(0, 3)).toEqual(["exec", "resume", "--json"]);
+
+    const projectTwoPreview = codexPromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectTwo.id}/codex/prompt-preview`, {
+        fileId: projectTwoFile.id,
+        ticketId: "AKB-06",
+      }),
+    );
+    expect(projectTwoPreview.resumeSessionId).toBeUndefined();
+    expect(projectTwoPreview.prompt).toContain(`${realProjectTwoRoot} 프로젝트`);
+
+    const projectOneDocument = ticketDocumentResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/tickets`),
+    );
+    const projectOneTicket = projectOneDocument.document.tickets.find(
+      (ticket) => ticket.id === "AKB-05",
+    );
+    expect(projectOneTicket?.userInstructions.at(-1)?.text).toBe(
+      "Codex 실행 지시: workspace fake instruction",
+    );
+    expect(
+      projectOneTicket?.progressNotes.some((entry) =>
+        entry.text.includes("Codex run succeeded"),
+      ),
+    ).toBe(false);
+
+    const chat = codexTicketChatResponseSchema.parse(
+      await getJson(
+        `/api/workspaces/${projectOne.id}/files/${projectOneFile.id}/tickets/AKB-05/chat`,
+      ),
+    );
+    expect(chat.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(chat.messages[0]).toMatchObject({
+      scope: "ticket",
+      role: "user",
+      contentFormat: "markdown",
+      content: "workspace fake instruction",
+      workspaceId: projectOne.id,
+      fileRelativePath: "docs/02_alpha_kanban_tickets.md",
+      ticketId: "AKB-05",
+      runId: created.run.id,
+    });
+    expect(chat.messages[1]).toMatchObject({
+      role: "assistant",
+      contentFormat: "markdown",
+      content: "fake final message",
+      runId: created.run.id,
+    });
+
+    const projectTwoChat = codexTicketChatResponseSchema.parse(
+      await getJson(
+        `/api/workspaces/${projectTwo.id}/files/${projectTwoFile.id}/tickets/AKB-05/chat`,
+      ),
+    );
+    expect(projectTwoChat.messages).toEqual([]);
+  });
+
   it("previews and runs Codex with file-level session state", async () => {
     const files = filesResponseSchema.parse(await getJson("/api/files"));
     const file = files.files[0];
@@ -564,7 +772,29 @@ describe("API", () => {
     );
     const ticket = noted.document.tickets.find((item) => item.id === "AKB-05");
     expect(ticket?.userInstructions.at(-1)?.text).toBe("Codex 실행 지시: fake instruction");
-    expect(ticket?.progressNotes.at(-1)?.text).toContain("Codex run succeeded");
+    expect(
+      ticket?.progressNotes.some((entry) => entry.text.includes("Codex run succeeded")),
+    ).toBe(false);
+
+    const chat = codexTicketChatResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/tickets/AKB-05/chat`),
+    );
+    expect(chat.messages).toHaveLength(2);
+    expect(chat.messages[0]).toMatchObject({
+      scope: "ticket",
+      role: "user",
+      contentFormat: "markdown",
+      content: "fake instruction",
+      fileRelativePath: "docs/02_alpha_kanban_tickets.md",
+      ticketId: "AKB-05",
+      runId: created.run.id,
+    });
+    expect(chat.messages[1]).toMatchObject({
+      role: "assistant",
+      contentFormat: "markdown",
+      content: "fake final message",
+      runId: created.run.id,
+    });
 
     const resumedPreview = codexPromptPreviewResponseSchema.parse(
       await postJson("/api/codex/prompt-preview", {
@@ -590,6 +820,68 @@ describe("API", () => {
     );
     expect(otherPreview.resumeSessionId).toBeUndefined();
     expect(otherPreview.args.slice(0, 2)).toEqual(["exec", "--json"]);
+  });
+
+  it("runs Codex in read-only mode without appending ticket markdown", async () => {
+    const files = filesResponseSchema.parse(await getJson("/api/files"));
+    const file = files.files[0];
+    expect(file).toBeDefined();
+    const beforeMarkdown = readFileSync(file?.absolutePath ?? "", "utf8");
+
+    const preview = codexPromptPreviewResponseSchema.parse(
+      await postJson("/api/codex/prompt-preview", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "커밋 여부만 확인해줘",
+        mode: "read_only",
+      }),
+    );
+    expect(preview.mode).toBe("read_only");
+    expect(preview.prompt).toContain("작업 모드: Read-only answer");
+    expect(preview.prompt).toContain("파일 생성/수정/삭제를 하지 마");
+    expect(preview.prompt).toContain("append하지 마");
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "커밋 여부만 확인해줘",
+        mode: "read_only",
+      }),
+    );
+    expect(created.run.mode).toBe("read_only");
+
+    const finished = await waitForRun(created.run.id);
+    expect(finished.run.status).toBe("succeeded");
+    expect(finished.run.mode).toBe("read_only");
+    expect(finished.run.events.at(-1)?.type).toBe("exit");
+    expect(readFileSync(file?.absolutePath ?? "", "utf8")).toBe(beforeMarkdown);
+
+    const noted = ticketDocumentResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/tickets`),
+    );
+    const ticket = noted.document.tickets.find((item) => item.id === "AKB-05");
+    expect(
+      ticket?.userInstructions.some((entry) => entry.text.includes("커밋 여부만 확인")),
+    ).toBe(false);
+    expect(
+      ticket?.progressNotes.some((entry) => entry.text.includes("Codex run succeeded")),
+    ).toBe(false);
+
+    const chat = codexTicketChatResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/tickets/AKB-05/chat`),
+    );
+    expect(chat.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(chat.messages[0]).toMatchObject({
+      role: "user",
+      content: "커밋 여부만 확인해줘",
+      runId: created.run.id,
+    });
+    expect(chat.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "fake final message",
+      runId: created.run.id,
+    });
   });
 
   it("cancels a running Codex process", async () => {

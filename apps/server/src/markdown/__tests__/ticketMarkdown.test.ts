@@ -101,7 +101,7 @@ describe("ticketMarkdown", () => {
 
     expect(document.title).toBe("Alpha Kanban 티켓");
     expect(document.status.doneTickets).toBe(8);
-    expect(document.progressBoard).toHaveLength(8);
+    expect(document).not.toHaveProperty("progressBoard");
     expect(akb02?.status).toBe("DONE");
     expect(akb02?.progress).toBe(100);
     expect(akb02?.hasUserInstructionsSection).toBe(true);
@@ -130,20 +130,86 @@ describe("ticketMarkdown", () => {
       }),
     ]);
     expect(ticket?.missingFields).toEqual([]);
+    expect(document.missingSections).not.toContain("Progress Board");
+    expect(document).not.toHaveProperty("progressBoard");
   });
 
-  it("updates status/progress in ticket body, board, and top-level progress", () => {
+  it("updates status/progress in ticket body and top-level progress", () => {
     const updated = updateTicketStatusAndProgress(realTicketDocument, "AKB-07", {
       status: "IN_PROGRESS",
       progress: 50,
     });
 
     expect(updated).toContain("- 현재 진행률: `7 / 8 tickets`");
-    expect(updated).toContain("| AKB-07 | IN_PROGRESS | 50% | `alpha-kanban` | AKB-01, AKB-02, AKB-03, AKB-04, AKB-05, AKB-06 |");
     expect(updated).toContain(`### AKB-07. 통합 검증, sample 문서, 운영 문서 정리
 
 Status: IN_PROGRESS
 Progress: 50%`);
+    expect(updated).not.toContain("Completed at:");
+  });
+
+  it("updates status/progress when Progress Board is absent", () => {
+    const withoutProgressBoard = legacyTicketDocument.replace(
+      /\n## Progress Board\n\n\| Ticket \| Status \| Progress \| Repository \| Depends on \|\n\| --- \| --- \| ---: \| --- \| --- \|\n\| LEG-01 \| READY \| 25% \| `alpha-kanban` \| - \|\n/,
+      "\n",
+    );
+
+    const updated = updateTicketStatusAndProgress(withoutProgressBoard, "LEG-01", {
+      status: "DONE",
+      progress: 100,
+    });
+
+    expect(updated).toContain("- 현재 진행률: `1 / 1 tickets`");
+    expect(updated).toMatch(/Completed at: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}/);
+    expect(updated).toContain(`### LEG-01. Legacy ticket
+
+Status: DONE
+Progress: 100%`);
+
+    const ticket = parseTicketDocument(updated).tickets[0];
+    expect(ticket?.completedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/,
+    );
+  });
+
+  it("preserves an existing Completed at timestamp for DONE tickets", () => {
+    const withCompletedAt = legacyTicketDocument.replace(
+      "Progress: 25%",
+      "Progress: 25%\nCompleted at: 2026-06-23T15:42:31+09:00",
+    );
+
+    const updated = updateTicketStatusAndProgress(withCompletedAt, "LEG-01", {
+      status: "DONE",
+      progress: 100,
+    });
+
+    expect(updated).toContain("Completed at: 2026-06-23T15:42:31+09:00");
+  });
+
+  it("removes Completed at when a ticket is reopened", () => {
+    const withCompletedAt = legacyTicketDocument.replace(
+      "Progress: 25%",
+      "Progress: 25%\nCompleted at: 2026-06-23T15:42:31+09:00",
+    );
+
+    const updated = updateTicketStatusAndProgress(withCompletedAt, "LEG-01", {
+      status: "IN_PROGRESS",
+      progress: 75,
+    });
+
+    expect(updated).not.toContain("Completed at:");
+  });
+
+  it("ignores Completed at on non-DONE tickets", () => {
+    const withStaleCompletedAt = legacyTicketDocument.replace(
+      "Progress: 25%",
+      "Progress: 25%\nCompleted at: 2026-06-23T15:42:31+09:00",
+    );
+
+    const ticket = parseTicketDocument(withStaleCompletedAt).tickets[0];
+
+    expect(ticket?.status).toBe("READY");
+    expect(ticket?.completedAt).toBeUndefined();
   });
 
   it("appends 사용자 지시 to an existing section", () => {

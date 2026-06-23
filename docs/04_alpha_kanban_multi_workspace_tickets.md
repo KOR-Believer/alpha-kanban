@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `10 / 15 tickets`
+- 현재 진행률: `25 / 29 tickets`
 
 ## 티켓 상태
 
@@ -32,13 +32,23 @@
 - target workspace path는 `realpath` 기준으로 allowlist 내부인지 검증한다.
 - recent workspace, last selection, Codex session id는 control app의 `.alpha-kanban/state.json`에만 저장한다.
 - target project repository에는 Alpha Kanban local state를 쓰지 않는다.
-- Markdown 수정 시 개별 ticket body, `Progress Board`, top-level `현재 진행률`을 함께 갱신한다.
+- Markdown 수정 시 개별 ticket body와 top-level `현재 진행률`을 함께 갱신한다.
+- ticket을 `DONE`으로 바꿀 때는 `Progress` 바로 아래에 `Completed at: YYYY-MM-DDTHH:mm:ss+09:00`을 기록하고, non-DONE으로 되돌릴 때는 제거한다. legacy non-DONE 티켓에 값이 남아 있어도 완료 metadata로 취급하지 않는다.
 - `사용자 지시`와 `진행 메모`는 append-only log로 다루고, 같은 날짜의 항목 순서는 문서 라인 순서로 해석한다.
 - `Run with Codex`는 selected target workspace를 cwd로 사용한다.
 - ticket 실행 입력, document-level chat, workspace-level chat은 scope가 다르므로 UI와 prompt boundary를 분리한다.
+- chat 입력의 `@w`/`@d`/`@tickets`/`@t:ID` mention은 Alpha Kanban parser가 먼저 정규화하고, Codex prompt에는 normalized scope block으로 전달한다.
+- `$plan-ticketing` skill은 raw mention 문법을 직접 파싱하지 않고 Alpha Kanban이 제공한 scope 계약을 신뢰한다.
+- `Run with Codex` 입력과 assistant answer는 ticket-scoped chat log로 저장하고, Markdown에는 durable 요약만 append한다.
+- read-only answer와 file-edit run은 버튼을 늘리기보다 mode 표시와 prompt/permission boundary로 구분한다.
+- workspace-level chat은 티켓이 없는 초기 요구사항을 spec grilling한 뒤 plan/ticket 생성으로 handoff할 수 있어야 한다.
 - 자세한 terminal log는 debug affordance로 유지하고, 제품 UX에는 run status indicator를 우선 제공한다.
 - 완료/실패 run 결과는 시간 기반으로 사라지지 않고, 사용자가 명시적으로 읽음 처리할 때까지 unread badge로 유지한다.
 - 외부 CLI/editor가 Markdown을 직접 수정할 수 있으므로 UI는 file change 감지, stale 표시, refetch 정책을 가져야 한다.
+- workspace project는 URL path, selected Markdown document는 query string, ticket detail open state는 hash로 복원 가능한 route state를 유지한다.
+- plan/tickets/inventory 문서는 flat file list보다 document set으로 묶어 보여주고, 선택한 문서 type에 따라 Kanban, plan reader, inventory reader view mode를 분리한다.
+- `{NN}_{slug}_{plan|tickets|inventory}.md`의 `NN`은 정렬/생성순서 hint일 뿐 관계의 절대 기준이 아니며, 같은 directory의 `slug`와 suffix, 본문 link evidence를 우선한다.
+- frontend visual/layout 작업은 `DESIGN-notion.md`를 local design reference로 읽고, Notion 계열 warm canvas, white surface, hairline border, restrained color, aligned internal scroll 규칙을 따른다.
 
 ## Ticket Template
 
@@ -92,27 +102,8 @@ Depends on:
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+
 ```
-
-## Progress Board
-
-| Ticket | Status | Progress | Repository | Depends on |
-| --- | --- | ---: | --- | --- |
-| AKW-00 | DONE | 100% | `alpha-kanban`, `docs` | - |
-| AKW-01 | DONE | 100% | `packages/shared`, `apps/server` | AKW-00 |
-| AKW-02 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01 |
-| AKW-03 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
-| AKW-04 | DONE | 100% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
-| AKW-12 | DONE | 100% | `apps/web`, `alpha-kanban` | AKW-02, AKW-04 |
-| AKW-13 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared`, `alpha-kanban` | AKW-02, AKW-04, AKW-12 |
-| AKW-14 | DONE | 100% | `apps/web` | AKW-13 |
-| AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
-| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11, AKW-12, AKW-13, AKW-14 |
-| AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
-| AKW-08 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-02, AKW-03, AKW-04, AKW-05, AKW-07 |
-| AKW-09 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared` | AKW-05 |
-| AKW-10 | TODO | 0% | `apps/server`, `apps/web`, `packages/shared` | AKW-03, AKW-04 |
-| AKW-11 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared` | AKW-09 |
 
 ## Ticket List
 
@@ -654,10 +645,588 @@ Depends on:
 - 2026-06-23: `apps/web/src/App.tsx`의 folder picker를 modal로 전환하고, roots sidebar, path bar, details-view folder list, footer action 구조로 재구성했다.
 - 2026-06-23: in-app browser smoke에서 desktop modal과 mobile `390x844` modal을 확인했다. Desktop에서 type/path column overlap을 발견해 Type column 폭을 넓히고 재확인했다.
 
+### AKW-15. Resizable sidebar와 내부 scroll layout 정리
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+
+Priority: P1
+Type: UX / Feature
+Depends on:
+
+- `AKW-04`
+- `AKW-14`
+
+목표:
+
+- recent workspace path와 ticket document 목록을 읽기 쉽도록 sidebar width를 사용자가 조절할 수 있게 한다.
+- desktop app shell을 viewport 높이에 맞추고, sidebar ticket document 목록은 browser 전체 scroll이 아니라 sidebar 내부 scroll로 동작하게 한다.
+
+현재 문제:
+
+- sidebar가 고정 300px 폭이라 recent workspace의 absolute path가 대부분 잘린다.
+- app shell이 browser document scroll에 의존하면 sidebar와 board scroll boundary가 명확하지 않다.
+- ticket document 목록은 sidebar의 남은 높이를 차지하고 내부에서 스크롤되는 편이 사용자가 구조를 이해하기 쉽다.
+
+구현 범위:
+
+- `apps/web/src/App.tsx`에 sidebar resize handle을 추가한다.
+- sidebar width는 280px-560px 범위로 제한하고 기본값은 340px로 둔다.
+- width는 browser localStorage에 저장해 새로고침 후에도 유지한다.
+- resize handle은 pointer drag, keyboard arrow/Home/End, double-click reset을 지원한다.
+- desktop app shell은 `100dvh` 높이와 내부 overflow 구조를 사용한다.
+- workspace path는 wrapping과 hover title로 긴 주소를 확인할 수 있게 한다.
+
+제외 범위:
+
+- server-side user preference 저장
+- mobile sidebar drag resize
+- full workspace settings UI
+
+완료 기준:
+
+- [x] sidebar와 board 사이에 width resize handle이 있다.
+- [x] sidebar width가 최소/최대 범위 안에서 조절되고 새로고침 후 유지된다.
+- [x] desktop에서 browser document scroll 대신 sidebar list와 board body가 내부 scroll 영역을 가진다.
+- [x] 긴 recent workspace path가 sidebar 폭 증가와 wrapping/hover title로 확인 가능하다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] desktop browser smoke
+
+사용자 지시:
+
+- 2026-06-23: recent 영역이 있는 sidebar가 너무 좁아서 주소가 다 안 보이니 sidebar와 본문 사이에 width 조절 handle을 넣는 방향을 검토한다.
+- 2026-06-23: ticket 목록 영역이 browser 전체 scroll을 차지하기보다 sidebar 전체 높이를 viewport에 맞추고 ticket 목록 내부 scrollbar가 있는 구조가 좋다.
+- 2026-06-23: handle 영역 색과 본문 영역 색이 같아 어색하므로 navigation/sidebar 표면에 가까운 색과 border로 구분감을 준다.
+
+진행 메모:
+
+- 2026-06-23: `apps/web/src/App.tsx`에 resizable sidebar shell, persisted width state, resize separator, keyboard resize affordance를 구현했다.
+- 2026-06-23: desktop shell을 `100dvh`/internal overflow 구조로 전환하고 sidebar document list와 board body가 각각 내부 scroll을 가지도록 정리했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`.
+- 2026-06-23: in-app browser smoke에서 sidebar/handle 높이가 viewport와 일치하고, drag 후 `420px`로 변경, reload 후 유지, double-click reset 후 `340px` 복귀를 확인했다.
+- 2026-06-23: handle surface를 `bg-white`와 `border-neutral-200`로 조정해 본문 배경과 분리했다.
+- 2026-06-23: Chrome plugin smoke에서 handle background가 sidebar와 같은 white, main background가 neutral-50, handle border가 neutral-200 계열로 적용됨을 확인했다.
+
+### AKW-16. Notion design reference 주입과 scrollbar gutter 공통 정리
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P1
+Type: UX / Design System
+Depends on:
+
+- `AKW-15`
+
+목표:
+
+- `DESIGN-notion.md`를 frontend visual/layout 작업의 local design reference로 고정한다.
+- app shell의 scrollable region이 같은 scrollbar gutter, thumb weight, edge alignment를 쓰도록 공통 utility를 적용한다.
+- sidebar의 project list와 ticket document list scrollbar가 서로 다른 inset에 놓이지 않게 정렬한다.
+
+현재 문제:
+
+- project list와 ticket document list가 각각 다른 padding boundary 안에서 스크롤되어 scrollbar x-position이 어긋난다.
+- Notion-like UI 목표가 대화에만 있고 `AGENTS.md`와 CSS token에 명시되지 않아 세션이 길어질수록 일관성이 흔들릴 수 있다.
+- modal, board, drawer, preview/log 영역의 scrollbar 스타일이 제각각이다.
+
+구현 범위:
+
+- `AGENTS.md`에 `DESIGN-notion.md`를 UI 작업 전 읽는 design reference로 추가한다.
+- `apps/web/src/styles.css`에 Notion 계열 canvas/surface/hairline token과 `ak-scroll-area` utility를 추가한다.
+- sidebar project list와 ticket document list를 같은 outer edge에서 스크롤하도록 padding/overflow boundary를 정리한다.
+- board body, folder picker list, ticket drawer body, prompt preview, run log에 `ak-scroll-area`를 적용한다.
+
+제외 범위:
+
+- 전체 컴포넌트 visual redesign
+- shadcn theme generator 도입
+- typography scale 전면 교체
+
+완료 기준:
+
+- [x] `AGENTS.md`가 `DESIGN-notion.md`를 local design-system reference로 지시한다.
+- [x] shared scroll utility가 CSS에 존재한다.
+- [x] sidebar project list와 ticket document list가 같은 right-edge scrollbox 기준을 사용한다.
+- [x] 주요 overflow container가 shared scroll utility를 사용한다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] `git diff --check`
+- [x] Chrome plugin visual smoke
+
+사용자 지시:
+
+- 2026-06-23: scrollbar 정렬이 엉망이므로 디자인 시스템 룰을 찾아 주입한 뒤 공통 적용하고 시작하는 방향을 검토한다.
+- 2026-06-23: `DESIGN-notion.md`를 읽고 항상 지침으로 활용하면 좋겠다.
+
+진행 메모:
+
+- 2026-06-23: `DESIGN-notion.md`를 읽고 Notion 계열 warm canvas, white surface, hairline, restrained accent, app shell row/scroll 원칙을 확인했다.
+- 2026-06-23: `AGENTS.md`에 frontend visual/layout 작업 전 `DESIGN-notion.md`를 읽고 `ak-scroll-area` 기반 internal scroll model을 따르도록 추가했다.
+- 2026-06-23: `apps/web/src/styles.css`에 design token과 shared scrollbar utility를 추가하고, `apps/web/src/App.tsx`의 주요 overflow container에 공통 적용했다.
+- 2026-06-23: sidebar project list의 outer section padding을 제거하고 list scrollbox 자체를 sidebar edge에 맞춰 ticket document list와 scrollbar 기준선을 정렬했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`, `git diff --check`.
+- 2026-06-23: Chrome plugin smoke에서 project list와 ticket document list scrollbox의 right edge delta가 `0px`임을 확인했다.
+
+### AKW-17. Notion design token foundation 정리
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+
+Priority: P1
+Type: UX / Design System
+Depends on:
+
+- `AKW-16`
+
+목표:
+
+- `DESIGN-notion.md`의 surface, text, radius, shadow, focus token을 `apps/web/src/styles.css`의 reusable CSS variables/utilities로 정리한다.
+- 이후 component wrapper와 app layout이 raw `neutral-*` class에 덜 의존하도록 foundation을 마련한다.
+
+현재 문제:
+
+- `styles.css`에는 일부 surface/scroll token만 있고 button, badge, dialog, app shell이 여전히 Tailwind neutral class를 직접 많이 사용한다.
+- focus ring, input chrome, row active state, panel surface 같은 반복 스타일이 컴포넌트별로 흩어져 있다.
+
+구현 범위:
+
+- Notion 계열 CSS variables를 확장한다.
+- `ak-focus-ring`, `ak-control`, `ak-panel`, `ak-row`, `ak-row-active`, `ak-card`, `ak-muted-label` 같은 utility class를 추가한다.
+- 기존 CSS token 이름은 유지해 현재 구현을 깨지 않게 한다.
+- design token/theme foundation 변경 시 `AGENTS.md`의 Product UI Design 지침을 같은 변경에서 갱신한다.
+
+제외 범위:
+
+- 기능 로직 변경
+- package/theme generator 도입
+- dark mode
+
+완료 기준:
+
+- [x] design token과 utility가 `styles.css`에 정리된다.
+- [x] app shell과 shadcn wrapper가 foundation utility를 사용할 수 있다.
+- [x] `AGENTS.md`가 foundation 유지 규칙을 함께 담는다.
+- [x] 기존 build/typecheck가 깨지지 않는다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm build`
+
+사용자 지시:
+
+- 2026-06-23: 이미 구현된 shadcn 컴포넌트와 tsx 레이아웃을 주입한 디자인 시스템 기준으로 리디자인하고 싶다.
+- 2026-06-23: 새 티켓을 추가하고 전부 진행한다.
+- 2026-06-23: 디자인 토큰, 테마 foundation을 만들면 그 foundation을 지킬 `AGENTS.md` 파일도 같이 비치해 앞으로 잊지 않도록 한다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: `apps/web/src/styles.css`에 Notion 계열 CSS variables와 `ak-focus-ring`, `ak-control`, `ak-control-field`, `ak-panel`, `ak-card`, `ak-row`, `ak-row-active`, `ak-muted-label` 등 foundation utility를 추가했다.
+- 2026-06-23: `AGENTS.md`에 design token/theme foundation 변경 시 Product UI Design 지침을 같은 변경에서 갱신해야 한다는 규칙을 추가했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm build`.
+
+### AKW-18. shadcn primitive wrapper Notion-like 리디자인
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+
+Priority: P1
+Type: UX / Component
+Depends on:
+
+- `AKW-17`
+
+목표:
+
+- `Button`, `Badge`, `Dialog` wrapper를 `DESIGN-notion.md`의 utility button, badge pill, modal surface 기준으로 재정리한다.
+
+현재 문제:
+
+- `button.tsx`, `badge.tsx`, `dialog.tsx`가 shadcn default neutral scale에 가까워 local design token을 충분히 쓰지 않는다.
+- Dialog footer와 overlay, close button surface가 app shell과 완전히 같은 design language로 묶여 있지 않다.
+
+구현 범위:
+
+- `apps/web/src/components/ui/button.tsx` variants를 Notion-like primary/outline/ghost/icon utility button 기준으로 정리한다.
+- `apps/web/src/components/ui/badge.tsx` variants를 pill, muted, outline, success, warning 기준으로 조용한 hairline surface에 맞춘다.
+- `apps/web/src/components/ui/dialog.tsx` content, footer, close button, overlay를 tokenized surface/shadow/focus 기준으로 조정한다.
+
+제외 범위:
+
+- 새로운 primitive 추가
+- external design dependency 추가
+- animation library 변경
+
+완료 기준:
+
+- [x] shadcn wrapper가 `ak-*` foundation utility를 사용한다.
+- [x] primary action만 blue structural accent를 사용한다.
+- [x] badge/status color가 과하게 구조 색을 점유하지 않는다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] Chrome visual smoke
+
+사용자 지시:
+
+- 2026-06-23: 이미 구현된 shadcn 컴포넌트를 주입한 디자인 시스템으로 리디자인한다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: `Button` wrapper를 Notion-like primary/outline/ghost/default utility button 기준으로 정리했다. 기본 action은 blue primary가 되고 outline/ghost/default는 white surface와 hairline 중심으로 낮췄다.
+- 2026-06-23: `Badge` wrapper를 rounded pill, white/warm muted surface, hairline 중심으로 정리했다.
+- 2026-06-23: `Dialog` wrapper를 `ak-card-soft`, tokenized overlay/footer/close button 기준으로 정리했다.
+
+### AKW-19. App shell/sidebar/board layout Notion-like 리디자인
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+
+Priority: P1
+Type: UX / Layout
+Depends on:
+
+- `AKW-17`
+- `AKW-18`
+
+목표:
+
+- main app shell, sidebar project switcher, ticket document list, board header, kanban columns/cards를 Notion-like quiet productivity surface로 정리한다.
+
+현재 문제:
+
+- app shell의 surface hierarchy가 일부 개선됐지만, list row active state, board column, ticket card spacing/radius가 아직 제각각이다.
+- `App.tsx` 내부에 neutral class가 많이 남아 있어 design-system migration 기준이 흐려진다.
+
+구현 범위:
+
+- app shell background, header, sidebar sections를 design token 기반으로 정리한다.
+- workspace/project row, file row, empty/loading state를 shared row/card utility 기준으로 정리한다.
+- kanban column과 ticket card를 hairline + warm canvas + white surface 계층으로 조정한다.
+- text hierarchy를 compact product UI 기준으로 맞춘다.
+
+제외 범위:
+
+- board drag-and-drop
+- column virtualization
+- route 구조 변경
+
+완료 기준:
+
+- [x] sidebar list row와 board card가 같은 row/card language를 공유한다.
+- [x] nested-card처럼 보이는 과한 composition이 줄어든다.
+- [x] desktop/mobile viewport에서 텍스트 겹침이 없다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] Chrome desktop visual smoke
+- [x] mobile-width visual smoke
+
+사용자 지시:
+
+- 2026-06-23: 나머지 tsx 파일의 레이아웃을 주입한 디자인 시스템으로 리디자인한다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: app shell, sidebar header, ticket document rows, project rows, workspace picker rows를 `ak-row`, `ak-row-active`, `ak-control`, `ak-muted-label` 중심으로 정리했다.
+- 2026-06-23: board header/body, kanban columns, empty states, ticket cards를 `ak-panel`, `ak-panel-muted`, `ak-card` 계층으로 정리했다.
+- 2026-06-23: Chrome desktop smoke에서 design token, header/sidebar/board surface, scrollbar edge alignment, board/ticket card rendering을 확인했다.
+- 2026-06-23: Playwright mobile-width smoke `390x844`에서 document horizontal overflow가 없고 resize handle이 숨겨지며 board는 내부 horizontal scroll 영역에 유지됨을 확인했다.
+
+### AKW-20. Drawer/dialog/form/run panel Notion-like 리디자인
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+
+Priority: P1
+Type: UX / Layout
+Depends on:
+
+- `AKW-17`
+- `AKW-18`
+- `AKW-19`
+
+목표:
+
+- ticket detail drawer, forms, checklist/progress sections, prompt preview, run log panel, folder picker dialog를 같은 design token 기준으로 정리한다.
+
+현재 문제:
+
+- drawer와 run/debug panel은 기능 구현 과정에서 생긴 panel/card 조합이 남아 있어 app shell보다 무겁게 보인다.
+- select/input/textarea/pre/log surface가 각자 다른 neutral treatment를 사용한다.
+
+구현 범위:
+
+- drawer header/body/footer surface와 internal sections를 tokenized utility 기준으로 정리한다.
+- select/input/textarea/pre/log style을 shared control/panel/card utility로 맞춘다.
+- folder picker dialog의 roots/list/table header/footer를 Dialog primitive migration과 맞춘다.
+
+제외 범위:
+
+- Codex runner API 구현
+- log streaming 구조 변경
+- Markdown parser 변경
+
+완료 기준:
+
+- [x] drawer와 dialog가 같은 modal/panel surface language를 공유한다.
+- [x] forms와 preview/log panel이 Notion-like quiet utility chrome을 사용한다.
+- [x] drawer 내부 text/button/control overlap이 없다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] Chrome drawer/dialog visual smoke
+
+사용자 지시:
+
+- 2026-06-23: 이미 구현된 shadcn 컴포넌트와 tsx 레이아웃을 주입한 디자인 시스템 기준으로 전부 진행한다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: ticket detail drawer overlay/surface/header/body/forms를 hairline/white surface/foundation control 기준으로 정리했다.
+- 2026-06-23: prompt preview, run log, canonical sections, timeline entries, checkbox accent를 foundation utility와 primary accent 기준으로 정리했다.
+- 2026-06-23: Chrome smoke에서 drawer title, select, textarea, dialog content, folder picker list surface가 정상 렌더링됨을 확인했다.
+
+### AKW-21. Design migration 통합 검증과 문서 정리
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P1
+Type: Test / Documentation
+Depends on:
+
+- `AKW-17`
+- `AKW-18`
+- `AKW-19`
+- `AKW-20`
+
+목표:
+
+- Notion design-system migration이 build/test와 Chrome visual smoke를 통과하고, plan/ticket 문서에 실제 상태가 남게 한다.
+
+현재 문제:
+
+- 전역 visual migration은 작은 기능 변경보다 회귀 범위가 넓어 desktop/mobile/interactive surface smoke가 별도로 필요하다.
+- `DESIGN-notion.md`가 untracked 상태이므로 design reference를 commit 대상 문서로 포함할지 확인이 필요하다.
+
+구현 범위:
+
+- `pnpm typecheck`, `pnpm test`, `pnpm build`, `git diff --check`를 실행한다.
+- Chrome plugin으로 desktop app shell, sidebar scroll, board, detail drawer, folder picker dialog를 확인한다.
+- 변경된 design reference와 ticket progress를 문서에 반영한다.
+
+제외 범위:
+
+- pixel-perfect Notion clone
+- automated screenshot diff infrastructure
+- external browser matrix
+
+완료 기준:
+
+- [x] full static verification이 통과한다.
+- [x] Chrome visual smoke에서 주요 surface가 비어 있거나 깨져 있지 않다.
+- [x] `DESIGN-notion.md`와 `AGENTS.md` 기준이 유지된다.
+- [x] Progress Board와 top-level 진행률이 실제 DONE 개수와 일치한다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] `git diff --check`
+- [x] Chrome visual smoke
+
+사용자 지시:
+
+- 2026-06-23: 새 티켓을 추가하고 전부 진행한다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: static verification을 완료했고 Chrome desktop smoke와 Playwright mobile-width smoke를 수행했다.
+- 2026-06-23: `DESIGN-notion.md`는 design reference로 유지하며, `AGENTS.md`에 해당 reference와 foundation 유지 규칙을 명시했다.
+
+### AKW-22. Spacing, radius, scrollbar gutter rhythm 보정
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P1
+Type: UX / Design System / Documentation
+Depends on:
+
+- `AKW-17`
+- `AKW-18`
+- `AKW-19`
+- `AKW-20`
+- `AKW-21`
+
+목표:
+
+- 디자인 토큰을 만들었더라도 실제 TSX 적용부에서 padding, radius, scrollbar gutter rhythm이 흔들리지 않도록 공통 utility와 AGENTS 규칙으로 보강한다.
+
+현재 문제:
+
+- sidebar의 recent workspace list와 ticket document list가 서로 다른 scroll container padding을 사용해 scrollbar와 row content 사이 gap이 다르게 보인다.
+- ticket detail side panel의 close button이 header padding과 hit area 때문에 시각적으로 오른쪽/상단 rhythm이 어긋나 보인다.
+- 반복되는 spacing/radius 판단이 개별 Tailwind class에 흩어지면 agent가 작성한 CSS 특유의 미세한 불일치가 다시 누적될 수 있다.
+
+구현 범위:
+
+- `styles.css`에 `--ak-space-*` spacing token과 sidebar scroll/drawer alignment utility를 추가한다.
+- sidebar project list와 ticket document list의 scroll container edge를 맞추고 padding은 shared inner wrapper로 이동한다.
+- workspace row와 ticket row의 horizontal padding rhythm을 맞춘다.
+- ticket detail drawer header/body/close button을 `ak-drawer-*` utility로 정리한다.
+- AGENTS.md에 spacing/radius/scroll wrapper/drawer utility 사용 규칙을 추가한다.
+
+제외 범위:
+
+- 전체 화면 pixel-perfect redesign
+- screenshot diff infrastructure
+- 남은 TODO 티켓의 feature UI 구현
+
+완료 기준:
+
+- [x] recent workspace list와 ticket document list의 scrollbar outer edge가 같은 sidebar edge에 정렬된다.
+- [x] 두 list 모두 content padding이 shared inner wrapper 규칙을 따른다.
+- [x] drawer close button이 panel header padding rhythm 안에서 별도 action affordance로 정렬된다.
+- [x] AGENTS.md에 spacing/radius utility 사용 규칙이 남는다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm build`
+- [x] Chrome visual smoke
+
+사용자 지시:
+
+- 2026-06-23: padding이나 rounded 사용 통일성이 아직 아쉽다. 사이드바 recent 목록과 ticket 목록은 scrollbar와 content 사이 gap이 다를 이유가 없고, ticket side panel close button 위치도 padding 때문에 시각적으로 불쾌하다.
+- 2026-06-23: 디자인 토큰/테마 파운데이션을 만들면 그 파운데이션을 지킬 AGENTS.md 파일도 같이 비치해야 한다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: `styles.css`에 spacing token, shared scroll content wrapper, drawer header/body/close utility를 추가했다.
+- 2026-06-23: sidebar project list와 ticket document list를 같은 outer scroll edge와 inner padding model로 맞췄고, drawer close button을 `iconSm` + absolute action rail로 정리했다.
+- 2026-06-23: AGENTS.md에 spacing/radius/scroll wrapper/drawer utility 유지 규칙을 추가했다.
+- 2026-06-23: Chrome smoke에서 project/ticket scrollbox right-edge delta `0px`, scroll container padding `0px`, inner wrapper padding `8px`, drawer close top/right inset `16px`를 확인했다.
+
+### AKW-23. Ticket detail side panel resize와 modal/side preference
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P1
+Type: UX / Feature / Design System
+Depends on:
+
+- `AKW-20`
+- `AKW-22`
+
+목표:
+
+- ticket detail을 Notion-like 방식으로 side panel 또는 centered modal로 전환할 수 있게 하고, 사용자의 마지막 선택과 side panel 폭을 localStorage에 기억한다.
+
+현재 문제:
+
+- ticket detail side panel 폭이 고정되어 긴 티켓을 읽거나 실행 draft를 작성할 때 사용자가 작업 환경에 맞춰 조절할 수 없다.
+- side panel만 지원하면 Notion처럼 집중해서 읽는 modal workflow와 board를 보며 훑는 side workflow를 선택할 수 없다.
+- presentation preference가 저장되지 않으면 매번 같은 토글을 반복해야 한다.
+
+구현 범위:
+
+- `TicketDetailDrawer`에 `side` / `modal` presentation mode를 추가한다.
+- header action rail에 side/modal toggle button과 close button을 배치한다.
+- side mode에 desktop resize handle을 추가하고 drag, keyboard resize, double-click reset을 지원한다.
+- `alpha-kanban.ticketDetailMode`, `alpha-kanban.ticketDetailWidth` localStorage key로 마지막 mode와 width를 저장한다.
+- `AGENTS.md`에 drawer presentation preference 유지 규칙을 추가한다.
+
+제외 범위:
+
+- server-side user preference 저장
+- multi-device sync
+- mobile 전용 fullscreen sheet redesign
+
+완료 기준:
+
+- [x] side mode에서 ticket detail panel 폭을 resize할 수 있다.
+- [x] modal mode와 side mode를 header action으로 전환할 수 있다.
+- [x] 선택한 mode와 side panel width가 localStorage에 저장된다.
+- [x] drawer header action rail이 `ak-drawer-*` padding rhythm을 유지한다.
+- [x] AGENTS.md에 관련 유지 규칙이 남는다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm build`
+- [x] `pnpm test`
+- [x] Chrome visual/interaction smoke
+
+사용자 지시:
+
+- 2026-06-23: side ticket panel도 resize handle이 있었으면 좋겠고, Notion처럼 modal과 side panel을 localStorage 레벨에서 기억하고 토글 가능하면 좋겠다.
+
+진행 메모:
+
+- 2026-06-23: 티켓 추가.
+- 2026-06-23: `TicketDetailDrawer`에 localStorage-backed `side`/`modal` mode와 side width state를 추가하고, side panel resize handle을 구현했다.
+- 2026-06-23: header action rail에 modal/side toggle과 close button을 배치했고, `AGENTS.md`에 유지 규칙을 추가했다.
+- 2026-06-23: Chrome smoke에서 side resize handle, modal toggle, reload 후 modal 복원, side 복귀 후 resized width 유지(`520px -> 639px`)를 확인했다.
+- 2026-06-23: `pnpm typecheck`, `pnpm build`, `pnpm test`, `git diff --check` 통과를 확인했다.
+
 ### AKW-05. Codex runner를 target workspace cwd/session 기준으로 라우팅
 
-Status: TODO
-Progress: 0%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/server`
@@ -699,30 +1268,37 @@ Depends on:
 
 완료 기준:
 
-- [ ] preview prompt가 selected target workspace root를 표시한다.
-- [ ] mocked Codex process cwd가 selected target workspace로 설정된다.
-- [ ] 같은 ticket path라도 workspace가 다르면 session id가 분리된다.
-- [ ] run instruction summary가 target ticket의 `사용자 지시`에 append된다.
-- [ ] Codex stdin EOF 대기 방지 옵션이 유지된다.
+- [x] preview prompt가 selected target workspace root를 표시한다.
+- [x] mocked Codex process cwd가 selected target workspace로 설정된다.
+- [x] 같은 ticket path라도 workspace가 다르면 session id가 분리된다.
+- [x] run instruction summary가 target ticket의 `사용자 지시`에 append된다.
+- [x] Codex stdin EOF 대기 방지 옵션이 유지된다.
 
 검증:
 
-- [ ] mocked process integration test
-- [ ] workspace-scoped session resume test
-- [ ] prompt preview smoke
+- [x] mocked process integration test
+- [x] workspace-scoped session resume test
+- [x] prompt preview smoke
 
 사용자 지시:
 
 - 2026-06-22: UI에서 입력한 Run with Codex 지시는 selected project에서 수행되어야 한다.
+- 2026-06-23: Hashline 도입 검토는 보류하고, 기존 카드 중 적절한 작업으로 돌아가 진행한다.
+- 2026-06-23: AKW-05를 진행한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-23: `CodexRunner`가 target workspace `MarkdownFileStore`를 기준으로 prompt root, ticket/plan absolute path, `spawn` cwd를 구성하도록 변경했다. Session state key는 target `workspaceId::fileRelativePath` 단위를 사용하고, run log metadata에 workspace id/root와 target ticket path를 기록한다.
+- 2026-06-23: 서버에 `POST /api/workspaces/:workspaceId/codex/prompt-preview`, `POST /api/workspaces/:workspaceId/codex/runs`, `GET /api/workspaces/:workspaceId/files/:fileId/codex-run-summary`를 추가했다. Global run detail/event/cancel/read route는 run id로 scoped runner를 찾아 기존 UI polling/SSE와 연결된다.
+- 2026-06-23: `apps/web/src/App.tsx`의 Run with Codex preview/run/summary 호출을 selected workspace route로 전환하고, AKW-05 전용 비활성화 문구를 제거했다.
+- 2026-06-23: mocked Codex API test에서 selected workspace prompt path, process cwd, target ticket instruction append, workspace별 session resume 분리를 검증했다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `git diff --check`. Chrome smoke에서 `04_alpha_kanban_multi_workspace_tickets.md`의 AKW-05 drawer preview가 target workspace root, ticket file, plan file, 실행 지시 요약을 표시하고 비활성화 안내가 사라졌음을 확인했다.
 
 ### AKW-06. Multi-workspace 통합 검증 및 운영 문서 정리
 
-Status: TODO
-Progress: 0%
+Status: IN_PROGRESS
+Progress: 25%
 Repository:
 
 - `alpha-kanban`
@@ -746,6 +1322,18 @@ Depends on:
 - `AKW-12`
 - `AKW-13`
 - `AKW-14`
+- `AKW-15`
+- `AKW-16`
+- `AKW-17`
+- `AKW-18`
+- `AKW-19`
+- `AKW-20`
+- `AKW-21`
+- `AKW-22`
+- `AKW-23`
+- `AKW-24`
+- `AKW-25`
+- `AKW-26`
 
 목표:
 
@@ -763,6 +1351,7 @@ Depends on:
 - API, UI, Codex mocked integration 검증을 실행한다.
 - run status indicator와 external Markdown change sync 동작을 통합 smoke에 포함한다.
 - run result unread/read badge 동작을 통합 smoke에 포함한다.
+- ticket body와 top-level 진행률의 canonical 관계를 정리하고 legacy Progress Board 무시/호환 기준을 문서화한다.
 - manual smoke checklist를 업데이트한다.
 - 기존 `docs/01`, `docs/02`는 MVP 완료 기록으로 유지하고 새 phase 문서를 현재 상태로 갱신한다.
 
@@ -781,6 +1370,7 @@ Depends on:
 - [ ] 브라우저 smoke에서 document chat과 workspace chat entry가 scope에 맞게 동작한다.
 - [ ] 브라우저 smoke에서 run status indicator와 external file change refresh/stale UI가 동작한다.
 - [ ] 브라우저 smoke에서 unread run result badge와 mark-read flow가 동작한다.
+- [x] legacy Progress Board가 있어도 UI/API가 ticket body를 canonical source로 사용하고 안전하게 무시한다.
 - [ ] README와 티켓 문서가 실제 구현 상태와 일치한다.
 
 검증:
@@ -797,10 +1387,260 @@ Depends on:
 사용자 지시:
 
 - 2026-06-22: 샘플 fixture와 실제 제품 진행률은 구분하고, 새 phase는 별도 티켓으로 추적한다.
+- 2026-06-23: Progress Board 운영이 현재 UI에서 얼마나 유효한지, ticket body와 어떤 canonical 관계를 가져야 하는지 검토한다.
+- 2026-06-23: Progress Board를 스킬에서 제거하고, UI/API도 없는 것처럼 취급하며, legacy 문서에 섹션이 남아 있어도 parser가 안전하게 무시하도록 한다.
+- 2026-06-23: `Completed at: 2026-06-23T15:42:31+09:00` 같은 DONE 완료 시각 필드도 `$plan-ticketing` skill과 Alpha Kanban parser/writer에 반영한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-23: Progress Board 정합성 점검 중 body가 완료 기준 미충족 상태인데 `DONE`/`100%`로 표시된 것을 확인했다. 미완료 의존 티켓과 체크리스트 상태에 맞춰 `TODO`/`0%`로 보정했다.
+- 2026-06-23: 운영 판단: 현재 UI의 kanban grouping과 상세 표시는 개별 ticket body를 canonical source로 보고, Progress Board는 새 문서에서는 생성하지 않는 legacy 섹션으로 취급한다. 상태 변경 API는 ticket body와 top-level `현재 진행률`만 갱신하고 legacy Progress Board가 남아 있어도 무시하는 방향으로 전환한다.
+- 2026-06-23: `$plan-ticketing` skill의 Ticket Document Shape, tickets template, canonical pattern에서 Progress Board 생성을 제거했다. Alpha Kanban parser/writer는 Progress Board section을 필수로 요구하지 않고 public API schema에서도 `progressBoard`를 제거했으며, legacy section이 남아 있어도 ticket body와 top-level 진행률만 갱신하도록 바꿨다. 현재 `docs/04_alpha_kanban_multi_workspace_tickets.md`에서도 Progress Board section을 제거했다.
+- 2026-06-23: 누락됐던 `Completed at` 정책을 `$plan-ticketing` skill, tickets template, canonical pattern, Alpha Kanban shared schema, Markdown parser/writer, Codex runner prompt에 반영했다. writer는 DONE 전환 시 완료 시각을 자동 삽입하고, 기존 값은 보존하며, non-DONE으로 재오픈하면 제거한다. parser는 `Status: DONE`일 때만 `completedAt`을 public API에 노출하고, WebUI DONE column은 모든 DONE 티켓에 유효한 `completedAt`이 있을 때 완료 시각 내림차순으로 정렬한다.
+
+### AKW-24. Ticket-scoped chat log 저장 모델 구현
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P1
+Type: Feature / Data Model / UX
+Depends on:
+
+- `AKW-05`
+- `AKW-09`
+- `AKW-11`
+
+목표:
+
+- `Run with Codex` 입력과 assistant answer를 ticket 단위 Q/A chat log로 저장한다.
+- ticket Markdown에는 긴 대화 원문을 넣지 않고, durable 요약만 `사용자 지시`와 `진행 메모`에 남긴다.
+
+현재 문제:
+
+- 현재 `Run with Codex`는 실행 지시 summary와 진행 메모만 Markdown에 남긴다.
+- Codex 채팅창처럼 길고 맥락 있는 답변을 WebUI ticket drawer 안에서 볼 수 있는 저장 surface가 없다.
+- 질문형 run과 구현형 run 모두 assistant answer가 있어야 하지만, 현재 UI는 run event/log와 badge 중심이다.
+- Markdown에 모든 Q/A를 append하면 plan-ticketing 문서가 과도하게 커질 수 있다.
+- 서버 wrapper가 자동 append하는 `Codex run succeeded. ... Log: ...` 형식의 기계적 성공 메모는 사람이 읽는 진행 메모로는 가치가 낮고, run summary/raw log/chat log와 중복된다.
+
+구현 범위:
+
+- control app local state 아래 ticket chat log 저장소를 추가한다. 예: `.alpha-kanban/chats/{workspaceId}/{fileKey}/{ticketId}.jsonl`.
+- chat scope key는 `workspaceId + ticketFileRelativePath + ticketId` 조합으로 정의해 다른 workspace/document의 같은 ticket id 충돌을 막는다.
+- shared schema에 chat message, role, content format, createdAt, runId, scope metadata를 추가한다.
+- `Run with Codex` 시작 시 execution draft 원문을 `role: "user"` message로 저장한다.
+- Codex run 종료 시 assistant markdown answer를 `role: "assistant"` message로 저장한다.
+- ticket drawer에 최근 ticket chat messages를 Markdown 렌더링으로 표시한다.
+- run summary, unread state, chat message가 같은 runId로 연결되게 한다.
+- raw `.alpha-kanban/runs/{runId}.jsonl`은 prompt, command output, stderr, file change, final answer를 담는 디버그/감사용 원본으로 유지한다.
+- run status와 logPath는 run summary가 보존하고, 사람이 읽는 최종 답변은 chat log가 보존한다.
+- successful wrapper result note는 ticket Markdown `진행 메모`에 자동 append하지 않는다.
+- 실패, auth-required, cancel처럼 사용자가 놓치면 안 되는 run outcome만 ticket `진행 메모`에 짧게 append할지 정책화한다.
+- 진행 메모에는 Codex가 직접 판단한 작업 결과 요약만 남기고, 긴 assistant answer와 기계적 성공 문구는 chat log/run summary에 둔다.
+
+제외 범위:
+
+- document-level chat UI 구현
+- workspace-level chat UI 구현
+- 원격 sync 또는 multi-user shared chat
+- target project repository에 chat log 저장
+
+완료 기준:
+
+- [x] `Run with Codex` execution draft가 ticket-scoped `role: "user"` message로 저장된다.
+- [x] Codex final answer가 `role: "assistant"`, `contentFormat: "markdown"` message로 저장된다.
+- [x] ticket drawer에서 같은 ticket의 Q/A history를 볼 수 있다.
+- [x] 같은 ticket id라도 workspace나 ticket file이 다르면 chat log가 분리된다.
+- [x] Markdown ticket 문서에는 긴 Q/A 원문이 자동 append되지 않는다.
+- [x] 성공 run의 wrapper result note가 Markdown `진행 메모`에 자동 append되지 않는다.
+- [x] run status/logPath는 run summary 또는 raw run log 참조로 확인할 수 있다.
+
+검증:
+
+- [x] chat log store unit test
+- [x] workspace/file/ticket scoped key collision test
+- [x] Codex run to chat message API integration test
+- [x] ticket drawer Markdown answer rendering smoke
+
+사용자 지시:
+
+- 2026-06-23: `Run with Codex`의 `Execution draft`는 사실상 `role: "user"` 메시지이고, 질문과 응답을 ticket별 chat log로 저장하는 방향이 좋아 보인다.
+- 2026-06-23: assistant answer는 Markdown으로 저장해 Codex 답변처럼 예쁘게 렌더링되면 좋겠다.
+- 2026-06-23: 모든 `Run with Codex` 질문과 응답을 저장하되, Markdown에는 durable 요약만 남기는 구조를 검토한다.
+- 2026-06-23: `Codex run succeeded. ... Log: ...` 같은 wrapper 성공 메모는 Markdown `진행 메모`에서 제외하고, run status/logPath는 run summary/raw log에 보존하는 쪽이 맞다.
+- 2026-06-23: AKW-24 구현을 진행한다.
+
+진행 메모:
+
+- 2026-06-23: 초안 작성.
+- 2026-06-23: `packages/shared`에 `CodexChatMessage`/`CodexTicketChatResponse` schema를 추가하고, `apps/server/src/codexChat.ts`에 control app `.alpha-kanban/chats/{workspaceId}/{fileKey}/{ticketId}.jsonl` 기반 ticket chat store를 구현했다.
+- 2026-06-23: `CodexRunner`가 run 시작 시 execution draft를 `role: "user"` message로 저장하고, Codex JSON event의 마지막 assistant answer를 `role: "assistant"`, `contentFormat: "markdown"` message로 저장하도록 연결했다. 성공 wrapper result note는 더 이상 ticket Markdown `진행 메모`에 자동 append하지 않고, 실패/cancel/auth-required 계열 outcome만 짧은 progress note 후보로 유지한다.
+- 2026-06-23: `GET /api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId/chat`와 legacy `GET /api/files/:fileId/tickets/:ticketId/chat` route를 추가했다. API 통합 테스트에서 workspace/file/ticket key 분리, user/assistant message 저장, 성공 wrapper note 미생성을 검증했다.
+- 2026-06-23: `apps/web`에 `react-markdown`/`remark-gfm`을 추가하고, ticket drawer `Run with Codex` 영역에 `Ticket chat` history를 Markdown 렌더링으로 표시했다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm build`, `pnpm test`, Chrome smoke. Chrome smoke에서는 local chat fixture로 AKW-24 drawer의 user/assistant message와 Markdown bullet/inline code 렌더링을 확인했고 fixture는 제거했다. `pnpm build`는 Markdown renderer 추가로 bundle size warning을 표시하지만 build는 통과했다.
+
+### AKW-25. Run with Codex read-only/edit mode 정책 구현
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P1
+Type: Feature / Policy / UX
+Depends on:
+
+- `AKW-05`
+- `AKW-24`
+
+목표:
+
+- `Run with Codex` 버튼은 하나로 유지하되, 사용자가 read-only answer인지 file edit run인지 의사표시할 수 있게 한다.
+- read-only mode에서는 답변만 저장하고, file edit mode에서는 현재처럼 파일 수정과 plan-ticketing 문서 기록을 허용한다.
+
+현재 문제:
+
+- "이 티켓 실제 커밋까지 끝났는지 추적해줘" 같은 요청은 구현 실행보다 조사/답변에 가깝다.
+- 현재 실행 model은 모든 `Run with Codex`를 edit-capable implementation run으로 취급한다.
+- 버튼을 `Ask`, `Run`, `Preview`로 늘리면 사용자가 기능 차이를 이해하기 어려울 수 있다.
+
+구현 범위:
+
+- ticket drawer composer에 `Allow file edits` 또는 `Read-only answer / Edit files` mode control을 추가한다.
+- 기본값은 ticket drawer의 제품 목적에 맞춰 `Edit files`로 두되, 사용자가 run 전 바꿀 수 있게 한다.
+- read-only mode prompt에는 파일 수정 금지, Markdown append 금지, 최종 Markdown 답변만 출력 정책을 명시한다.
+- read-only mode에서는 `사용자 지시`와 `진행 메모` 자동 append를 기본적으로 수행하지 않는다.
+- edit mode에서는 기존처럼 실행 지시 summary를 `사용자 지시`에 append하고, 결과 요약을 `진행 메모`에 append한다.
+- 두 mode 모두 AKW-24 chat log에는 user message와 assistant answer를 저장한다.
+- 서버 레벨 read-only guard 또는 sandbox 제한 가능성은 설계에 남기되, MVP는 prompt policy와 post-run diff detection으로 시작한다.
+
+제외 범위:
+
+- 별도 `Ask` 버튼 추가
+- 완전한 OS/filesystem sandbox 구현
+- Codex CLI 권한 모델 변경
+- read-only mode에서 외부 도구의 모든 side effect를 100% 강제 차단
+
+완료 기준:
+
+- [x] `Run with Codex` 버튼은 하나로 유지된다.
+- [x] run 시작 전 read-only/edit mode를 명확히 선택하거나 확인할 수 있다.
+- [x] read-only mode prompt가 파일 수정과 Markdown append 금지를 명시한다.
+- [x] read-only mode 결과는 chat log에 저장되고 ticket Markdown은 자동 변경되지 않는다.
+- [x] edit mode는 기존 `사용자 지시`/`진행 메모` append 정책을 유지한다.
+
+검증:
+
+- [x] prompt builder mode unit test
+- [x] read-only mode no-append API integration test
+- [x] edit mode existing append regression test
+- [x] ticket drawer mode control smoke
+
+사용자 지시:
+
+- 2026-06-23: 버튼은 하나로 두고 read-only 의사표시만 하는 방식이 좋다.
+- 2026-06-23: read-only와 file edit의 차이는 CLI의 다른 기능이라기보다 우리가 보내는 prompt 계약과 권한 boundary 차이로 보면 된다.
+- 2026-06-23: Codex 실행 지시: 진행
+- 2026-06-23: detail modal 상태에서 read-only/edit mode를 토글하면 빈 modal 또는 빈 화면처럼 보이는 문제가 재현된다.
+
+진행 메모:
+
+- 2026-06-23: 초안 작성.
+- 2026-06-23: WebUI에서 `진행`만 입력한 이전 AKW-25 run은 `packages/shared/src/index.ts`와 `apps/server/src/codexRunner.ts` 일부 변경을 만든 뒤 정상 `exit` 이벤트와 ticket 진행 갱신 없이 끊긴 것으로 확인했다.
+- 2026-06-23: `CodexRunMode` shared schema/API response/run summary를 `edit`/`read_only`로 확장했다. `edit`은 기본값이며 기존 사용자 지시 append 정책을 유지하고, `read_only`는 prompt에서 파일 수정과 Markdown append 금지를 명시하며 ticket Markdown 자동 append를 건너뛴다.
+- 2026-06-23: `CodexRunner`가 read-only run 전후 `git status --short --untracked-files=all`을 비교해 system event로 남기도록 했다. Run terminal `exit`/`error` 이벤트는 assistant chat 저장과 read-only diff check 이후에 발행해 UI refetch race를 줄였다.
+- 2026-06-23: ticket drawer `Run with Codex` 영역에 단일 버튼은 유지하고 `Edit files`/`Read-only` segmented mode control을 추가했다. Preview/run request payload와 preview/log/run signal badge에 mode 표시를 연결했다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm test`, `pnpm build`, Chrome smoke. Chrome smoke에서는 AKW-25 drawer 기본 `Edit files`, `Read-only` 전환, read-only prompt preview 문구를 확인했다. `pnpm build`는 기존과 같이 Vite chunk-size warning을 표시하지만 build는 통과했다.
+- 2026-06-23: modal/read-only 토글 blank 문제를 확인했다. 원인은 read-only 정책 자체가 아니라 URL `file=` route에서 selected file state가 비어도 렌더/query가 path 기준 파일을 즉시 resolve하지 못하는 문제와 run mode radio id/name이 고정값인 구조였다. `selectedFile`/query/drawer/patch 경로를 resolved file id 기반으로 통일하고, run mode radio group을 ticket별 id/name으로 분리했다.
+- 2026-06-23: 추가 원인을 확정했다. detail modal panel의 `overflow-hidden`이 programmatic scroll container가 되어, 화면 아래쪽의 `Read-only` control을 클릭할 때 panel 자체의 `scrollTop`이 이동했고 header/body가 clipped panel 밖으로 밀려 빈 modal처럼 보였다. ticket detail panel을 `overflow-clip`으로 바꿔 panel 자체는 스크롤되지 않고 `.ak-drawer-body`만 스크롤되게 했다. 사용자가 준 direct URL 하나만 Chrome에서 열고 `Read-only`/`Edit files` 토글을 재검증했으며, panel `scrollTop`은 `0`으로 유지되고 modal content가 계속 보임을 확인했다.
+
+### AKW-26. Workspace spec grilling chat과 plan-ticketing handoff 구현
+
+Status: READY
+Progress: 25%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P1
+Type: Feature / UX / Workflow
+Depends on:
+
+- `AKW-07`
+- `AKW-08`
+- `AKW-24`
+- `AKW-25`
+
+목표:
+
+- 아직 ticket 문서가 없거나 구현 범위가 불명확한 상태에서 workspace 전체를 대상으로 요구사항을 질문하고 정리하는 spec grilling chat을 제공한다.
+- 충분히 정리된 논의를 `$plan-ticketing` 기반 plan/ticket 생성 실행으로 handoff한다.
+
+현재 문제:
+
+- `AKW-08`은 workspace-level chat entry와 project-wide 논의 surface를 정의하지만, 요구사항을 질문으로 좁히고 plan/ticket 생성으로 넘기는 구체 workflow가 없다.
+- AKW-07/08의 scope parser는 입력 범위와 prompt boundary를 정하지만, "요구사항을 질문으로 구체화한 뒤 plan-ticketing으로 넘기는" 제품 flow는 별도로 필요하다.
+- 사용자는 평소 Codex 채팅창에서 요구사항을 왕복 정리한 뒤 plan/ticket 생성을 시키지만, WebUI에는 그 대화와 생성 결과를 workspace scope로 보존할 모델이 없다.
+- ticket이 없는 상태에서는 ticket drawer 기반 `Run with Codex`로 시작할 수 없다.
+
+구현 범위:
+
+- workspace chat에 `Spec grilling` mode를 추가한다.
+- spec grilling은 AKW-07의 normalized scope block과 AKW-08의 workspace chat entry를 사용한다.
+- prompt context에는 selected workspace root, discovered plan/ticket/inventory docs 목록, 최근 선택 문서, 사용자가 입력한 목표를 포함한다.
+- spec grilling 기본 mode는 read-only answer로 두고, 파일 생성/수정은 명시적 handoff action에서만 수행한다.
+- assistant가 필요한 clarifying questions, 결정 사항, open questions, tentative scope를 Markdown으로 답변하게 한다.
+- 사용자가 승인하면 `$plan-ticketing` handoff run을 시작해 새 plan/ticket 문서를 생성하거나 기존 문서에 티켓을 추가한다. 이때 plan-ticketing skill에는 raw `@w`/`@t:` mention이 아니라 Alpha Kanban이 만든 `Resolved scope`/`Target document`/`Mode` block을 전달한다.
+- 생성된 plan/ticket file path와 ticket ids를 workspace chat metadata에 연결한다.
+- chat log 저장은 AKW-24의 scope model을 확장해 `scope: "workspace"`를 지원한다.
+
+제외 범위:
+
+- workspace 전체 코드 semantic index
+- 여러 workspace를 동시에 대상으로 하는 spec grilling
+- 외부 issue tracker/Notion sync
+- 자동 제품 요구사항 완성 판정
+
+완료 기준:
+
+- [ ] selected workspace가 있으면 ticket document 선택 없이 spec grilling chat을 시작할 수 있다.
+- [ ] spec grilling 기본 응답은 Markdown을 수정하지 않는다.
+- [ ] plan/ticket 생성은 사용자가 명시적으로 실행할 때만 수행된다.
+- [ ] plan-ticketing handoff prompt는 raw mention이 아니라 normalized scope block을 포함한다.
+- [ ] 생성된 plan/ticket 문서 경로와 workspace chat log가 metadata로 연결된다.
+- [ ] ticket-level run/chat과 workspace-level spec chat의 scope label이 명확히 다르다.
+
+검증:
+
+- [ ] workspace chat scope key test
+- [ ] spec grilling prompt preview/unit test
+- [ ] plan-ticketing handoff dry-run test
+- [ ] desktop browser smoke
+- [ ] mobile browser smoke
+
+사용자 지시:
+
+- 2026-06-23: 추후 tickets가 없을 때 하고 싶은 구현을 질문으로 구체화한 다음 plan/ticket 생성을 지시하는 프로젝트 스코프 전체채팅을 넣고 싶다.
+- 2026-06-23: workspace-level spec grilling chat 기능이 ticket-level 논의와 별도로 필요하다.
+- 2026-06-23: plan-ticketing skill은 `@w`/`@t:` raw mention을 직접 파싱하지 않고 Alpha Kanban이 정규화한 scope 계약을 받는 쪽이 맞다.
+
+진행 메모:
+
+- 2026-06-23: 초안 작성.
+- 2026-06-23: Progress Board와 개별 ticket body의 상태 불일치를 정리했다. 아직 구현 착수 전이므로 `READY 25%`로 맞춘다.
+- 2026-06-23: AKW-26을 AKW-07 scope parser와 AKW-08 workspace chat entry 위에 얹는 spec grilling/plan-ticketing handoff workflow로 재정의했다.
 
 ### AKW-11. Run result unread badge와 read state 저장 구현
 
@@ -872,10 +1712,10 @@ Depends on:
 - 2026-06-22: `apps/web`에서 ticket card/document header는 active 또는 unread run만 표시하고, drawer의 `Mark as read`가 readAt 저장 후 badge를 제거하도록 구현했다.
 - 2026-06-22: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright UI smoke. Dry run으로 unread succeeded badge를 만들고 `Mark as read` 후 카드/header/drawer badge 제거와 state.json `readAt` 저장을 확인했다.
 
-### AKW-07. Document-level chat panel 구현
+### AKW-07. Scope-aware ChatComposer와 mention parser 구현
 
-Status: TODO
-Progress: 0%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/web`
@@ -889,59 +1729,94 @@ Depends on:
 - `AKW-03`
 - `AKW-04`
 - `AKW-05`
+- `AKW-24`
+- `AKW-25`
 
 목표:
 
-- 선택된 ticket document 전체를 두고 단순 질문, 논의, 요약, 작업 방향 정리를 할 수 있는 document-level chat surface를 제공한다.
+- Ticket, Document, Workspace scope 입력을 하나의 shared ChatComposer와 ScopeResolver로 처리한다.
+- 기존 ticket drawer의 `Run with Codex` 입력에 scope mention parser를 붙여 기본 ticket scope를 유지하면서도 `@t:`, `@d`, `@tickets`, `@w` 같은 명시적 scope override를 해석한다.
 
 현재 문제:
 
-- 현재 자유 입력은 ticket detail drawer의 `Run with Codex` 실행 draft에만 있다.
-- 문서 전체에 대해 질문하고 싶은 경우에도 특정 card를 열어야 해 scope가 잘못 보인다.
-- 사용자의 논의가 바로 Markdown에 기록되어야 하는지, 단순 대화인지 구분할 UI가 없다.
+- 기존 `Run with Codex`는 현재 ticket 하나를 전제로 prompt를 구성한다.
+- 사용자가 "문서 전체", "workspace 전체", "다른 ticket"을 언급해도 UI/API가 이를 구조화하지 않으면 prompt 품질에 의존하게 된다.
+- AKW-07/08/26은 모두 넓은 scope chat 문제를 다루므로, 별도 입력기를 늘리기보다 공통 scope parser와 composer를 먼저 세워야 한다.
+- bare ticket id를 자동 scope로 해석하면 "AKW-26 말고 AKW-08부터 할까" 같은 자연어가 잘못 라우팅될 위험이 있다.
 
 구현 범위:
 
-- board 우측에 collapsible `Document Chat` panel을 추가한다.
-- panel header에 현재 selected ticket document path를 표시한다.
-- board header 오른쪽에 `Discuss doc` 또는 동일 의미의 entry button을 둔다.
-- composer placeholder는 현재 문서 전체에 대한 질문/논의임을 명확히 한다.
-- document chat prompt는 selected workspace, selected file, 관련 plan path, ticket ids 요약을 context로 포함한다.
-- 기본 chat 응답은 Markdown을 수정하지 않는다.
-- 사용자가 명시적으로 기록을 요청할 때만 선택 ticket의 `사용자 지시` append, 특정 ticket 선택 요청, 또는 새 ticket 생성 flow로 전환한다.
-- desktop에서는 우측 panel, mobile에서는 sheet/fullscreen 형태로 제공한다.
+- shared schema에 chat scope resolver 결과를 추가한다. 최소 필드는 `scope`, `targetWorkspaceId`, `targetFileId`, optional `targetTicketId`, `rawMessage`, `cleanedMessage`, `warnings`로 둔다.
+- mention parser는 `@w`/`@workspace`, `@d`/`@doc`/`@document`, `@tickets`, `@t:AKW-26`/`@ticket:AKW-26`을 지원한다.
+- 티켓번호만 단독으로 등장하는 텍스트는 scope control로 해석하지 않고 자연어로 보존한다.
+- UI 진입점이 default scope를 제공한다. Ticket drawer는 `ticket`, document reader/board entry는 `document`, project/sidebar entry는 `workspace`가 기본값이다.
+- 기존 ticket drawer `Run with Codex` composer를 shared ChatComposer로 교체하거나 adapter로 감싼다.
+- `Run with Codex` preview/run prompt에는 raw mention을 직접 해석시키지 않고 `Resolved scope`, `Target document`, `Target ticket`, `Mode` block을 삽입한다.
+- ticket drawer에서는 기본 write target을 현재 ticket으로 유지한다.
+- ticket drawer에서 `@t:`와 `@d`/`@tickets`는 허용하되, `@w` edit handoff는 workspace chat/spec grilling으로 전환하거나 명시 확인을 요구한다.
+- parser가 해석한 scope chip을 composer 주변에 표시하고, disallowed scope는 조용히 무시하지 않고 사용자에게 안내한다.
+- `$plan-ticketing` skill은 raw mention을 직접 파싱하지 않고 Alpha Kanban이 생성한 normalized scope block을 신뢰한다.
 
 제외 범위:
 
-- workspace 전체 docs 검색
-- 새 plan/ticket 생성 primary flow
-- 장기 transcript sync 또는 외부 저장소 동기화
+- Workspace Chat entry 자체
+- Spec grilling workflow
+- workspace 전체 코드 semantic index
+- rich chat thread UI redesign
+- plan/ticket 생성 handoff 실행
 
 완료 기준:
 
-- [ ] 선택된 ticket document가 있으면 document chat entry가 활성화된다.
-- [ ] document chat panel이 현재 document path와 scope를 표시한다.
-- [ ] document chat 입력은 기본적으로 Markdown을 수정하지 않는다.
-- [ ] 사용자가 기록을 명시하면 기록 대상 ticket 선택 또는 append action으로 전환된다.
-- [ ] ticket drawer의 `Run with Codex` draft와 혼동되지 않는다.
+- [x] `@w`, `@workspace`, `@d`, `@doc`, `@document`, `@tickets`, `@t:ID`, `@ticket:ID`가 구조화된 scope로 파싱된다.
+- [x] bare ticket id는 scope override로 파싱되지 않는다.
+- [x] 기존 ticket drawer `Run with Codex` 기본 동작은 현재 ticket scope로 유지된다.
+- [x] prompt preview에 normalized scope block이 표시된다.
+- [x] disallowed scope override는 사용자에게 안내되고 잘못된 write target으로 실행되지 않는다.
+- [x] parser 결과와 chat/run log 저장 단위가 일치한다.
 
 검증:
 
-- [ ] document chat prompt preview/unit test
-- [ ] desktop browser smoke
-- [ ] mobile browser smoke
-- [ ] no-write default behavior test
+- [x] mention parser unit test
+- [x] ticket drawer default scope regression test
+- [x] prompt preview normalized scope test
+- [x] disallowed scope UI/API test
+- [x] desktop browser smoke
 
 사용자 지시:
 
 - 2026-06-22: 카드별 입력뿐 아니라 현재 Markdown 파일 전체를 두고 자유 질문이나 논의를 할 수 있는 전체 입력이 있으면 좋겠다.
 - 2026-06-22: document chat은 board 우측 panel에 두는 방향이 좋다.
+- 2026-06-23: `@workspace`, `@tickets`, `@ticket:XXX-000` 같은 parser를 도입해 prompt에 자동 삽입할지 검토한다.
+- 2026-06-23: 특정 ticket scope 문법은 너무 길지 않게 `@t:AKW-26` 같은 짧은 alias를 허용하고, 티켓번호만 덩그러니 있는 경우는 scope control로 보지 않는 쪽이 안전하다.
+- 2026-06-23: 기존 ticket drawer의 `Run with Codex`에도 같은 scope parser를 붙이되, 기본 scope는 현재 ticket으로 유지한다.
+- 2026-06-23: raw mention 문법은 plan-ticketing skill이 직접 해석하지 않고 Alpha Kanban parser가 normalized scope block으로 정리해 전달한다.
+- 2026-06-23: AKW-07/08은 완전히 별도 채팅창 두 개라기보다 공통 scope-aware chat 기반으로 통합 설계한다.
+- 2026-06-23: 진행.
+- 2026-06-23: textarea 영역에서 scope token이 Codex 채팅 입력처럼 한 단어 단위로 삭제되면 좋겠다.
+- 2026-06-23: textarea keydown 보정보다 Tiptap처럼 DOM 기반 inline token으로 처리한다.
+- 2026-06-23: `@` 입력 시 scope/ticket 후보 선택 목록이 추천되면 더 좋다.
+- 2026-06-23: `@` 후보 영역은 직접 만든 absolute list보다 shadcn/Radix 기반 surface로 정리하는 게 낫다. 기존 후보 UI는 키보드 navigation, focus 처리, z-index가 허술해 보인다.
+- 2026-06-23: `@` 후보 목록에서 키보드 Up/Down 이동 시 active row를 따라 내부 스크롤도 이동해야 한다.
+- 2026-06-23: `@` 후보 Popover 영역의 스크롤바도 다른 app scroll region과 같은 디자인 시스템 scrollbar를 따라야 한다.
+- 2026-06-23: AKW-07의 ticket body 상태/progress와 Progress Board가 불일치하므로 정합성을 맞춘다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-23: 기존 Document Chat 티켓을 공통 `ScopeResolver`/`ChatComposer` 기반 티켓으로 재정의했다. Document/Workspace chat surface는 같은 composer를 사용하는 후속 티켓으로 남긴다.
+- 2026-06-23: `packages/shared`에 `resolveCodexChatScope`, scope resolution schema, edit/workspace guard helper를 추가했다. `@w`/`@workspace`, `@d`/`@doc`/`@document`, `@tickets`, `@t:ID`/`@ticket:ID`를 파싱하고 bare ticket id는 자연어로 보존한다.
+- 2026-06-23: `apps/server` Codex prompt preview/run에 `scopeResolution`을 연결하고 `Resolved scope` prompt block을 삽입했다. edit mode에서 workspace scope는 `CODEX_SCOPE_NOT_ALLOWED`로 차단하며, ticket chat message와 run snapshot에 resolved scope를 남긴다.
+- 2026-06-23: `apps/web` ticket drawer `Run with Codex` 입력 아래에 scope chip/warning을 표시했다. `@t:AKW-26`은 ticket scope로 preview되고, `@w`는 edit mode에서 warning과 함께 run button이 비활성화되며 read-only mode에서는 허용된다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm --filter @alpha-kanban/web typecheck`, Chrome smoke. Chrome smoke에서는 AKW-07 direct modal URL에서 `@t:AKW-26` scope chip과 preview prompt의 `Resolved scope`/`Target ticket id: AKW-26`/cleaned message를 확인했고, `@w` edit guard와 read-only 허용 상태를 확인했다. Chrome console error는 없었다.
+- 2026-06-23: textarea `Backspace`/`Delete`에서 커서가 scope mention token 내부, token 끝, 또는 token 바로 뒤 공백에 있을 때 token 전체를 원자적으로 삭제하도록 shared helper와 web keydown handler를 추가했다. native textarea라 inline chip 렌더링은 아니지만 삭제 동작은 Codex chat input에 가깝게 맞췄다.
+- 2026-06-23: textarea stopgap을 Tiptap 기반 `ScopeComposer`로 대체했다. `scopeMention` inline atom node를 사용해 mention이 DOM pill로 렌더링되고, editor 내용은 기존 API 계약에 맞춰 plain text `instructionDraft`로 serialize된다. `@` 입력 중에는 Workspace, Tickets, Document, 현재 ticket document의 ticket 후보가 추천되고, 선택 시 atom node로 삽입된다.
+- 2026-06-23: Tiptap atom node 삭제 UX를 보정했다. 자동 삽입된 trailing space 뒤에서 `Backspace`를 눌러도 ProseMirror document range 기준으로 직전 `scopeMention` atom과 공백을 함께 삭제한다. Chrome smoke에서 `@t:AKW-26` 후보 선택, atom pill 렌더링, preview prompt serialization, Backspace 1회 삭제, console error 없음까지 확인했다.
+- 2026-06-23: scope suggestion surface를 `@radix-ui/react-popover` 기반 shadcn-style `Popover` wrapper로 교체했다. 후보 목록은 portal에서 z-index `90`으로 렌더링되고, editor focus는 유지한 채 `aria-controls`/`aria-activedescendant`/`aria-selected`로 active row를 추적한다. Chrome smoke에서 `@` 후보 Popover 표시, ArrowDown navigation, `@t:AKW-26` 필터링, Enter atom 삽입, Backspace 삭제, console error 없음까지 확인했다.
+- 2026-06-23: scope suggestion active option이 바뀔 때 `scrollIntoView({ block: "nearest" })`로 Popover 내부 스크롤을 따라가게 했다. Chrome smoke에서 `@` 후보 8개 목록에서 ArrowDown 7회 후 list `scrollTop`이 `0`에서 `158`로 변하고 selected row가 visible 상태임을 확인했다.
+- 2026-06-23: Popover 후보 목록에도 공용 `ak-scroll-area`를 적용해 scrollbar width, gutter, thumb 색상이 다른 내부 scroll region과 같은 디자인 시스템 토큰을 따르도록 맞췄다.
+- 2026-06-23: AKW-07 ticket body의 `Status`/`Progress`를 구현 완료 상태와 Progress Board에 맞춰 `DONE`/`100%`로 보정했다.
 
-### AKW-08. Workspace-level chat entry와 project-wide 논의 flow 구현
+### AKW-08. Workspace-level chat entry와 project-wide scope 적용
 
 Status: TODO
 Progress: 0%
@@ -963,13 +1838,13 @@ Depends on:
 
 목표:
 
-- 선택된 workspace 전체의 plan/ticket/inventory 문서를 기준으로 질문, 논의, 새 작업 plan/ticket 생성을 시작할 수 있는 workspace-level chat surface를 제공한다.
+- AKW-07의 shared ChatComposer와 ScopeResolver를 사용해 selected workspace 전체를 대상으로 질문, 논의, 새 plan/ticket 생성 논의를 시작할 수 있는 workspace-level chat entry를 제공한다.
 
 현재 문제:
 
-- Document Chat은 현재 선택된 ticket document에 묶인다.
-- 새 기능 논의, 여러 ticket document 간 비교, workspace 전체 현황 질문은 특정 document 우측 panel보다 project scope entry가 더 적합하다.
-- `$plan-ticketing`을 활용한 새 plan/ticket 생성 요청은 특정 card나 document보다 workspace scope에서 시작하는 것이 자연스럽다.
+- ticket drawer와 document-level entry는 특정 document/ticket context가 강하다.
+- 새 기능 논의, 여러 Markdown document 간 비교, workspace 전체 현황 질문은 project scope entry가 더 적합하다.
+- tickets 문서가 없거나 아직 어떤 문서에 기록해야 할지 모르는 상태에서는 workspace scope에서 시작해야 한다.
 
 구현 범위:
 
@@ -977,8 +1852,10 @@ Depends on:
 - entry sublabel에 현재 selected workspace와 전체 docs scope를 표시한다.
 - desktop에서는 command-palette style modal 또는 sidebar 확장 panel로 연다.
 - mobile에서는 fullscreen sheet로 연다.
+- workspace chat은 AKW-07의 shared ChatComposer를 사용하고 default scope를 `workspace`로 주입한다.
 - workspace chat prompt는 selected workspace root, discovered plan/ticket/inventory docs 목록, recent selected document를 context로 포함한다.
-- `$plan-ticketing` 명시 호출이나 plan/ticket 생성 요청을 workspace chat의 primary flow로 지원한다.
+- workspace chat에서도 `@t:`, `@d`, `@tickets` override를 허용하되, scope chip과 target metadata를 명확히 표시한다.
+- `$plan-ticketing` 명시 호출이나 plan/ticket 생성 요청을 workspace chat의 primary flow로 지원하되, 실제 생성 실행은 preview/confirm boundary를 둔다.
 - chat 결과가 Markdown 변경을 제안할 때는 대상 문서 생성/수정 범위를 preview하고 명시 실행으로 분리한다.
 
 제외 범위:
@@ -986,18 +1863,21 @@ Depends on:
 - workspace 전체 코드베이스 semantic indexing
 - 외부 issue tracker 동기화
 - 여러 workspace를 동시에 대상으로 하는 cross-workspace chat
+- spec grilling 질문 workflow의 완성
 
 완료 기준:
 
 - [ ] selected workspace가 있으면 sidebar에서 workspace chat entry가 보인다.
 - [ ] workspace chat은 현재 document가 없어도 project scope로 열 수 있다.
 - [ ] workspace chat prompt가 project docs 목록을 기반으로 구성된다.
-- [ ] plan/ticket 생성 요청은 `$plan-ticketing`을 사용할 수 있는 prompt boundary를 가진다.
+- [ ] workspace chat은 AKW-07 scope parser 결과를 사용한다.
+- [ ] plan/ticket 생성 요청은 `$plan-ticketing`을 사용할 수 있는 normalized scope/prompt boundary를 가진다.
 - [ ] document chat과 workspace chat의 scope label이 명확히 구분된다.
 
 검증:
 
 - [ ] workspace chat prompt preview/unit test
+- [ ] workspace default scope resolver test
 - [ ] `$plan-ticketing` trigger prompt smoke
 - [ ] desktop browser smoke
 - [ ] mobile browser smoke
@@ -1005,10 +1885,12 @@ Depends on:
 사용자 지시:
 
 - 2026-06-22: workspace chat은 project switcher 아래 sidebar entry에서 열고, project 전체 docs를 기준으로 질문하거나 새 plan/ticket 생성을 논의하는 방향이 좋다.
+- 2026-06-23: 7/8은 Codex 채팅창에서는 전체를 봐달라고 지시하던 일을 scope만 다르게 제품화하는 느낌이므로, 별도 기능 두 개보다 scope-aware chat으로 정리한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-23: Workspace Chat은 별도 parser를 만들지 않고 AKW-07의 shared scope parser/composer를 사용하는 entry로 재정의했다. AKW-26은 이 workspace scope 위의 spec grilling/handoff workflow로 유지한다.
 
 ### AKW-09. Codex run status indicator와 active run 신호 구현
 
@@ -1157,3 +2039,178 @@ Depends on:
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+
+### AKW-27. Project switcher modal 재배치와 URL route state 복원
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P1
+Type: UX / Routing
+Depends on:
+
+- `AKW-04`
+- `AKW-13`
+- `AKW-15`
+
+목표:
+
+- 사이드바에서 프로젝트 recent/open path 목록을 항상 펼쳐두지 않고, 현재 project 표시와 switch action만 남긴다.
+- 새로고침 또는 URL 공유 시 마지막으로 보던 project, Markdown document, ticket detail open state를 복원한다.
+
+현재 문제:
+
+- 기존 project switcher가 사이드바 상단에 recent/open path/discovered 목록을 계속 노출해 ticket document 목록처럼 오인된다.
+- 사용자가 실수로 project를 바꾸기 쉽고, 새로고침하면 마지막으로 보던 Markdown document 대신 첫 ticket document로 돌아갈 수 있다.
+- 모든 state를 hash에 넣으면 URL이 지저분하고 project routing boundary가 모호하다.
+
+구현 범위:
+
+- sidebar project 영역은 현재 project compact button으로 축소한다.
+- recent/discovered project, open path, browse folder UX는 `Switch project` modal 안으로 이동한다.
+- URL route state를 `path=/w/:workspaceId`, `query=file:{workspaceRelativePath}`, `hash=ticket/detail`로 분리한다.
+- 직접 URL 진입과 browser refresh에서 selected workspace, selected Markdown document, ticket detail modal/side state를 복원한다.
+- ticket detail을 닫으면 hash의 ticket/detail state를 제거한다.
+
+제외 범위:
+
+- React Router 도입
+- server-side route registry
+- browser history stack을 ticket/card click마다 push하는 세밀한 back/forward UX
+- project 변경 전 draft/active run confirm guard
+
+완료 기준:
+
+- [x] 사이드바에는 현재 project compact switcher만 보인다.
+- [x] recent/open path/browse는 modal 안에서만 보인다.
+- [x] project는 URL path로 표현된다.
+- [x] selected Markdown document는 query string으로 복원된다.
+- [x] ticket detail open state는 hash로 복원되고 닫을 때 제거된다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] Chrome direct route/reload smoke
+
+사용자 지시:
+
+- 2026-06-23: project recent/open path 영역이 항상 펼쳐져 있을 필요가 없고, ticket으로 오인해 project를 잘못 바꾸기 쉬우므로 위치를 옮긴다.
+- 2026-06-23: 새로고침 시 마지막으로 보던 Markdown file을 기억한다.
+- 2026-06-23: 가능하면 `#`로 ticket modal open 여부까지 복원한다.
+- 2026-06-23: 모든 것을 hashbang으로 처리하지 말고 project 정도는 router 주소로 처리한다.
+- 2026-06-23: `?file=...#ticket=...&detail=modal` 직접 URL에서 selected file state가 비면 modal/detail이 빈 화면처럼 보일 수 있으므로, URL file path를 렌더 단계에서도 복구해야 한다.
+
+진행 메모:
+
+- 2026-06-23: sidebar project 영역을 현재 project compact button으로 축소하고, `Switch project` Dialog 안으로 recent/discovered/open path/browse 진입점을 이동했다.
+- 2026-06-23: manual History API 기반 route state를 추가했다. Project는 `/w/:workspaceId`, Markdown document는 `?file=docs%2F...md`, ticket detail state는 `#ticket=AKW-25&detail=modal|side`로 유지한다.
+- 2026-06-23: 직접 URL 진입, ticket modal close 시 hash 제거, 새로고침 후 selected Markdown document 복원을 Chrome smoke로 확인했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`. `pnpm build`는 기존과 같이 Vite chunk-size warning을 표시하지만 build는 통과했다.
+- 2026-06-23: route state 보정을 추가했다. `selectedFileId` state가 비거나 stale이어도 URL `file=` path로 `selectedFile`과 file id를 derive해 ticket board/detail query와 modal direct route가 즉시 복원되게 했다.
+
+### AKW-28. Document Set navigator와 type-specific document view mode 구현
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+- `alpha-kanban`
+
+Priority: P1
+Type: UX / Parser / API / Routing
+Depends on:
+
+- `AKW-02`
+- `AKW-03`
+- `AKW-04`
+- `AKW-27`
+
+목표:
+
+- selected workspace의 plan/tickets/inventory Markdown 문서를 flat file list가 아니라 작업 단위 document set으로 묶어 보여준다.
+- `tickets` 문서를 선택하면 Kanban board를 유지하고, `plan` 또는 `inventory` 문서를 선택하면 해당 문서에 맞는 reader view를 보여준다.
+- Sparkone처럼 실제 사용 중인 docs 구조에서 plan/tickets pair, plan/tickets/inventory set, standalone inventory가 섞여 있어도 보수적으로 탐색할 수 있게 한다.
+
+현재 문제:
+
+- 현재 UI는 selected document를 ticket document로 전제하고 Kanban board를 렌더링한다.
+- plan-ticketing skill은 plan, tickets, inventory 문서를 생성하지만 UI는 ticket documents만 주요 navigation 대상으로 다룬다.
+- `{NN}_{slug}_...` 번호는 생성 순서에 가깝고, inventory가 standalone이거나 번호가 떨어진 경우가 있어 파일 번호만으로 관계를 확정하기 어렵다.
+- 문서 본문에는 `기준 문서`, `연결 문서`, Markdown link, absolute/relative path 언급이 섞여 있지만 아직 관계 evidence로 정규화하지 않는다.
+
+구현 범위:
+
+- shared/server에 Markdown document type schema를 추가하거나 기존 summary를 확장한다.
+- file scan 결과를 `{ type: "plan" | "tickets" | "inventory" | "other", workspaceRelativePath, directory, slug, sequenceNumber }` 형태로 분류한다.
+- 같은 directory와 slug를 strong key로 사용해 document set을 만든다.
+- `NN`은 sorting/timeline hint로만 사용하고 관계 판단의 필수 조건으로 쓰지 않는다.
+- 본문 link evidence를 보조 정보로 추출해 set confidence와 linked documents를 표시한다.
+- `GET /api/workspaces/:workspaceId/document-sets` 또는 기존 file API 확장으로 document set 목록을 제공한다.
+- sidebar의 ticket document list를 document set navigator로 교체한다.
+- document set row에서 plan/tickets/inventory presence와 selected type을 명확히 표시한다.
+- selected `tickets` document는 기존 Kanban board를 렌더링한다.
+- selected `plan` document는 Markdown outline, 목표/비목표/현재 상태/검증 계획, linked ticket progress summary를 보여주는 plan reader를 렌더링한다.
+- selected `inventory` document는 Matrix/Register/Repository details 섹션을 읽기 쉬운 outline 또는 table-like reader로 보여준다.
+- selected `other` Markdown은 generic reader mode로 열고 ticket mutation/run affordance는 비활성화한다.
+- URL `?file=` route state는 모든 Markdown type을 복원하고, ticket detail hash는 tickets view에서만 의미 있게 해석한다.
+
+제외 범위:
+
+- 모든 Markdown 문서 관계를 LLM으로 자동 추론하는 기능
+- target repository에 강제 metadata frontmatter를 삽입하는 migration
+- rich Markdown editor
+- document graph visualization
+- plan/inventory 문서의 ticket-level mutation
+
+완료 기준:
+
+- [x] Sparkone docs fixture에서 plan/tickets pair와 plan/tickets/inventory set이 같은 document set으로 묶인다.
+- [x] standalone inventory나 suffix 미해석 문서는 `Unlinked` 또는 `Standalone` 영역에 남는다.
+- [x] sidebar에서 document set 단위로 plan/tickets/inventory presence가 보인다.
+- [x] plan 선택 시 Kanban이 아니라 plan reader가 열린다.
+- [x] inventory 선택 시 Kanban이 아니라 inventory reader가 열린다.
+- [x] tickets 선택 시 기존 board/detail/run 기능이 회귀 없이 동작한다.
+- [x] 직접 URL 또는 새로고침으로 plan/inventory/tickets 선택 상태가 복원된다.
+
+검증:
+
+- [x] document type parser unit test
+- [x] document set grouping unit test with Sparkone-style fixtures
+- [x] alpha-kanban docs grouping regression test
+- [x] plan/tickets/inventory 선택 UI smoke
+- [x] direct route reload smoke
+
+사용자 지시:
+
+- 2026-06-23: plan-ticketing skill은 plan/ticket/inventory를 생성하지만 UI는 티켓 문서에 특화되어 있으므로, 인벤토리와 플랜도 살펴볼 UX가 필요하다.
+- 2026-06-23: 파일 내부 본문에는 연관 파일 나열 방식이 규격화되어 있지 않고, 절대주소/상대주소/파일명만 언급되는 경우가 섞일 수 있다.
+- 2026-06-23: `~/workspace/sparkone/docs`가 실제로 가장 많이 사용한 representative repo이므로 그 구조를 기준으로 판단한다.
+- 2026-06-23: `{NN}_{slug}_`는 skill에 명시된 생성 규칙이지만, 번호 자체는 관계의 강한 기준으로 보지 않는다.
+- 2026-06-23: plan을 선택하면 Kanban이 아니라 다른 view mode가 필요하다.
+- 2026-06-23: AKW-28을 먼저 시작한다.
+- 2026-06-23: Markdown renderer는 직접 구현보다 rich open-source renderer를 쓰는 방향이 좋고, reader code block 컬러링이 읽기 어렵다. Outline 항목을 클릭하면 해당 heading 위치로 스크롤되면 좋겠다.
+- 2026-06-23: plan/inventory Markdown reader에서 바깥 스크롤과 본문 내부 스크롤이 중첩되어 보이는 UX가 불편하므로, 내부 스크롤을 풀거나 sticky 처리로 정리한다.
+- 2026-06-23: Markdown reader title/header 영역도 상단 sticky로 유지하고, linked docs/outline 패널은 창 높이가 줄 때 내부 스크롤은 허용하되 padding 때문에 부모 스크롤을 유발하지 않게 정리한다.
+- 2026-06-23: sticky header가 카드 상단과 rounded clipping을 깨고, 좌측 docs 영역 하단이 잘려 보이므로 sticky 대신 내부 스크롤바를 쓰되 외부 스크롤이 생기지 않도록 viewport 높이 계산으로 정리한다.
+- 2026-06-23: Outline 클릭으로 이동한 anchor heading이 어디인지 알 수 있게, 스크롤 후 해당 라인에 은은한 shadow 반짝임을 1회 표시한다.
+
+진행 메모:
+
+- 2026-06-23: 초안 작성. Sparkone docs baseline은 Markdown 76개, typed `{NN}_{slug}_{plan|tickets|inventory}.md` 61개, directory+slug group 35개, plan+tickets pair 18개, plan+tickets+inventory set 4개, standalone/lonely group 13개로 확인했다.
+- 2026-06-23: 구현 착수. Document set API, generic Markdown reader, sidebar document set navigator, type-specific document view mode 순서로 진행한다.
+- 2026-06-23: 구현 완료. `packages/shared`에 document set/Markdown reader schema를 추가하고, `apps/server`에 document set grouping과 generic Markdown read route를 추가했다. `apps/web`은 sidebar를 Document Set navigator로 교체하고 tickets는 Kanban, plan/inventory/markdown은 reader mode로 분기한다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/shared build`, `pnpm --filter @alpha-kanban/server typecheck`, `pnpm --filter @alpha-kanban/server test`, `pnpm --filter @alpha-kanban/web typecheck`, `pnpm test`, `pnpm build`, Chrome smoke. Chrome smoke는 alpha-kanban plan reader, alpha-kanban tickets Kanban, Sparkone inventory reader direct route를 확인했다. `pnpm build`는 기존 Vite chunk-size warning만 표시하고 성공했다.
+- 2026-06-23: Markdown reader polish를 반영했다. 기존 `react-markdown`/`remark-gfm` renderer는 유지하되 `ak-markdown` 스타일로 inline code와 fenced code block 색상 충돌을 분리했고, outline 항목 클릭 시 line 기반 heading id로 smooth scroll되도록 연결했다.
+- 2026-06-23: Markdown reader의 오른쪽 본문 내부 스크롤을 제거하고 바깥 document body 스크롤로 통합했다. 왼쪽 linked docs/outline 패널은 sticky sidebar로 유지해 긴 plan/inventory 문서 탐색을 보조한다.
+- 2026-06-23: Reader title/header를 sticky로 변경했다. 왼쪽 linked docs/outline 패널은 sticky `flex-col` container와 `min-h-0 flex-1 overflow-auto` body로 재구성해 내부 padding이 부모 높이를 넘겨 추가 스크롤을 만들지 않게 했다.
+- 2026-06-23: Sticky 방식이 panel clipping과 충돌해 reader layout을 `h-full min-h-0` grid로 되돌렸다. 좌측 linked docs/outline과 우측 Markdown body만 각각 내부 스크롤을 갖고, article header는 sticky가 아닌 카드 내부 고정 header로 유지한다.
+- 2026-06-23: Outline heading click 후 scroll completion 또는 fallback delay에 맞춰 target heading에 `ak-markdown-heading-highlight` class를 1회 부여하고, CSS keyframes로 은은한 background/shadow flash를 표시하도록 구현했다.

@@ -36,6 +36,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
   const workspaceService = new WorkspaceService(config);
   const fileStore = new MarkdownFileStore(config);
   const codexRunner = new CodexRunner(config, fileStore);
+  const scopedCodexRunners = new Map<string, CodexRunner>([
+    [fileStore.workspaceId, codexRunner],
+  ]);
   const app = express();
 
   app.disable("x-powered-by");
@@ -79,6 +82,27 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
       next(error);
     }
   });
+
+  app.get("/api/workspaces/:workspaceId/document-sets", async (request, response, next) => {
+    try {
+      const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+      response.json({ sets: await scopedFileStore.listDocumentSets() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get(
+    "/api/workspaces/:workspaceId/files/:fileId/markdown",
+    async (request, response, next) => {
+      try {
+        const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+        response.json(await scopedFileStore.readMarkdownDocument(request.params.fileId ?? ""));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   app.get(
     "/api/workspaces/:workspaceId/files/:fileId/tickets",
@@ -164,9 +188,80 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     },
   );
 
+  app.get(
+    "/api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId/chat",
+    async (request, response, next) => {
+      try {
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        response.json(
+          await runner.getTicketChat(
+            request.params.fileId ?? "",
+            request.params.ticketId ?? "",
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/workspaces/:workspaceId/codex/prompt-preview",
+    async (request, response, next) => {
+      try {
+        const body = codexPromptPreviewRequestSchema.parse(request.body);
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        response.json(await runner.previewPrompt(body));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post("/api/workspaces/:workspaceId/codex/runs", async (request, response, next) => {
+    try {
+      const body = createCodexRunRequestSchema.parse(request.body);
+      const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+      response.status(202).json({ run: await runner.startRun(body) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get(
+    "/api/workspaces/:workspaceId/files/:fileId/codex-run-summary",
+    async (request, response, next) => {
+      try {
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+        const fileId = request.params.fileId ?? "";
+        scopedFileStore.resolveFileId(fileId);
+        response.json(await runner.getDocumentRunSummary(fileId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   app.get("/api/files", async (_request, response, next) => {
     try {
       response.json({ files: await fileStore.listFiles() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/document-sets", async (_request, response, next) => {
+    try {
+      response.json({ sets: await fileStore.listDocumentSets() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/files/:fileId/markdown", async (request, response, next) => {
+    try {
+      response.json(await fileStore.readMarkdownDocument(request.params.fileId ?? ""));
     } catch (error) {
       next(error);
     }
@@ -245,6 +340,19 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     },
   );
 
+  app.get("/api/files/:fileId/tickets/:ticketId/chat", async (request, response, next) => {
+    try {
+      response.json(
+        await codexRunner.getTicketChat(
+          request.params.fileId ?? "",
+          request.params.ticketId ?? "",
+        ),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/codex/prompt-preview", async (request, response, next) => {
     try {
       const body = codexPromptPreviewRequestSchema.parse(request.body);
@@ -275,7 +383,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.get("/api/codex/runs/:runId", (request, response, next) => {
     try {
-      response.json({ run: codexRunner.getRun(request.params.runId ?? "") });
+      const runId = request.params.runId ?? "";
+      const runner = findCodexRunnerByRunId(runId);
+      response.json({ run: runner.getRun(runId) });
     } catch (error) {
       next(error);
     }
@@ -283,13 +393,16 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.get("/api/codex/runs/:runId/events", (request, response, next) => {
     try {
+      const runId = request.params.runId ?? "";
+      const runner = findCodexRunnerByRunId(runId);
+
       response.writeHead(200, {
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
         "Content-Type": "text/event-stream",
       });
 
-      const unsubscribe = codexRunner.subscribe(request.params.runId ?? "", (event) => {
+      const unsubscribe = runner.subscribe(runId, (event) => {
         response.write(`id: ${event.id}\n`);
         response.write("event: codex\n");
         response.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -303,7 +416,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.post("/api/codex/runs/:runId/cancel", async (request, response, next) => {
     try {
-      response.json({ run: await codexRunner.cancelRun(request.params.runId ?? "") });
+      const runId = request.params.runId ?? "";
+      const runner = findCodexRunnerByRunId(runId);
+      response.json({ run: await runner.cancelRun(runId) });
     } catch (error) {
       next(error);
     }
@@ -311,7 +426,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.post("/api/codex/runs/:runId/read", async (request, response, next) => {
     try {
-      response.json({ run: await codexRunner.markRunRead(request.params.runId ?? "") });
+      const runId = request.params.runId ?? "";
+      const runner = findCodexRunnerByRunId(runId);
+      response.json({ run: await runner.markRunRead(runId) });
     } catch (error) {
       next(error);
     }
@@ -324,6 +441,33 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
   async function createScopedFileStore(workspaceId: string): Promise<MarkdownFileStore> {
     const workspace = await workspaceService.getAvailableWorkspace(workspaceId);
     return createWorkspaceFileStore(config, workspace);
+  }
+
+  async function createScopedCodexRunner(workspaceId: string): Promise<CodexRunner> {
+    const scopedFileStore = await createScopedFileStore(workspaceId);
+    const existing = scopedCodexRunners.get(scopedFileStore.workspaceId);
+    if (existing) {
+      return existing;
+    }
+
+    const runner = new CodexRunner(config, scopedFileStore);
+    scopedCodexRunners.set(scopedFileStore.workspaceId, runner);
+    return runner;
+  }
+
+  function findCodexRunnerByRunId(runId: string): CodexRunner {
+    for (const runner of scopedCodexRunners.values()) {
+      try {
+        runner.getRun(runId);
+        return runner;
+      } catch (error) {
+        if (!(error instanceof CodexRunError) || error.code !== CODEX_RUN_ERROR.RUN_NOT_FOUND) {
+          throw error;
+        }
+      }
+    }
+
+    throw new CodexRunError(CODEX_RUN_ERROR.RUN_NOT_FOUND, "Codex run was not found.");
   }
 }
 
@@ -392,6 +536,8 @@ function normalizeError(error: unknown): {
 function codexRunErrorStatus(code: string): number {
   switch (code) {
     case CODEX_RUN_ERROR.DOCUMENT_RUN_ACTIVE:
+      return 409;
+    case CODEX_RUN_ERROR.SCOPE_NOT_ALLOWED:
       return 409;
     case CODEX_RUN_ERROR.RUN_NOT_FOUND:
       return 404;

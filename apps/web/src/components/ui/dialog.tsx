@@ -16,7 +16,7 @@ export const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/35 data-[state=closed]:animate-out data-[state=open]:animate-in",
+      "fixed inset-0 z-50 bg-black/25 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=open]:animate-in",
       className,
     )}
     {...props}
@@ -33,13 +33,13 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid max-h-[min(760px,calc(100vh-2rem))] w-[min(960px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-lg border border-neutral-200 bg-white p-0 shadow-xl outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
+        "ak-card-soft fixed left-1/2 top-1/2 z-50 grid max-h-[min(760px,calc(100vh-2rem))] w-[min(960px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden p-0 outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900">
+      <DialogPrimitive.Close className="ak-focus-ring absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-[var(--ak-radius-md)] text-[var(--ak-ink-muted)] transition-colors hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]">
         <X className="size-4" aria-hidden="true" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -62,7 +62,7 @@ export const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex items-center justify-end gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-4",
+      "flex items-center justify-end gap-2 border-t border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] px-5 py-4",
       className,
     )}
     {...props}
@@ -76,7 +76,7 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-base font-semibold tracking-normal text-neutral-950", className)}
+    className={cn("text-base font-semibold tracking-normal text-[var(--ak-ink)]", className)}
     {...props}
   />
 ));
@@ -88,7 +88,7 @@ export const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-neutral-500", className)}
+    className={cn("text-sm text-[var(--ak-ink-muted)]", className)}
     {...props}
   />
 ));

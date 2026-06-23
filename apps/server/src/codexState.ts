@@ -22,9 +22,14 @@ export class CodexStateStore {
   readonly statePath: string;
   private readonly workspaceId: string;
 
-  constructor(config: ServerConfig) {
+  constructor(
+    config: ServerConfig,
+    options: {
+      workspaceId?: string;
+    } = {},
+  ) {
     this.statePath = path.join(config.workspaceRoot, ".alpha-kanban", "state.json");
-    this.workspaceId = config.workspaceId;
+    this.workspaceId = options.workspaceId ?? config.workspaceId;
   }
 
   async getDocumentState(relativePath: string): Promise<CodexDocumentState | undefined> {

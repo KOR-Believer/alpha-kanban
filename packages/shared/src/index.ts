@@ -63,22 +63,12 @@ export const ticketDocumentStatusSchema = z.object({
 
 export type TicketDocumentStatus = z.infer<typeof ticketDocumentStatusSchema>;
 
-export const progressBoardRowSchema = z.object({
-  ticketId: z.string().min(1),
-  status: ticketStatusSchema,
-  progress: ticketProgressSchema,
-  repository: z.string(),
-  dependsOn: z.string(),
-  line: z.number().int().positive(),
-});
-
-export type ProgressBoardRow = z.infer<typeof progressBoardRowSchema>;
-
 export const ticketItemSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
   status: ticketStatusSchema,
   progress: ticketProgressSchema,
+  completedAt: z.string().optional(),
   repository: z.array(z.string()),
   priority: z.string(),
   type: z.string(),
@@ -104,7 +94,6 @@ export type TicketItem = z.infer<typeof ticketItemSchema>;
 export const ticketDocumentSchema = z.object({
   title: z.string(),
   status: ticketDocumentStatusSchema,
-  progressBoard: z.array(progressBoardRowSchema),
   tickets: z.array(ticketItemSchema),
   lineCount: z.number().int().nonnegative(),
   missingSections: z.array(z.string()),
@@ -252,12 +241,14 @@ export const markdownFileSummarySchema = z.object({
   workspaceId: z.string().min(1),
   type: markdownFileTypeSchema,
   filename: z.string().min(1),
+  directory: z.string(),
   relativePath: z.string().min(1),
   workspaceRelativePath: z.string().min(1),
   absolutePath: z.string().min(1),
   mtimeMs: z.number().nonnegative(),
   hash: z.string().min(1),
   slug: z.string().min(1),
+  sequenceNumber: z.number().int().nonnegative().optional(),
 });
 
 export type MarkdownFileSummary = z.infer<typeof markdownFileSummarySchema>;
@@ -267,6 +258,52 @@ export const filesResponseSchema = z.object({
 });
 
 export type FilesResponse = z.infer<typeof filesResponseSchema>;
+
+export const markdownHeadingSchema = z.object({
+  level: z.number().int().min(1).max(6),
+  title: z.string().min(1),
+  line: z.number().int().positive(),
+});
+
+export type MarkdownHeading = z.infer<typeof markdownHeadingSchema>;
+
+export const documentSetTicketProgressSchema = z.object({
+  doneTickets: z.number().int().nonnegative().optional(),
+  totalTickets: z.number().int().nonnegative().optional(),
+});
+
+export type DocumentSetTicketProgress = z.infer<
+  typeof documentSetTicketProgressSchema
+>;
+
+export const documentSetSummarySchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  directory: z.string(),
+  slug: z.string().min(1),
+  label: z.string().min(1),
+  sequenceNumber: z.number().int().nonnegative().optional(),
+  documents: z.array(markdownFileSummarySchema),
+  types: z.array(markdownFileTypeSchema),
+  primaryFile: markdownFileSummarySchema,
+  ticketProgress: documentSetTicketProgressSchema.optional(),
+});
+
+export type DocumentSetSummary = z.infer<typeof documentSetSummarySchema>;
+
+export const documentSetsResponseSchema = z.object({
+  sets: z.array(documentSetSummarySchema),
+});
+
+export type DocumentSetsResponse = z.infer<typeof documentSetsResponseSchema>;
+
+export const markdownDocumentResponseSchema = z.object({
+  file: markdownFileSummarySchema,
+  markdown: z.string(),
+  outline: z.array(markdownHeadingSchema),
+});
+
+export type MarkdownDocumentResponse = z.infer<typeof markdownDocumentResponseSchema>;
 
 export const ticketDocumentResponseSchema = z.object({
   file: markdownFileSummarySchema,
@@ -318,11 +355,55 @@ export const codexRunEventTypeSchema = z.enum([
 
 export type CodexRunEventType = z.infer<typeof codexRunEventTypeSchema>;
 
+export const codexRunModeSchema = z.enum(["edit", "read_only"]);
+
+export type CodexRunMode = z.infer<typeof codexRunModeSchema>;
+
+export const codexChatScopeSchema = z.enum(["ticket", "document", "workspace"]);
+
+export type CodexChatScope = z.infer<typeof codexChatScopeSchema>;
+
+export const codexChatScopeMentionKindSchema = z.enum(["ticket", "document", "workspace"]);
+
+export type CodexChatScopeMentionKind = z.infer<
+  typeof codexChatScopeMentionKindSchema
+>;
+
+export const codexChatScopeMentionSchema = z.object({
+  kind: codexChatScopeMentionKindSchema,
+  targetTicketId: z.string().min(1).optional(),
+  token: z.string().min(1),
+});
+
+export type CodexChatScopeMention = z.infer<typeof codexChatScopeMentionSchema>;
+
+export const codexChatScopeResolutionSchema = z.object({
+  scope: codexChatScopeSchema,
+  targetWorkspaceId: z.string().min(1),
+  targetFileId: z.string().min(1).optional(),
+  targetTicketId: z.string().min(1).optional(),
+  rawMessage: z.string(),
+  cleanedMessage: z.string(),
+  mentions: z.array(codexChatScopeMentionSchema),
+  warnings: z.array(z.string()),
+});
+
+export type CodexChatScopeResolution = z.infer<typeof codexChatScopeResolutionSchema>;
+
+export type ResolveCodexChatScopeInput = {
+  defaultScope: CodexChatScope;
+  rawMessage: string;
+  targetFileId?: string;
+  targetTicketId?: string;
+  targetWorkspaceId: string;
+};
+
 export const codexPromptPreviewRequestSchema = z.object({
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
   instructionDraft: z.string().optional(),
   instruction: z.string().optional(),
+  mode: codexRunModeSchema.optional(),
 });
 
 export type CodexPromptPreviewRequest = z.infer<typeof codexPromptPreviewRequestSchema>;
@@ -330,12 +411,14 @@ export type CodexPromptPreviewRequest = z.infer<typeof codexPromptPreviewRequest
 export const codexPromptPreviewResponseSchema = z.object({
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
+  mode: codexRunModeSchema,
   prompt: z.string().min(1),
   command: z.string().min(1),
   args: z.array(z.string()),
   instructionDraft: z.string().optional(),
   instructionSummary: z.string().optional(),
   resumeSessionId: z.string().optional(),
+  scopeResolution: codexChatScopeResolutionSchema,
   statePath: z.string().min(1),
 });
 
@@ -363,6 +446,7 @@ export const codexRunSnapshotSchema = z.object({
   id: z.string().min(1),
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
+  mode: codexRunModeSchema,
   status: codexRunStatusSchema,
   prompt: z.string().min(1),
   command: z.string().min(1),
@@ -376,6 +460,7 @@ export const codexRunSnapshotSchema = z.object({
   logPath: z.string().min(1),
   resumeSessionId: z.string().optional(),
   capturedSessionId: z.string().optional(),
+  scopeResolution: codexChatScopeResolutionSchema,
   events: z.array(codexRunEventSchema),
 });
 
@@ -398,6 +483,7 @@ export const codexRunSummarySchema = z.object({
   id: z.string().min(1),
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
+  mode: codexRunModeSchema,
   status: codexRunSignalStatusSchema,
   rawStatus: codexRunStatusSchema,
   instructionSummary: z.string().optional(),
@@ -424,6 +510,166 @@ export const codexDocumentRunSummaryResponseSchema = z.object({
 export type CodexDocumentRunSummaryResponse = z.infer<
   typeof codexDocumentRunSummaryResponseSchema
 >;
+
+export const codexChatRoleSchema = z.enum(["user", "assistant"]);
+
+export type CodexChatRole = z.infer<typeof codexChatRoleSchema>;
+
+export const codexChatContentFormatSchema = z.enum(["text", "markdown"]);
+
+export type CodexChatContentFormat = z.infer<typeof codexChatContentFormatSchema>;
+
+type MentionMatch = CodexChatScopeMention & {
+  end: number;
+  start: number;
+};
+
+export type CodexChatScopeMentionRange = CodexChatScopeMention & {
+  end: number;
+  start: number;
+};
+
+const SCOPE_MENTION_PATTERN =
+  /(^|[\s([{'"`])@(workspace|w|tickets|document|doc|d|t:[A-Za-z][A-Za-z0-9]*-\d+|ticket:[A-Za-z][A-Za-z0-9]*-\d+)(?=$|[\s)\]}'"`.,;!?])/gi;
+
+export function resolveCodexChatScope(
+  input: ResolveCodexChatScopeInput,
+): CodexChatScopeResolution {
+  const rawMessage = input.rawMessage;
+  const mentions = parseCodexScopeMentions(rawMessage);
+  const lastMention = mentions.at(-1);
+  const warnings: string[] = [];
+  const scope = lastMention ? mentionKindToScope(lastMention.kind) : input.defaultScope;
+  const targetTicketId =
+    scope === "ticket" ? lastMention?.targetTicketId ?? input.targetTicketId : undefined;
+  const targetFileId = scope === "workspace" ? undefined : input.targetFileId;
+
+  if (mentions.length > 1) {
+    warnings.push("Multiple scope mentions were found; the last mention controls the scope.");
+  }
+
+  if ((scope === "ticket" || scope === "document") && !targetFileId) {
+    warnings.push("Document scope requires a selected ticket document.");
+  }
+
+  if (scope === "ticket" && !targetTicketId) {
+    warnings.push("Ticket scope requires a selected ticket.");
+  }
+
+  return {
+    scope,
+    targetWorkspaceId: input.targetWorkspaceId,
+    targetFileId,
+    targetTicketId,
+    rawMessage,
+    cleanedMessage: removeMentionRanges(rawMessage, mentions).replace(/\s+/g, " ").trim(),
+    mentions: mentions.map(({ end: _end, start: _start, ...mention }) => mention),
+    warnings,
+  };
+}
+
+export function isCodexChatScopeRunAllowed(
+  resolution: CodexChatScopeResolution,
+  mode: CodexRunMode,
+): boolean {
+  return !(mode === "edit" && resolution.scope === "workspace");
+}
+
+export function codexChatScopeRunWarnings(
+  resolution: CodexChatScopeResolution,
+  mode: CodexRunMode,
+): string[] {
+  const warnings = [...resolution.warnings];
+  if (!isCodexChatScopeRunAllowed(resolution, mode)) {
+    warnings.push(
+      "Workspace scope is read-only from a ticket drawer; use workspace chat/spec grilling before file-edit runs.",
+    );
+  }
+  return warnings;
+}
+
+export function findCodexChatScopeMentionRanges(
+  rawMessage: string,
+): CodexChatScopeMentionRange[] {
+  return parseCodexScopeMentions(rawMessage).map((mention) => ({ ...mention }));
+}
+
+export const codexChatMessageSchema = z.object({
+  id: z.string().min(1),
+  scope: codexChatScopeSchema,
+  role: codexChatRoleSchema,
+  contentFormat: codexChatContentFormatSchema,
+  content: z.string(),
+  createdAt: z.string().datetime(),
+  workspaceId: z.string().min(1),
+  fileRelativePath: z.string().min(1).optional(),
+  ticketId: z.string().min(1).optional(),
+  runId: z.string().min(1).optional(),
+});
+
+export type CodexChatMessage = z.infer<typeof codexChatMessageSchema>;
+
+export const codexTicketChatResponseSchema = z.object({
+  messages: z.array(codexChatMessageSchema),
+});
+
+export type CodexTicketChatResponse = z.infer<typeof codexTicketChatResponseSchema>;
+
+function parseCodexScopeMentions(rawMessage: string): MentionMatch[] {
+  const mentions: MentionMatch[] = [];
+
+  for (const match of rawMessage.matchAll(SCOPE_MENTION_PATTERN)) {
+    const fullMatch = match[0] ?? "";
+    const prefix = match[1] ?? "";
+    const tokenBody = match[2] ?? "";
+    const start = (match.index ?? 0) + prefix.length;
+    const end = (match.index ?? 0) + fullMatch.length;
+    const token = `@${tokenBody}`;
+    const normalizedToken = token.toLowerCase();
+
+    if (normalizedToken === "@w" || normalizedToken === "@workspace") {
+      mentions.push({ end, kind: "workspace", start, token });
+      continue;
+    }
+
+    if (
+      normalizedToken === "@d" ||
+      normalizedToken === "@doc" ||
+      normalizedToken === "@document" ||
+      normalizedToken === "@tickets"
+    ) {
+      mentions.push({ end, kind: "document", start, token });
+      continue;
+    }
+
+    if (normalizedToken.startsWith("@t:") || normalizedToken.startsWith("@ticket:")) {
+      const targetTicketId = token.slice(token.indexOf(":") + 1).toUpperCase();
+      mentions.push({ end, kind: "ticket", start, targetTicketId, token });
+    }
+  }
+
+  return mentions;
+}
+
+function removeMentionRanges(rawMessage: string, mentions: MentionMatch[]): string {
+  if (mentions.length === 0) {
+    return rawMessage.trim();
+  }
+
+  let cursor = 0;
+  let cleaned = "";
+  for (const mention of mentions) {
+    cleaned += rawMessage.slice(cursor, mention.start);
+    cursor = mention.end;
+  }
+  cleaned += rawMessage.slice(cursor);
+
+  return cleaned.trim();
+}
+
+function mentionKindToScope(kind: CodexChatScopeMentionKind): CodexChatScope {
+  return kind === "workspace" ? "workspace" : kind === "document" ? "document" : "ticket";
+}
 
 export const createCodexRunResponseSchema = z.object({
   run: codexRunSnapshotSchema,

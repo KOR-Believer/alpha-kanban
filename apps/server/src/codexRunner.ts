@@ -1,9 +1,11 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { promisify } from "node:util";
 
 import type {
+  CodexChatScopeResolution,
   CodexDocumentRunSummaryResponse,
   CodexPromptPreviewRequest,
   CodexPromptPreviewResponse,
@@ -12,15 +14,24 @@ import type {
   CodexRunSnapshot,
   CodexRunSummary,
   CodexRunStatus,
+  CodexRunMode,
+  CodexTicketChatResponse,
   CreateCodexRunRequest,
 } from "@alpha-kanban/shared";
+import {
+  codexChatScopeRunWarnings,
+  isCodexChatScopeRunAllowed,
+  resolveCodexChatScope,
+} from "@alpha-kanban/shared";
 
+import { CodexChatStore } from "./codexChat";
 import type { ServerConfig } from "./config";
 import { CodexStateStore } from "./codexState";
 import type { MarkdownFileStore } from "./files";
 
 export const CODEX_RUN_ERROR = {
   DOCUMENT_RUN_ACTIVE: "CODEX_DOCUMENT_RUN_ACTIVE",
+  SCOPE_NOT_ALLOWED: "CODEX_SCOPE_NOT_ALLOWED",
   RUN_NOT_FOUND: "CODEX_RUN_NOT_FOUND",
   NOT_RUNNING: "CODEX_RUN_NOT_RUNNING",
 } as const;
@@ -43,11 +54,15 @@ type MutableRun = Omit<CodexRunSnapshot, "events"> & {
   child?: ChildProcess;
   events: CodexRunEvent[];
   isFinishing: boolean;
+  readOnlyGitStatusBefore?: string;
   subscribers: Set<RunSubscriber>;
   stderrBuffer: string;
 };
 
+const execFileAsync = promisify(execFile);
+
 export class CodexRunner {
+  private readonly chatStore: CodexChatStore;
   private readonly runs = new Map<string, MutableRun>();
   private readonly stateStore: CodexStateStore;
 
@@ -55,7 +70,21 @@ export class CodexRunner {
     private readonly config: ServerConfig,
     private readonly fileStore: MarkdownFileStore,
   ) {
-    this.stateStore = new CodexStateStore(config);
+    this.chatStore = new CodexChatStore(config, { workspaceId: fileStore.workspaceId });
+    this.stateStore = new CodexStateStore(config, { workspaceId: fileStore.workspaceId });
+  }
+
+  private resolvePromptScope(
+    request: Pick<CodexPromptPreviewRequest, "fileId" | "ticketId">,
+    instructionDraft: string,
+  ): CodexChatScopeResolution {
+    return resolveCodexChatScope({
+      defaultScope: "ticket",
+      rawMessage: instructionDraft,
+      targetFileId: request.fileId,
+      targetTicketId: request.ticketId,
+      targetWorkspaceId: this.fileStore.workspaceId,
+    });
   }
 
   async previewPrompt(
@@ -72,34 +101,38 @@ export class CodexRunner {
     }
 
     const documentState = await this.stateStore.getDocumentState(file.relativePath);
+    const workspaceRoot = this.fileStore.workspaceRoot;
     const planPath = document.status.planPath
-      ? path.resolve(this.config.workspaceRoot, document.status.planPath)
+      ? path.resolve(workspaceRoot, document.status.planPath)
       : undefined;
-    const relatedDocuments = [file.absolutePath, planPath].filter(
-      (item): item is string => Boolean(item),
-    );
     const instructionDraft = normalizeInstructionDraft(request);
     const instructionSummary = summarizeInstructionDraft(instructionDraft);
-    const prompt = buildPrompt({
+    const mode = normalizeRunMode(request.mode);
+    const scopeResolution = this.resolvePromptScope(request, instructionDraft);
+    const prompt = buildCodexPrompt({
       instructionDraft,
       instructionSummary,
+      mode,
       planPath,
+      scopeResolution,
       ticketFilePath: file.absolutePath,
       ticketId: ticket.id,
       ticketRange: ticket.range,
-      workspaceRoot: this.config.workspaceRoot,
+      workspaceRoot,
     });
     const args = buildCodexArgs(prompt, documentState?.codexSessionId);
 
     return {
       fileId: request.fileId,
       ticketId: request.ticketId,
+      mode,
       prompt,
       command: this.config.codexCommand,
       args,
       instructionDraft: instructionDraft || undefined,
       instructionSummary,
       resumeSessionId: documentState?.codexSessionId,
+      scopeResolution,
       statePath: this.stateStore.statePath,
     };
   }
@@ -117,8 +150,19 @@ export class CodexRunner {
 
     const instructionDraft = normalizeInstructionDraft(request);
     const instructionSummary = summarizeInstructionDraft(instructionDraft);
+    const mode = normalizeRunMode(request.mode);
+    const scopeResolution = this.resolvePromptScope(request, instructionDraft);
+    const runId = randomUUID();
 
-    if (instructionSummary && !request.dryRun) {
+    if (!isCodexChatScopeRunAllowed(scopeResolution, mode)) {
+      throw new CodexRunError(
+        CODEX_RUN_ERROR.SCOPE_NOT_ALLOWED,
+        codexChatScopeRunWarnings(scopeResolution, mode).at(-1) ??
+          "Selected scope cannot be used for this Codex run.",
+      );
+    }
+
+    if (mode === "edit" && instructionSummary && !request.dryRun) {
       await this.fileStore.appendInstruction(request.fileId, request.ticketId, {
         text: instructionSummary,
         expectedHash: request.expectedHash,
@@ -128,11 +172,20 @@ export class CodexRunner {
 
     const preview = await this.previewPrompt(request);
     const { file, document } = await this.fileStore.readTicketDocument(request.fileId);
-    const runId = randomUUID();
+    await this.chatStore.appendTicketMessage({
+      fileRelativePath: file.relativePath,
+      ticketId: request.ticketId,
+      scope: preview.scopeResolution.scope,
+      role: "user",
+      contentFormat: "markdown",
+      content: instructionDraft,
+      runId,
+    });
     const run: MutableRun = {
       id: runId,
       fileId: request.fileId,
       ticketId: request.ticketId,
+      mode,
       status: request.dryRun ? "succeeded" : "queued",
       prompt: preview.prompt,
       command: preview.command,
@@ -143,8 +196,13 @@ export class CodexRunner {
       startedAt: new Date().toISOString(),
       logPath: path.join(this.config.workspaceRoot, ".alpha-kanban", "runs", `${runId}.jsonl`),
       resumeSessionId: preview.resumeSessionId,
+      scopeResolution: preview.scopeResolution,
       events: [],
       isFinishing: false,
+      readOnlyGitStatusBefore:
+        mode === "read_only" && !request.dryRun
+          ? await readGitStatus(this.fileStore.workspaceRoot)
+          : undefined,
       subscribers: new Set(),
       stderrBuffer: "",
     };
@@ -155,7 +213,16 @@ export class CodexRunner {
       command: preview.command,
       args: preview.args,
       instructionSummary,
+      mode,
+      scopeResolution: preview.scopeResolution,
       statePath: preview.statePath,
+      workspaceId: this.fileStore.workspaceId,
+      workspaceRoot: this.fileStore.workspaceRoot,
+      fileRelativePath: file.relativePath,
+      ticketFilePath: file.absolutePath,
+      planPath: document.status.planPath
+        ? path.resolve(this.fileStore.workspaceRoot, document.status.planPath)
+        : undefined,
     });
 
     if (request.dryRun) {
@@ -206,6 +273,25 @@ export class CodexRunner {
     return this.runSummary(run, readState.readAt);
   }
 
+  async getTicketChat(
+    fileId: string,
+    ticketId: string,
+  ): Promise<CodexTicketChatResponse> {
+    const { file, document } = await this.fileStore.readTicketDocument(fileId);
+    const ticket = document.tickets.find((item) => item.id === ticketId);
+
+    if (!ticket) {
+      throw new CodexRunError(
+        CODEX_RUN_ERROR.RUN_NOT_FOUND,
+        `Ticket ${ticketId} was not found.`,
+      );
+    }
+
+    return {
+      messages: await this.chatStore.listTicketMessages(file.relativePath, ticketId),
+    };
+  }
+
   subscribe(runId: string, subscriber: RunSubscriber): () => void {
     const run = this.requireRun(runId);
 
@@ -242,7 +328,7 @@ export class CodexRunner {
 
     try {
       child = spawn(run.command, run.args, {
-        cwd: this.config.workspaceRoot,
+        cwd: this.fileStore.workspaceRoot,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -330,7 +416,10 @@ export class CodexRunner {
     }
 
     run.isFinishing = true;
-    await this.addEvent(run, status === "failed" ? "error" : "exit", message, { exitCode });
+    await this.addEvent(run, "system", `Codex process finished with status ${status}.`, {
+      exitCode,
+      status,
+    });
 
     if (run.capturedSessionId) {
       await this.stateStore.setDocumentSession(context.fileRelativePath, run.capturedSessionId, {
@@ -341,13 +430,44 @@ export class CodexRunner {
       });
     }
 
-    if (!run.dryRun) {
+    const assistantAnswer = findLatestAssistantAnswer(run.events);
+    if (assistantAnswer) {
+      try {
+        await this.chatStore.appendTicketMessage({
+          fileRelativePath: context.fileRelativePath,
+          ticketId: run.ticketId,
+          scope: run.scopeResolution.scope,
+          role: "assistant",
+          contentFormat: "markdown",
+          content: assistantAnswer,
+          runId: run.id,
+        });
+      } catch (error) {
+        await this.addEvent(
+          run,
+          "system",
+          `Could not append Codex chat answer: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    if (run.mode === "read_only" && !run.dryRun) {
+      await this.addReadOnlyDiffEvent(run);
+    }
+
+    if (run.mode === "edit" && !run.dryRun && shouldAppendRunOutcomeNote(status)) {
       await this.appendRunResultNote(run, status, message);
     }
 
     run.status = status;
     run.exitCode = exitCode;
     run.finishedAt = new Date().toISOString();
+    await this.addEvent(run, status === "failed" ? "error" : "exit", message, {
+      exitCode,
+      status,
+    });
   }
 
   private async appendRunResultNote(
@@ -364,12 +484,43 @@ export class CodexRunner {
     } catch (error) {
       await this.addEvent(
         run,
-        "error",
+        "system",
         `Could not append Codex result note: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
     }
+  }
+
+  private async addReadOnlyDiffEvent(run: MutableRun): Promise<void> {
+    if (run.readOnlyGitStatusBefore === undefined) {
+      await this.addEvent(
+        run,
+        "system",
+        "Read-only diff check skipped because Git status was unavailable before the run.",
+      );
+      return;
+    }
+
+    const after = await readGitStatus(this.fileStore.workspaceRoot);
+    if (after === undefined) {
+      await this.addEvent(
+        run,
+        "system",
+        "Read-only diff check skipped because Git status was unavailable after the run.",
+      );
+      return;
+    }
+
+    if (after !== run.readOnlyGitStatusBefore) {
+      await this.addEvent(run, "system", "Read-only diff check detected workspace changes.", {
+        before: run.readOnlyGitStatusBefore,
+        after,
+      });
+      return;
+    }
+
+    await this.addEvent(run, "system", "Read-only diff check passed with no Git status change.");
   }
 
   private async addEvent(
@@ -412,6 +563,7 @@ export class CodexRunner {
       id: run.id,
       fileId: run.fileId,
       ticketId: run.ticketId,
+      mode: run.mode,
       status: signalStatus(run),
       rawStatus: run.status,
       instructionSummary: run.instructionSummary,
@@ -429,6 +581,7 @@ export class CodexRunner {
     const {
       child: _child,
       isFinishing: _isFinishing,
+      readOnlyGitStatusBefore: _readOnlyGitStatusBefore,
       subscribers: _subscribers,
       stderrBuffer: _stderrBuffer,
       ...snapshot
@@ -440,10 +593,12 @@ export class CodexRunner {
   }
 }
 
-function buildPrompt({
+export function buildCodexPrompt({
   instructionDraft,
   instructionSummary,
+  mode,
   planPath,
+  scopeResolution,
   ticketFilePath,
   ticketId,
   ticketRange,
@@ -451,12 +606,61 @@ function buildPrompt({
 }: {
   instructionDraft: string;
   instructionSummary?: string;
+  mode: CodexRunMode;
   planPath?: string;
+  scopeResolution: CodexChatScopeResolution;
   ticketFilePath: string;
   ticketId: string;
   ticketRange: { startLine: number; endLine: number };
   workspaceRoot: string;
 }): string {
+  const modeRules =
+    mode === "read_only"
+      ? [
+          "작업 모드: Read-only answer",
+          "",
+          "read-only mode 규칙:",
+          "- 파일 생성/수정/삭제를 하지 마. apply_patch, formatter, package install, git write command 등 write side effect를 실행하지 마.",
+          "- ticket Markdown의 `사용자 지시`와 `진행 메모`를 append하지 마. status/progress도 변경하지 마.",
+          "- 필요한 조사는 rg/sed/git status 같은 read-only command로 제한하고, 구현이 필요하면 제안과 검증 계획을 최종 답변에 적어.",
+          "- 서버는 이 실행의 user message와 assistant answer만 ticket chat log에 저장한다.",
+        ]
+      : [
+          "작업 모드: Edit files",
+          "",
+          "작업 규칙:",
+          "- 문서 전체를 prompt 기억에 의존하지 말고, 필요할 때 rg/sed로 ticket range와 관련 plan section을 직접 읽어.",
+          "- Run 시작 시 서버가 이번 실행 지시 요약을 ticket의 `사용자 지시`에 append한다. Codex는 같은 사용자 지시를 중복 append하지 마.",
+          "- agent 작업 기록과 검증 결과는 `진행 메모`에 append해.",
+          "- 상태/progress 변경 시 개별 ticket body와 top-level 현재 진행률을 함께 갱신해. DONE으로 바꿀 때는 `Completed at: YYYY-MM-DDTHH:mm:ss+09:00`을 `Progress` 바로 아래에 추가하고, non-DONE으로 되돌릴 때는 제거해.",
+          "- 관련 없는 사용자 변경은 되돌리지 마.",
+        ];
+  const scopeWarnings = codexChatScopeRunWarnings(scopeResolution, mode);
+  const scopeLines = [
+    "Resolved scope:",
+    `- Scope: ${scopeResolution.scope}`,
+    `- Target workspace id: ${scopeResolution.targetWorkspaceId}`,
+    scopeResolution.targetFileId
+      ? `- Target file id: ${scopeResolution.targetFileId}`
+      : "- Target file id: not selected",
+    scopeResolution.targetTicketId
+      ? `- Target ticket id: ${scopeResolution.targetTicketId}`
+      : "- Target ticket id: not selected",
+    `- Cleaned message: ${
+      scopeResolution.cleanedMessage || "(UI에서 별도 실행 지시가 입력되지 않았음)"
+    }`,
+    scopeResolution.mentions.length
+      ? `- Parsed mentions: ${scopeResolution.mentions
+          .map((mention) => mention.token)
+          .join(", ")}`
+      : "- Parsed mentions: none",
+    scopeWarnings.length
+      ? `- Scope warnings: ${scopeWarnings.join(" / ")}`
+      : "- Scope warnings: none",
+    "- Raw mention syntax is already normalized by Alpha Kanban; do not reinterpret @scope tokens as separate user instructions.",
+    "- Write target remains the selected ticket unless the mode is read-only.",
+  ];
+
   return [
     `${workspaceRoot} 프로젝트에서 plan-ticketing 문서 기반 작업을 이어가.`,
     "",
@@ -465,12 +669,9 @@ function buildPrompt({
     `Selected ticket: ${ticketId}`,
     `Ticket range hint: lines ${ticketRange.startLine}-${ticketRange.endLine}`,
     "",
-    "작업 규칙:",
-    "- 문서 전체를 prompt 기억에 의존하지 말고, 필요할 때 rg/sed로 ticket range와 관련 plan section을 직접 읽어.",
-    "- Run 시작 시 서버가 이번 실행 지시 요약을 ticket의 `사용자 지시`에 append한다. Codex는 같은 사용자 지시를 중복 append하지 마.",
-    "- agent 작업 기록과 검증 결과는 `진행 메모`에 append해.",
-    "- 상태/progress 변경 시 개별 ticket body, Progress Board, top-level 현재 진행률을 함께 갱신해.",
-    "- 관련 없는 사용자 변경은 되돌리지 마.",
+    ...scopeLines,
+    "",
+    ...modeRules,
     "",
     "이번 실행 지시 요약:",
     instructionSummary ?? "(UI에서 별도 실행 지시가 입력되지 않았음)",
@@ -484,6 +685,10 @@ function normalizeInstructionDraft(
   request: Pick<CodexPromptPreviewRequest, "instruction" | "instructionDraft">,
 ): string {
   return (request.instructionDraft ?? request.instruction ?? "").trim();
+}
+
+function normalizeRunMode(mode: CodexRunMode | undefined): CodexRunMode {
+  return mode ?? "edit";
 }
 
 function summarizeInstructionDraft(instructionDraft: string): string | undefined {
@@ -504,6 +709,19 @@ function buildCodexArgs(prompt: string, sessionId?: string): string[] {
   return ["exec", "--json", prompt];
 }
 
+async function readGitStatus(workspaceRoot: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", workspaceRoot, "status", "--short", "--untracked-files=all"],
+      { encoding: "utf8", maxBuffer: 1024 * 1024 },
+    );
+    return String(stdout).trimEnd();
+  } catch {
+    return undefined;
+  }
+}
+
 function splitLines(value: string): { lines: string[]; remainder: string } {
   const parts = value.split(/\r?\n/);
   return {
@@ -520,6 +738,10 @@ function classifyFailure(stderr: string): string {
     return "Codex CLI could not be started or found.";
   }
   return "Codex run failed.";
+}
+
+function shouldAppendRunOutcomeNote(status: CodexRunStatus): boolean {
+  return status !== "succeeded";
 }
 
 function isActiveRunStatus(status: CodexRunStatus): boolean {
@@ -558,6 +780,42 @@ function summarizeJsonEvent(data: unknown): string {
   const type = typeof record.type === "string" ? record.type : "json";
   const message = findString(record, ["message", "text", "content", "summary"]);
   return message ? `${type}: ${message}` : type;
+}
+
+function findLatestAssistantAnswer(events: CodexRunEvent[]): string | undefined {
+  for (const event of [...events].reverse()) {
+    if (event.type !== "json") {
+      continue;
+    }
+
+    const answer = extractAssistantAnswer(event.data);
+    if (answer) {
+      return answer;
+    }
+  }
+  return undefined;
+}
+
+function extractAssistantAnswer(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  const itemAnswer = extractAssistantAnswer(record.item);
+  if (itemAnswer) {
+    return itemAnswer;
+  }
+
+  if (record.type === "agent_message") {
+    return findString(record, ["text", "message", "content"]);
+  }
+
+  if (record.type === "message") {
+    return findString(record, ["message", "text", "content"]);
+  }
+
+  return undefined;
 }
 
 function findSessionId(value: unknown): string | undefined {

@@ -1,7 +1,6 @@
 import {
   ticketProgressSchema,
   ticketStatusSchema,
-  type ProgressBoardRow,
   type TicketChecklistItem,
   type TicketDocument,
   type TicketDocumentStatus,
@@ -97,7 +96,13 @@ const BLOCK_FIELD_NAMES = [
   "진행 메모",
 ] as const;
 
-const SINGLE_LINE_FIELD_NAMES = ["Status", "Progress", "Priority", "Type"] as const;
+const SINGLE_LINE_FIELD_NAMES = [
+  "Status",
+  "Progress",
+  "Completed at",
+  "Priority",
+  "Type",
+] as const;
 
 const FIELD_NAME_SET = new Set<string>([
   ...BLOCK_FIELD_NAMES,
@@ -125,14 +130,7 @@ export function updateTicketStatusAndProgress(
   const nextProgress = update.progress ?? ticket.progress;
   const statusField = requiredField(ticket, "Status");
   const progressField = requiredField(ticket, "Progress");
-  const boardRow = parsed.progressBoard.find((row) => row.ticketId === ticketId);
-
-  if (!boardRow) {
-    throw new TicketMarkdownWriteError(
-      TICKET_WRITE_ERROR.NEEDS_REPAIR,
-      `Progress Board row for ${ticketId} was not found.`,
-    );
-  }
+  const completedAtField = ticket.fields.get("Completed at");
 
   if (parsed.statusProgressLine === undefined) {
     throw new TicketMarkdownWriteError(
@@ -144,11 +142,7 @@ export function updateTicketStatusAndProgress(
   const lines = [...parsed.lines];
   lines[statusField.lineIndex] = `Status: ${nextStatus}`;
   lines[progressField.lineIndex] = `Progress: ${nextProgress}%`;
-  lines[boardRow.line - 1] = replaceProgressBoardRow(
-    parsed.lines[boardRow.line - 1] ?? "",
-    nextStatus,
-    nextProgress,
-  );
+  updateCompletedAtLine(lines, progressField, completedAtField, nextStatus);
 
   const doneTickets = parsed.tickets.filter((item) =>
     item.id === ticketId ? nextStatus === "DONE" : item.status === "DONE",
@@ -209,11 +203,9 @@ function parseTicketDocumentInternal(markdown: string): InternalDocument {
   const { lines } = split;
   const title = parseTitle(lines);
   const statusSection = findSection(lines, "Status");
-  const progressBoardSection = findSection(lines, "Progress Board");
   const ticketListSection = findSection(lines, "Ticket List");
   const missingSections = [
     ["Status", statusSection],
-    ["Progress Board", progressBoardSection],
     ["Ticket List", ticketListSection],
   ]
     .filter(([, section]) => !section)
@@ -223,16 +215,11 @@ function parseTicketDocumentInternal(markdown: string): InternalDocument {
     ? parseDocumentStatus(lines, statusSection)
     : { status: {}, progressLine: undefined };
 
-  const progressBoard = progressBoardSection
-    ? parseProgressBoard(lines, progressBoardSection)
-    : [];
-
   const tickets = ticketListSection ? parseTickets(lines, ticketListSection) : [];
 
   return {
     title,
     status,
-    progressBoard,
     tickets,
     lineCount: lines.length,
     missingSections,
@@ -311,47 +298,6 @@ function parseDocumentStatus(
   return { status, progressLine };
 }
 
-function parseProgressBoard(lines: string[], section: SectionRange): ProgressBoardRow[] {
-  const rows: ProgressBoardRow[] = [];
-
-  for (let index = section.startLine; index < section.endLine; index += 1) {
-    const line = lines[index] ?? "";
-    if (!line.startsWith("|") || line.includes("---") || line.includes("Ticket |")) {
-      continue;
-    }
-
-    const cells = parseMarkdownTableRow(line);
-    if (cells.length < 5) {
-      continue;
-    }
-
-    const status = parseTicketStatus(cells[1]);
-    const progress = parseTicketProgress(cells[2]);
-
-    if (!status || progress === undefined) {
-      continue;
-    }
-
-    rows.push({
-      ticketId: cells[0] ?? "",
-      status,
-      progress,
-      repository: cells[3] ?? "",
-      dependsOn: cells[4] ?? "",
-      line: index + 1,
-    });
-  }
-
-  return rows;
-}
-
-function parseMarkdownTableRow(line: string): string[] {
-  return line
-    .split("|")
-    .slice(1, -1)
-    .map((cell) => cell.trim());
-}
-
 function parseTickets(lines: string[], section: SectionRange): InternalTicket[] {
   const headings: Array<{ index: number; id: string; title: string }> = [];
 
@@ -385,6 +331,8 @@ function parseTicket(
   const missingFields = REQUIRED_TICKET_FIELDS.filter((field) => !fields.has(field));
   const status = parseTicketStatus(fields.get("Status")?.value) ?? "TODO";
   const progress = parseTicketProgress(fields.get("Progress")?.value) ?? 0;
+  const completedAt =
+    status === "DONE" ? parseCompletedAt(fields.get("Completed at")?.value) : undefined;
   const userInstructionField = fields.get("사용자 지시");
   const completionCriteriaItems = parseChecklistField(lines, fields.get("완료 기준"));
   const validationItems = parseChecklistField(lines, fields.get("검증"));
@@ -394,6 +342,7 @@ function parseTicket(
     title,
     status,
     progress,
+    completedAt,
     repository: parseListField(lines, fields.get("Repository"), { stripBackticks: true }),
     priority: fields.get("Priority")?.value?.trim() ?? "",
     type: fields.get("Type")?.value?.trim() ?? "",
@@ -603,11 +552,15 @@ function cleanInlineValue(value: string): string {
   return value.trim().replace(/^`|`$/g, "");
 }
 
+function parseCompletedAt(value: string | undefined): string | undefined {
+  const normalized = cleanInlineValue(value ?? "");
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function toPublicDocument(document: InternalDocument): TicketDocument {
   return {
     title: document.title,
     status: document.status,
-    progressBoard: document.progressBoard,
     tickets: document.tickets.map(({ fields: _fields, ...ticket }) => ticket),
     lineCount: document.lineCount,
     missingSections: document.missingSections,
@@ -651,24 +604,45 @@ function requiredField(ticket: InternalTicket, fieldName: string): FieldPosition
   return field;
 }
 
-function replaceProgressBoardRow(
-  rowLine: string,
+function updateCompletedAtLine(
+  lines: string[],
+  progressField: FieldPosition,
+  completedAtField: FieldPosition | undefined,
   status: TicketStatus,
-  progress: TicketProgress,
-): string {
-  const cells = parseMarkdownTableRow(rowLine);
+): void {
+  if (status === "DONE") {
+    if (completedAtField?.value?.trim()) {
+      return;
+    }
 
-  if (cells.length < 5) {
-    throw new TicketMarkdownWriteError(
-      TICKET_WRITE_ERROR.NEEDS_REPAIR,
-      "Progress Board row is malformed.",
-    );
+    if (completedAtField) {
+      lines[completedAtField.lineIndex] = `Completed at: ${formatLocalIsoDateTime()}`;
+      return;
+    }
+
+    lines.splice(progressField.lineIndex + 1, 0, `Completed at: ${formatLocalIsoDateTime()}`);
+    return;
   }
 
-  cells[1] = status;
-  cells[2] = `${progress}%`;
+  if (completedAtField) {
+    lines.splice(completedAtField.lineIndex, 1);
+  }
+}
 
-  return `| ${cells.join(" | ")} |`;
+function formatLocalIsoDateTime(date = new Date()): string {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteOffsetMinutes = Math.abs(offsetMinutes);
+  const offsetHours = String(Math.floor(absoluteOffsetMinutes / 60)).padStart(2, "0");
+  const offsetRemainderMinutes = String(absoluteOffsetMinutes % 60).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetRemainderMinutes}`;
 }
 
 function replaceTopLevelProgress(line: string, doneTickets: number, totalTickets: number): string {
