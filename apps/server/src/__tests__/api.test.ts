@@ -26,6 +26,7 @@ import {
   ticketDocumentResponseSchema,
   type MarkdownFileSummary,
   type WorkspaceSummary,
+  workspaceDirectoriesResponseSchema,
   workspacesResponseSchema,
 } from "@alpha-kanban/shared";
 
@@ -269,6 +270,82 @@ describe("API", () => {
       id: selected.workspace.id,
       root: realProjectOneRoot,
     });
+  });
+
+  it("lists allowlisted workspace directories for the folder picker", async () => {
+    const realProjectsRoot = realpathSync.native(projectsRoot);
+
+    const listed = workspaceDirectoriesResponseSchema.parse(
+      await getJson("/api/workspace-directories"),
+    );
+    expect(listed.roots).toContainEqual({
+      label: "projects",
+      path: realProjectsRoot,
+    });
+    expect(listed.directory).toMatchObject({
+      path: realProjectsRoot,
+      label: "projects",
+      isWorkspaceCandidate: false,
+      hasDocs: false,
+    });
+
+    const projectOne = listed.directory?.children.find(
+      (child) => child.path === realProjectOneRoot,
+    );
+    const projectTwo = listed.directory?.children.find(
+      (child) => child.path === realProjectTwoRoot,
+    );
+    expect(projectOne).toMatchObject({
+      name: "project-one",
+      isWorkspaceCandidate: true,
+      hasDocs: true,
+    });
+    expect(projectTwo).toMatchObject({
+      name: "project-two",
+      isWorkspaceCandidate: true,
+      hasDocs: true,
+    });
+    expect(
+      listed.directory?.children.some((child) => child.path === realOutsideProjectRoot),
+    ).toBe(false);
+
+    const selected = workspaceDirectoriesResponseSchema.parse(
+      await getJson(`/api/workspace-directories?root=${encodeURIComponent(projectOneRoot)}`),
+    );
+    expect(selected.directory).toMatchObject({
+      path: realProjectOneRoot,
+      parentPath: realProjectsRoot,
+      isWorkspaceCandidate: true,
+      hasDocs: true,
+    });
+  });
+
+  it("rejects folder picker traversal and symlink escapes outside the allowlist", async () => {
+    const traversalResponse = await fetch(
+      `${baseUrl}/api/workspace-directories?root=${encodeURIComponent(
+        path.join(projectsRoot, "..", "outside-project"),
+      )}`,
+    );
+
+    expect(traversalResponse.status).toBe(403);
+    const traversalError = apiErrorResponseSchema.parse(await traversalResponse.json());
+    expect(traversalError.error.code).toBe("WORKSPACE_OUTSIDE_ALLOWLIST");
+
+    const symlinkRoot = path.join(projectsRoot, "escaped-link");
+    symlinkSync(outsideProjectRoot, symlinkRoot, "dir");
+    const listed = workspaceDirectoriesResponseSchema.parse(
+      await getJson("/api/workspace-directories"),
+    );
+    expect(listed.directory?.children.some((child) => child.name === "escaped-link")).toBe(
+      false,
+    );
+
+    const symlinkResponse = await fetch(
+      `${baseUrl}/api/workspace-directories?root=${encodeURIComponent(symlinkRoot)}`,
+    );
+    expect(symlinkResponse.status).toBe(403);
+    const symlinkError = apiErrorResponseSchema.parse(await symlinkResponse.json());
+    expect(symlinkError.error.code).toBe("WORKSPACE_OUTSIDE_ALLOWLIST");
   });
 
   it("rejects workspace path traversal and symlink escapes outside the allowlist", async () => {

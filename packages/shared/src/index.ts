@@ -203,6 +203,50 @@ export const selectWorkspaceResponseSchema = z.object({
 
 export type SelectWorkspaceResponse = z.infer<typeof selectWorkspaceResponseSchema>;
 
+export const workspaceDirectoryRootSchema = z.object({
+  path: z.string().min(1),
+  label: z.string().min(1),
+});
+
+export type WorkspaceDirectoryRoot = z.infer<typeof workspaceDirectoryRootSchema>;
+
+export const workspaceDirectoryEntrySchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  isWorkspaceCandidate: z.boolean(),
+  hasDocs: z.boolean(),
+});
+
+export type WorkspaceDirectoryEntry = z.infer<typeof workspaceDirectoryEntrySchema>;
+
+export const workspaceDirectorySchema = z.object({
+  path: z.string().min(1),
+  label: z.string().min(1),
+  parentPath: z.string().min(1).optional(),
+  isWorkspaceCandidate: z.boolean(),
+  hasDocs: z.boolean(),
+  children: z.array(workspaceDirectoryEntrySchema),
+});
+
+export type WorkspaceDirectory = z.infer<typeof workspaceDirectorySchema>;
+
+export const workspaceDirectoriesRequestSchema = z.object({
+  root: z.string().min(1).optional(),
+});
+
+export type WorkspaceDirectoriesRequest = z.infer<
+  typeof workspaceDirectoriesRequestSchema
+>;
+
+export const workspaceDirectoriesResponseSchema = z.object({
+  roots: z.array(workspaceDirectoryRootSchema),
+  directory: workspaceDirectorySchema.optional(),
+});
+
+export type WorkspaceDirectoriesResponse = z.infer<
+  typeof workspaceDirectoriesResponseSchema
+>;
+
 export const markdownFileSummarySchema = z.object({
   id: z.string().min(1),
   workspaceId: z.string().min(1),

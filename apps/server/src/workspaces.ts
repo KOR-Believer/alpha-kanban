@@ -3,6 +3,10 @@ import path from "node:path";
 
 import type {
   SelectWorkspaceRequest,
+  WorkspaceDirectoriesResponse,
+  WorkspaceDirectory,
+  WorkspaceDirectoryEntry,
+  WorkspaceDirectoryRoot,
   WorkspaceSummary,
   WorkspacesResponse,
 } from "@alpha-kanban/shared";
@@ -17,6 +21,15 @@ export const WORKSPACE_ERROR = {
 } as const;
 
 export type WorkspaceErrorCode = (typeof WORKSPACE_ERROR)[keyof typeof WORKSPACE_ERROR];
+
+const HIDDEN_DIRECTORY_NAMES = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+  ".turbo",
+]);
 
 export class WorkspaceError extends Error {
   readonly code: WorkspaceErrorCode;
@@ -114,6 +127,22 @@ export class WorkspaceService {
     });
 
     return workspace;
+  }
+
+  async listWorkspaceDirectories(root?: string): Promise<WorkspaceDirectoriesResponse> {
+    const allowlistRoots = await this.allowlistRoots();
+    const roots = allowlistRoots.map(createDirectoryRoot).sort(compareDirectoryRoots);
+    const selectedRoot = root ?? allowlistRoots[0];
+
+    if (!selectedRoot) {
+      return { roots };
+    }
+
+    const directory = await this.resolveDirectory(selectedRoot, allowlistRoots);
+    return {
+      roots,
+      directory: await this.createDirectory(directory, allowlistRoots),
+    };
   }
 
   async resolveWorkspaceRoot(root: string): Promise<WorkspaceSummary> {
@@ -214,6 +243,91 @@ export class WorkspaceService {
       hasDocs: await hasDocs(normalizedRoot),
     };
   }
+
+  private async resolveDirectory(root: string, allowlistRoots: string[]): Promise<string> {
+    const realRoot = await realpathDirectory(root);
+    if (!realRoot) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_NOT_FOUND,
+        "Workspace directory was not found.",
+      );
+    }
+
+    if (!isPathInsideAnyRoot(realRoot, allowlistRoots)) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_OUTSIDE_ALLOWLIST,
+        "Workspace directory is outside configured workspaceRoots.",
+      );
+    }
+
+    return realRoot;
+  }
+
+  private async createDirectory(
+    root: string,
+    allowlistRoots: string[],
+  ): Promise<WorkspaceDirectory> {
+    return {
+      path: root,
+      label: path.basename(root) || root,
+      parentPath: await this.resolveParentPath(root, allowlistRoots),
+      isWorkspaceCandidate: await isProjectCandidate(root),
+      hasDocs: await hasDocs(root),
+      children: await this.listChildDirectories(root, allowlistRoots),
+    };
+  }
+
+  private async resolveParentPath(
+    root: string,
+    allowlistRoots: string[],
+  ): Promise<string | undefined> {
+    const parentPath = path.dirname(root);
+    if (parentPath === root) {
+      return undefined;
+    }
+
+    const realParent = await realpathDirectory(parentPath);
+    if (!realParent || realParent === root || !isPathInsideAnyRoot(realParent, allowlistRoots)) {
+      return undefined;
+    }
+
+    return realParent;
+  }
+
+  private async listChildDirectories(
+    root: string,
+    allowlistRoots: string[],
+  ): Promise<WorkspaceDirectoryEntry[]> {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(root, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const children = await Promise.all(
+      entries
+        .filter((entry) => !shouldHideDirectory(entry.name))
+        .map(async (entry): Promise<WorkspaceDirectoryEntry | undefined> => {
+          const childPath = path.join(root, entry.name);
+          const realChild = await realpathDirectory(childPath);
+          if (!realChild || !isPathInsideAnyRoot(realChild, allowlistRoots)) {
+            return undefined;
+          }
+
+          return {
+            name: entry.name,
+            path: realChild,
+            isWorkspaceCandidate: await isProjectCandidate(realChild),
+            hasDocs: await hasDocs(realChild),
+          };
+        }),
+    );
+
+    return children
+      .filter((entry): entry is WorkspaceDirectoryEntry => Boolean(entry))
+      .sort(compareDirectoryEntries);
+  }
 }
 
 async function isProjectCandidate(root: string): Promise<boolean> {
@@ -290,8 +404,37 @@ function normalizeAbsolutePath(targetPath: string): string {
   return path.normalize(path.resolve(targetPath));
 }
 
+function createDirectoryRoot(root: string): WorkspaceDirectoryRoot {
+  return {
+    path: root,
+    label: path.basename(root) || root,
+  };
+}
+
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function compareDirectoryRoots(
+  a: WorkspaceDirectoryRoot,
+  b: WorkspaceDirectoryRoot,
+): number {
+  return a.label.localeCompare(b.label);
+}
+
+function compareDirectoryEntries(
+  a: WorkspaceDirectoryEntry,
+  b: WorkspaceDirectoryEntry,
+): number {
+  if (a.isWorkspaceCandidate !== b.isWorkspaceCandidate) {
+    return a.isWorkspaceCandidate ? -1 : 1;
+  }
+
+  if (a.hasDocs !== b.hasDocs) {
+    return a.hasDocs ? -1 : 1;
+  }
+
+  return a.name.localeCompare(b.name);
 }
 
 function compareWorkspaces(a: WorkspaceSummary, b: WorkspaceSummary): number {
@@ -308,6 +451,10 @@ function compareWorkspaces(a: WorkspaceSummary, b: WorkspaceSummary): number {
   }
 
   return a.label.localeCompare(b.label);
+}
+
+function shouldHideDirectory(name: string): boolean {
+  return name.startsWith(".") || HIDDEN_DIRECTORY_NAMES.has(name);
 }
 
 function isNodeError(error: unknown, code: string): boolean {

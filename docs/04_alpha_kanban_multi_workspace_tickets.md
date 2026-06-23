@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `8 / 14 tickets`
+- 현재 진행률: `9 / 14 tickets`
 
 ## 티켓 상태
 
@@ -104,7 +104,7 @@ Depends on:
 | AKW-03 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | DONE | 100% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-12 | DONE | 100% | `apps/web`, `alpha-kanban` | AKW-02, AKW-04 |
-| AKW-13 | TODO | 0% | `apps/server`, `apps/web`, `packages/shared`, `alpha-kanban` | AKW-02, AKW-04, AKW-12 |
+| AKW-13 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared`, `alpha-kanban` | AKW-02, AKW-04, AKW-12 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
 | AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11, AKW-12, AKW-13 |
 | AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
@@ -512,8 +512,8 @@ Depends on:
 
 ### AKW-13. Server-backed folder picker와 workspaceRoots 설정 UX 설계/구현
 
-Status: TODO
-Progress: 0%
+Status: DONE
+Progress: 100%
 Repository:
 
 - `apps/server`
@@ -555,29 +555,40 @@ Depends on:
 - OS-level filesystem permission 요청 자동화
 - allowlist 밖 directory를 임시 예외로 여는 기능
 - target project repository에 Alpha Kanban state/config를 쓰는 기능
+- 웹 UI에서 `alpha-kanban.config.json`을 직접 쓰기/수정하는 기능
 
 완료 기준:
 
-- [ ] 주소를 직접 입력하지 않고 allowlist 내부 directory를 선택할 수 있다.
-- [ ] folder picker가 allowlist 밖 navigation/path traversal/symlink escape를 허용하지 않는다.
-- [ ] `workspaceRoots` 최대 범위를 설정하는 ownership과 UX가 문서화된다.
-- [ ] 주소 입력 fallback과 folder picker의 error message가 같은 allowlist 정책을 따른다.
-- [ ] mobile viewport에서도 folder picker를 사용할 수 있다.
+- [x] 주소를 직접 입력하지 않고 allowlist 내부 directory를 선택할 수 있다.
+- [x] folder picker가 allowlist 밖 navigation/path traversal/symlink escape를 허용하지 않는다.
+- [x] `workspaceRoots` 최대 범위를 설정하는 ownership과 UX가 문서화된다.
+- [x] 주소 입력 fallback과 folder picker의 error message가 같은 allowlist 정책을 따른다.
+- [x] mobile viewport에서도 folder picker를 사용할 수 있다.
 
 검증:
 
-- [ ] directory listing API test
-- [ ] allowlist escape/symlink test
-- [ ] desktop browser smoke
-- [ ] mobile browser smoke
+- [x] directory listing API test
+- [x] allowlist escape/symlink test
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] desktop browser smoke
+- [x] mobile browser smoke
 
 사용자 지시:
 
 - 2026-06-23: file input 같은 것을 활용하거나 유사한 UI/API로 폴더를 고르게 할 수 있는지, 주소 입력이 최선인지, `workspaceRoots` 최대 범위는 언제 누가 정하는지 확인한다.
+- 2026-06-23: 위 내용을 티켓화해서 바로 진행한다.
+- 2026-06-23: 브라우저 smoke는 Playwright raw snapshot이 토큰을 많이 쓰면 Chrome/in-app browser plugin처럼 더 적합한 도구를 써도 된다. 마우스 cursor 표시가 필요한 비주얼 피드백에서는 Chrome plugin도 고려한다.
 
 진행 메모:
 
 - 2026-06-23: `webkitdirectory` 계열 file input은 absolute path를 제공하지 않으므로 Codex cwd routing에는 부족하고, 서버가 allowlist 내부 directory를 listing하는 폴더 브라우저 API가 필요하다고 정리했다.
+- 2026-06-23: `packages/shared`에 workspace directory DTO를 추가하고, `apps/server/src/workspaces.ts`와 `apps/server/src/app.ts`에 `GET /api/workspace-directories`를 구현했다. API는 allowlist root, 현재 directory, parent path, child directory entries를 반환한다.
+- 2026-06-23: directory API는 `realpath` 기준으로 allowlist 밖 traversal과 symlink escape를 거부하고, child listing에서도 allowlist 밖으로 빠지는 entry를 제외하도록 구현했다.
+- 2026-06-23: `apps/web/src/App.tsx` project switcher에 `Browse` inline folder picker를 추가했다. Allowlist root 선택, parent 이동, child folder navigation, 현재 folder `Open` action이 기존 root 기반 workspace select flow를 재사용한다.
+- 2026-06-23: config 쓰기 UI는 이번 티켓에서 제외했다. 현재 구현은 `workspaceRoots`가 앱 사용자/운영자가 정하는 allowlist 정책임을 문서화하고, UI는 그 정책 내부를 탐색하는 데 집중한다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm --filter @alpha-kanban/server typecheck`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `git diff --check`, Playwright desktop/mobile smoke. Desktop에서 Browse open, allowlist root listing, `alpha-kanban` child navigation, current folder Open을 확인했고 mobile `390x844`에서 folder picker layout이 겹치지 않음을 확인했다. Browser smoke는 다음부터 snapshot token을 줄이고, 순수 비주얼 확인은 in-app browser/Chrome plugin 사용을 우선 검토한다.
 
 ### AKW-05. Codex runner를 target workspace cwd/session 기준으로 라우팅
 

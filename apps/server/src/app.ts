@@ -8,6 +8,7 @@ import {
   createCodexRunRequestSchema,
   patchTicketRequestSchema,
   selectWorkspaceRequestSchema,
+  workspaceDirectoriesRequestSchema,
 } from "@alpha-kanban/shared";
 
 import { loadServerConfig, type LoadConfigOptions } from "./config";
@@ -47,6 +48,15 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
   app.get("/api/workspaces", async (_request, response, next) => {
     try {
       response.json(await workspaceService.listWorkspaces());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/workspace-directories", async (request, response, next) => {
+    try {
+      const query = workspaceDirectoriesRequestSchema.parse(request.query);
+      response.json(await workspaceService.listWorkspaceDirectories(query.root));
     } catch (error) {
       next(error);
     }
