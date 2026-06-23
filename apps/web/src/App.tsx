@@ -55,6 +55,14 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const BOARD_STATUSES: TicketStatus[] = [
   "TODO",
@@ -600,7 +608,7 @@ function ProjectSwitcher({
             Open path
           </label>
           <Button
-            onClick={() => setIsBrowserOpen((current) => !current)}
+            onClick={() => setIsBrowserOpen(true)}
             size="sm"
             type="button"
             variant="ghost"
@@ -609,21 +617,6 @@ function ProjectSwitcher({
             Browse
           </Button>
         </div>
-        {isBrowserOpen ? (
-          <FolderPickerPanel
-            data={directoriesQuery.data}
-            error={
-              directoriesQuery.isError ? normalizeClientError(directoriesQuery.error) : null
-            }
-            isLoading={directoriesQuery.isLoading}
-            isOpening={isOpeningPath}
-            onBrowse={(root) => {
-              setError(null);
-              setBrowseRoot(root);
-            }}
-            onOpen={(root) => void openWorkspaceRoot(root)}
-          />
-        ) : null}
         <div className="flex min-w-0 gap-2">
           <input
             aria-describedby={error ? "workspace-root-error" : undefined}
@@ -662,6 +655,20 @@ function ProjectSwitcher({
         ) : null}
       </form>
 
+      <FolderPickerDialog
+        data={directoriesQuery.data}
+        error={directoriesQuery.isError ? normalizeClientError(directoriesQuery.error) : null}
+        isLoading={directoriesQuery.isLoading}
+        isOpening={isOpeningPath}
+        onBrowse={(root) => {
+          setError(null);
+          setBrowseRoot(root);
+        }}
+        onOpen={(root) => void openWorkspaceRoot(root)}
+        onOpenChange={setIsBrowserOpen}
+        open={isBrowserOpen}
+      />
+
       <div className="grid max-h-56 gap-3 overflow-y-auto">
         {recentWorkspaces.length > 0 ? (
           <WorkspaceGroup
@@ -685,13 +692,15 @@ function ProjectSwitcher({
   );
 }
 
-function FolderPickerPanel({
+function FolderPickerDialog({
   data,
   error,
   isLoading,
   isOpening,
   onBrowse,
   onOpen,
+  onOpenChange,
+  open,
 }: {
   data?: WorkspaceDirectoriesResponse;
   error: ClientApiError | Error | null;
@@ -699,97 +708,123 @@ function FolderPickerPanel({
   isOpening: boolean;
   onBrowse: (root: string | undefined) => void;
   onOpen: (root: string) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
 }) {
+  const currentDirectory = data?.directory;
+
   return (
-    <div className="grid gap-2 rounded-md border border-neutral-200 bg-neutral-50 p-2">
-      {data?.roots.length ? (
-        <div className="flex flex-wrap gap-1">
-          {data.roots.map((root) => (
-            <DirectoryRootButton
-              isSelected={root.path === data.directory?.path}
-              key={root.path}
-              onBrowse={() => onBrowse(root.path)}
-              root={root}
-            />
-          ))}
-        </div>
-      ) : null}
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="h-[min(720px,calc(100vh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto]">
+        <DialogHeader className="pr-12">
+          <DialogTitle>Select workspace folder</DialogTitle>
+          <DialogDescription className="sr-only">
+            Select a folder inside the configured workspace roots.
+          </DialogDescription>
+        </DialogHeader>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-2 text-xs text-neutral-500">
-          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-          Loading folders
-        </div>
-      ) : null}
-
-      {error ? (
-        <p className="break-words rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
-          {formatClientError(error)}
-        </p>
-      ) : null}
-
-      {data?.directory ? (
-        <div className="grid gap-2">
-          <div className="grid gap-1 rounded-md border border-neutral-200 bg-white p-2">
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-neutral-900">
-                  {data.directory.label}
-                </p>
-                <p className="truncate text-[11px] text-neutral-500">{data.directory.path}</p>
-              </div>
-              <Button
-                disabled={isOpening}
-                onClick={() => onOpen(data.directory?.path ?? "")}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {isOpening ? (
-                  <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                ) : (
-                  <FolderKanban className="size-3" aria-hidden="true" />
-                )}
-                Open
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <Badge variant={data.directory.hasDocs ? "muted" : "outline"}>
-                {data.directory.hasDocs ? "docs" : "empty"}
-              </Badge>
-              {data.directory.isWorkspaceCandidate ? (
-                <Badge variant="success">project</Badge>
+        <div className="grid min-h-0 grid-cols-[190px_minmax(0,1fr)] border-y border-neutral-200 max-[720px]:grid-cols-1">
+          <aside className="min-h-0 border-r border-neutral-200 bg-neutral-50 p-3 max-[720px]:border-b max-[720px]:border-r-0">
+            <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-normal text-neutral-500">
+              Roots
+            </p>
+            <div className="grid gap-1 max-[720px]:grid-cols-2">
+              {data?.roots.map((root) => (
+                <DirectoryRootButton
+                  isSelected={isRootSelected(root, currentDirectory?.path)}
+                  key={root.path}
+                  onBrowse={() => onBrowse(root.path)}
+                  root={root}
+                />
+              ))}
+              {!isLoading && data?.roots.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-neutral-500">No roots configured</p>
               ) : null}
             </div>
-          </div>
+          </aside>
 
-          <div className="grid max-h-44 gap-1 overflow-y-auto">
-            {data.directory.parentPath ? (
-              <button
-                className="flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-600 transition-colors hover:bg-white"
-                onClick={() => onBrowse(data.directory?.parentPath)}
-                type="button"
-              >
-                <ChevronLeft className="size-3 shrink-0" aria-hidden="true" />
-                <span className="truncate">Parent folder</span>
-              </button>
-            ) : null}
-            {data.directory.children.map((entry) => (
-              <DirectoryEntryButton
-                entry={entry}
-                key={entry.path}
-                onBrowse={() => onBrowse(entry.path)}
-              />
-            ))}
-            {data.directory.children.length === 0 ? (
-              <p className="rounded-md border border-dashed border-neutral-200 px-2 py-3 text-center text-xs text-neutral-500">
-                Empty folder
-              </p>
-            ) : null}
-          </div>
+          <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-white">
+            <div className="grid gap-3 border-b border-neutral-200 p-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  aria-label="Parent folder"
+                  disabled={!currentDirectory?.parentPath || isLoading}
+                  onClick={() => onBrowse(currentDirectory?.parentPath)}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </Button>
+                <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700">
+                  <Folder className="size-4 shrink-0 text-neutral-500" aria-hidden="true" />
+                  <span className="truncate">{currentDirectory?.path ?? "Loading"}</span>
+                </div>
+              </div>
+              {currentDirectory ? (
+                <div className="flex flex-wrap items-center gap-1">
+                  <Badge variant={currentDirectory.hasDocs ? "muted" : "outline"}>
+                    {currentDirectory.hasDocs ? "docs" : "empty"}
+                  </Badge>
+                  {currentDirectory.isWorkspaceCandidate ? (
+                    <Badge variant="success">project</Badge>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="min-h-0 overflow-auto">
+              <div className="grid min-w-[700px] grid-cols-[minmax(190px,1.25fr)_150px_minmax(300px,2fr)] border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium uppercase tracking-normal text-neutral-500">
+                <span>Name</span>
+                <span>Type</span>
+                <span>Path</span>
+              </div>
+              {isLoading ? (
+                <div className="flex items-center gap-2 px-4 py-5 text-sm text-neutral-500">
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Loading folders
+                </div>
+              ) : null}
+              {error ? (
+                <p className="m-3 break-words rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {formatClientError(error)}
+                </p>
+              ) : null}
+              {currentDirectory?.children.map((entry) => (
+                <DirectoryEntryButton
+                  entry={entry}
+                  key={entry.path}
+                  onBrowse={() => onBrowse(entry.path)}
+                />
+              ))}
+              {!isLoading && currentDirectory?.children.length === 0 ? (
+                <p className="m-3 rounded-md border border-dashed border-neutral-200 px-3 py-8 text-center text-sm text-neutral-500">
+                  Empty folder
+                </p>
+              ) : null}
+            </div>
+          </section>
         </div>
-      ) : null}
-    </div>
+
+        <DialogFooter className="max-[720px]:flex-col max-[720px]:items-stretch">
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            Cancel
+          </Button>
+          <Button
+            disabled={!currentDirectory?.path || isOpening}
+            onClick={() => onOpen(currentDirectory?.path ?? "")}
+            type="button"
+          >
+            {isOpening ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <FolderKanban className="size-4" aria-hidden="true" />
+            )}
+            Select Folder
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -805,16 +840,22 @@ function DirectoryRootButton({
   return (
     <button
       className={[
-        "min-w-0 rounded-md border px-2 py-1 text-left text-[11px] transition-colors",
+        "min-w-0 rounded-md border px-3 py-2 text-left transition-colors",
         isSelected
-          ? "border-neutral-300 bg-white text-neutral-900"
-          : "border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-white",
+          ? "border-neutral-300 bg-white text-neutral-950 shadow-[0_1px_0_rgba(0,0,0,0.03)]"
+          : "border-transparent bg-transparent text-neutral-600 hover:border-neutral-200 hover:bg-white",
       ].join(" ")}
       onClick={onBrowse}
       title={root.path}
       type="button"
     >
-      <span className="block max-w-40 truncate">{root.label}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <Folder className="size-4 shrink-0 text-neutral-500" aria-hidden="true" />
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium">{root.label}</span>
+          <span className="block truncate text-[11px] text-neutral-500">{root.path}</span>
+        </span>
+      </span>
     </button>
   );
 }
@@ -828,22 +869,28 @@ function DirectoryEntryButton({
 }) {
   return (
     <button
-      className="grid min-h-10 min-w-0 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 text-left transition-colors hover:bg-white"
+      className="grid min-h-11 min-w-[700px] grid-cols-[minmax(190px,1.25fr)_150px_minmax(300px,2fr)] items-center border-b border-neutral-100 px-3 text-left text-sm transition-colors hover:bg-neutral-50"
       onClick={onBrowse}
       type="button"
     >
-      <Folder className="size-3.5 shrink-0 text-neutral-500" aria-hidden="true" />
-      <span className="min-w-0">
-        <span className="block truncate text-xs font-medium text-neutral-800">{entry.name}</span>
-        <span className="block truncate text-[11px] text-neutral-500">{entry.path}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <Folder className="size-4 shrink-0 text-neutral-500" aria-hidden="true" />
+        <span className="truncate font-medium text-neutral-900">{entry.name}</span>
       </span>
-      <span className="flex gap-1">
+      <span className="flex min-w-0 gap-1 overflow-hidden">
         {entry.isWorkspaceCandidate ? <Badge variant="success">project</Badge> : null}
         <Badge variant={entry.hasDocs ? "muted" : "outline"}>
           {entry.hasDocs ? "docs" : "empty"}
         </Badge>
       </span>
+      <span className="truncate text-xs text-neutral-500">{entry.path}</span>
     </button>
+  );
+}
+
+function isRootSelected(root: WorkspaceDirectoryRoot, currentPath?: string): boolean {
+  return Boolean(
+    currentPath && (currentPath === root.path || currentPath.startsWith(`${root.path}/`)),
   );
 }
 

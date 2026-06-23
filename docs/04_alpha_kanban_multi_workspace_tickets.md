@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `9 / 14 tickets`
+- 현재 진행률: `10 / 15 tickets`
 
 ## 티켓 상태
 
@@ -105,8 +105,9 @@ Depends on:
 | AKW-04 | DONE | 100% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
 | AKW-12 | DONE | 100% | `apps/web`, `alpha-kanban` | AKW-02, AKW-04 |
 | AKW-13 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared`, `alpha-kanban` | AKW-02, AKW-04, AKW-12 |
+| AKW-14 | DONE | 100% | `apps/web` | AKW-13 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
-| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11, AKW-12, AKW-13 |
+| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11, AKW-12, AKW-13, AKW-14 |
 | AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
 | AKW-08 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-02, AKW-03, AKW-04, AKW-05, AKW-07 |
 | AKW-09 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared` | AKW-05 |
@@ -590,6 +591,69 @@ Depends on:
 - 2026-06-23: config 쓰기 UI는 이번 티켓에서 제외했다. 현재 구현은 `workspaceRoots`가 앱 사용자/운영자가 정하는 allowlist 정책임을 문서화하고, UI는 그 정책 내부를 탐색하는 데 집중한다.
 - 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm --filter @alpha-kanban/server typecheck`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `git diff --check`, Playwright desktop/mobile smoke. Desktop에서 Browse open, allowlist root listing, `alpha-kanban` child navigation, current folder Open을 확인했고 mobile `390x844`에서 folder picker layout이 겹치지 않음을 확인했다. Browser smoke는 다음부터 snapshot token을 줄이고, 순수 비주얼 확인은 in-app browser/Chrome plugin 사용을 우선 검토한다.
 
+### AKW-14. Folder picker를 file chooser modal UX로 전환
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+
+Priority: P0
+Type: UX / Feature
+Depends on:
+
+- `AKW-13`
+
+목표:
+
+- project switcher 안에 갇힌 folder picker를 Windows file selector에 가까운 modal UX로 전환한다.
+- shadcn 스타일 Dialog와 details-view folder list를 사용해 workspace 선택 화면을 더 넓고 명확하게 만든다.
+
+현재 문제:
+
+- AKW-13의 inline folder picker는 sidebar 폭 안에 고정되어 폴더 목록, 경로, 선택 action을 한눈에 보기 어렵다.
+- 사용자가 기대한 UX는 작은 sidebar panel이 아니라 OS file chooser처럼 넓은 modal에서 폴더를 탐색하고 선택하는 흐름이다.
+
+구현 범위:
+
+- shadcn 스타일 `Dialog` component를 추가한다.
+- `@radix-ui/react-dialog`를 web package dependency로 추가한다.
+- Project switcher의 `Browse` action이 inline panel 대신 modal을 열도록 변경한다.
+- Modal은 좌측 allowlist roots, 상단 path bar, 중앙 details-view folder list, 하단 `Cancel`/`Select Folder` action으로 구성한다.
+- Desktop과 mobile viewport에서 modal layout이 겹치지 않게 조정한다.
+
+제외 범위:
+
+- OS native folder picker 연동
+- `workspaceRoots` config 편집 UI
+- directory API 계약 변경
+
+완료 기준:
+
+- [x] Browse action이 sidebar inline panel 대신 modal을 연다.
+- [x] Modal에서 allowlist root, 현재 path, child folders, current folder select action을 볼 수 있다.
+- [x] Folder list의 type/path column이 겹치지 않는다.
+- [x] mobile viewport에서 modal footer action이 안정적으로 배치된다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] desktop browser smoke
+- [x] mobile browser smoke
+
+사용자 지시:
+
+- 2026-06-23: 폴더 선택 UI가 sidebar에 고정되어 너무 좁으니 fileChooser처럼 modal로 만들고, shadcn을 활용해 Windows file selector 같은 UI로 구성한다.
+
+진행 메모:
+
+- 2026-06-23: `apps/web/src/components/ui/dialog.tsx`에 Radix 기반 shadcn 스타일 Dialog 컴포넌트를 추가했다.
+- 2026-06-23: `apps/web/src/App.tsx`의 folder picker를 modal로 전환하고, roots sidebar, path bar, details-view folder list, footer action 구조로 재구성했다.
+- 2026-06-23: in-app browser smoke에서 desktop modal과 mobile `390x844` modal을 확인했다. Desktop에서 type/path column overlap을 발견해 Type column 폭을 넓히고 재확인했다.
+
 ### AKW-05. Codex runner를 target workspace cwd/session 기준으로 라우팅
 
 Status: TODO
@@ -681,6 +745,7 @@ Depends on:
 - `AKW-11`
 - `AKW-12`
 - `AKW-13`
+- `AKW-14`
 
 목표:
 
