@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `7 / 12 tickets`
+- 현재 진행률: `8 / 14 tickets`
 
 ## 티켓 상태
 
@@ -103,8 +103,10 @@ Depends on:
 | AKW-02 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01 |
 | AKW-03 | DONE | 100% | `apps/server`, `packages/shared` | AKW-01, AKW-02 |
 | AKW-04 | DONE | 100% | `apps/web`, `packages/shared` | AKW-02, AKW-03 |
+| AKW-12 | DONE | 100% | `apps/web`, `alpha-kanban` | AKW-02, AKW-04 |
+| AKW-13 | TODO | 0% | `apps/server`, `apps/web`, `packages/shared`, `alpha-kanban` | AKW-02, AKW-04, AKW-12 |
 | AKW-05 | TODO | 0% | `apps/server`, `apps/web` | AKW-03, AKW-04 |
-| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11 |
+| AKW-06 | TODO | 0% | `alpha-kanban`, `apps/server`, `apps/web` | AKW-01, AKW-02, AKW-03, AKW-04, AKW-05, AKW-07, AKW-08, AKW-09, AKW-10, AKW-11, AKW-12, AKW-13 |
 | AKW-07 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-03, AKW-04, AKW-05 |
 | AKW-08 | TODO | 0% | `apps/web`, `apps/server`, `packages/shared` | AKW-02, AKW-03, AKW-04, AKW-05, AKW-07 |
 | AKW-09 | DONE | 100% | `apps/server`, `apps/web`, `packages/shared` | AKW-05 |
@@ -441,6 +443,142 @@ Depends on:
 - 2026-06-23: selected workspace root와 selected ticket document path를 board header에 표시하고, workspace-scoped Codex 실행은 AKW-05 전까지 drawer에서 명시적으로 비활성화했다.
 - 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright desktop/mobile smoke. Desktop에서 no-last empty state, project switcher, last workspace reload, project 전환을 확인했고 mobile `390x844`에서 switcher/file list/board header가 겹치지 않음을 확인했다.
 
+### AKW-12. Project switcher Open path 입력 선택 구현
+
+Status: DONE
+Progress: 100%
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P0
+Type: UX / Feature
+Depends on:
+
+- `AKW-02`
+- `AKW-04`
+
+목표:
+
+- recent/discovered 목록에 없는 workspace도 사용자가 absolute path를 직접 입력해 선택할 수 있게 한다.
+- 입력된 path는 기존 allowlist 검증 API를 통과한 경우에만 recent/last workspace로 기록한다.
+
+현재 문제:
+
+- project switcher는 API가 반환하는 recent/discovered 목록만 선택할 수 있다.
+- allowlist 내부에 있는 새 project나 아직 discovered 목록에 없는 하위 경로를 사용자가 직접 열 수 없다.
+- 현재 dogfooding config가 `workspaceRoots: ["."]`에 묶여 sibling project 선택 흐름을 확인하기 어렵다.
+
+구현 범위:
+
+- project switcher에 `Open path` 입력 form을 추가한다.
+- 입력값을 trim한 뒤 `POST /api/workspaces/select`에 `{ root }`로 전달한다.
+- 성공 시 returned workspace id를 selected workspace로 설정하고 selected file/ticket state를 초기화한다.
+- 실패 시 `WORKSPACE_OUTSIDE_ALLOWLIST`, `WORKSPACE_NOT_FOUND`, `WORKSPACE_UNAVAILABLE` 같은 API error code와 message를 switcher 안에 표시한다.
+- 기존 discovered/recent workspace 선택은 `{ workspaceId }` 기반 select flow를 유지한다.
+- dogfooding config를 `defaultDocRoots`와 parent `workspaceRoots` 기준으로 정리한다.
+
+제외 범위:
+
+- OS native folder picker
+- `workspaceRoots` allowlist를 UI에서 편집하는 기능
+- target project별 docRoots 편집 UI
+
+완료 기준:
+
+- [x] allowlist 내부 path를 입력하면 workspace가 선택되고 recent에 기록된다.
+- [x] allowlist 밖 path를 입력하면 복구 가능한 error message가 표시된다.
+- [x] 기존 recent/discovered project 선택이 유지된다.
+- [x] path 입력 form이 mobile viewport에서 project switcher와 겹치지 않는다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] desktop browser smoke
+- [x] mobile browser smoke
+
+사용자 지시:
+
+- 2026-06-23: recent에 있는 project 말고 새로운 경로를 입력해 선택하는 기능이 앞으로 할 티켓에 없으면 바로 뒤에 추가하고 진행한다.
+
+진행 메모:
+
+- 2026-06-23: `apps/web/src/App.tsx`의 project switcher에 Open path form을 추가하고, root 기반 workspace select 성공 시 returned workspace id로 board scope를 전환하도록 구현했다.
+- 2026-06-23: `alpha-kanban.config.json`을 `workspaceRoots: [".."]`, `defaultDocRoots: ["docs", "examples"]`로 정리해 `/Users/kiseong.park/workspace` 아래 project를 dogfooding 대상으로 열 수 있게 했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright desktop/mobile smoke. `/tmp` 입력 시 `WORKSPACE_OUTSIDE_ALLOWLIST` 표시, allowlist 내부 신규 path 선택 및 recent 등록, 기존 `alpha-kanban` 재선택, mobile `390x844` 레이아웃을 확인했다.
+
+### AKW-13. Server-backed folder picker와 workspaceRoots 설정 UX 설계/구현
+
+Status: TODO
+Progress: 0%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+- `alpha-kanban`
+
+Priority: P0
+Type: API / UX / Policy
+Depends on:
+
+- `AKW-02`
+- `AKW-04`
+- `AKW-12`
+
+목표:
+
+- 사용자가 absolute path를 직접 타이핑하지 않아도 allowlist 내부 폴더를 탐색해 workspace를 선택할 수 있게 한다.
+- `workspaceRoots` 최대 범위를 누가, 언제, 어디서 정하는지 제품 흐름으로 명확히 만든다.
+
+현재 문제:
+
+- browser의 native folder input 또는 `webkitdirectory`는 폴더 선택 UI는 제공하지만 보안상 absolute path를 노출하지 않으므로, selected workspace cwd가 필요한 Alpha Kanban에는 단독으로 충분하지 않다.
+- AKW-12의 주소 입력은 빠른 fallback이지만 최종 제품 UX로는 탐색/검색 가능한 폴더 선택기가 더 적합하다.
+- `workspaceRoots` allowlist는 현재 config 파일에서 직접 설정해야 하며, 최초 설정 또는 settings UX가 없다.
+
+구현 범위:
+
+- allowlist root와 하위 directory를 조회하는 server API를 추가한다.
+- directory listing API는 `realpath` 기준으로 `workspaceRoots` 밖으로 벗어나는 요청을 거부한다.
+- UI는 project switcher 안에서 folder picker sheet 또는 inline browser를 제공한다.
+- folder picker는 allowlist root, parent/child navigation, 선택한 directory open action을 제공한다.
+- native folder input은 absolute path를 얻을 수 없다는 제약을 문서화하고, 필요하면 파일 목록 import 같은 보조 용도로만 평가한다.
+- `workspaceRoots`는 앱 설치/최초 실행/Settings에서 사용자가 지정하는 앱 정책임을 README와 plan에 정리한다.
+- Settings 기반 config 변경은 즉시 reload가 가능한지, server restart가 필요한지 정책을 명시한다.
+
+제외 범위:
+
+- OS-level filesystem permission 요청 자동화
+- allowlist 밖 directory를 임시 예외로 여는 기능
+- target project repository에 Alpha Kanban state/config를 쓰는 기능
+
+완료 기준:
+
+- [ ] 주소를 직접 입력하지 않고 allowlist 내부 directory를 선택할 수 있다.
+- [ ] folder picker가 allowlist 밖 navigation/path traversal/symlink escape를 허용하지 않는다.
+- [ ] `workspaceRoots` 최대 범위를 설정하는 ownership과 UX가 문서화된다.
+- [ ] 주소 입력 fallback과 folder picker의 error message가 같은 allowlist 정책을 따른다.
+- [ ] mobile viewport에서도 folder picker를 사용할 수 있다.
+
+검증:
+
+- [ ] directory listing API test
+- [ ] allowlist escape/symlink test
+- [ ] desktop browser smoke
+- [ ] mobile browser smoke
+
+사용자 지시:
+
+- 2026-06-23: file input 같은 것을 활용하거나 유사한 UI/API로 폴더를 고르게 할 수 있는지, 주소 입력이 최선인지, `workspaceRoots` 최대 범위는 언제 누가 정하는지 확인한다.
+
+진행 메모:
+
+- 2026-06-23: `webkitdirectory` 계열 file input은 absolute path를 제공하지 않으므로 Codex cwd routing에는 부족하고, 서버가 allowlist 내부 directory를 listing하는 폴더 브라우저 API가 필요하다고 정리했다.
+
 ### AKW-05. Codex runner를 target workspace cwd/session 기준으로 라우팅
 
 Status: TODO
@@ -530,6 +668,8 @@ Depends on:
 - `AKW-09`
 - `AKW-10`
 - `AKW-11`
+- `AKW-12`
+- `AKW-13`
 
 목표:
 

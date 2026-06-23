@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   APP_NAME,
@@ -117,9 +117,16 @@ async function fetchWorkspaces() {
   return requestJson("/api/workspaces", workspacesResponseSchema);
 }
 
-async function selectWorkspace(workspaceId: string) {
+async function selectWorkspaceById(workspaceId: string) {
   return requestJson("/api/workspaces/select", selectWorkspaceResponseSchema, {
     body: JSON.stringify({ workspaceId }),
+    method: "POST",
+  });
+}
+
+async function selectWorkspaceByRoot(root: string) {
+  return requestJson("/api/workspaces/select", selectWorkspaceResponseSchema, {
+    body: JSON.stringify({ root }),
     method: "POST",
   });
 }
@@ -310,10 +317,18 @@ export function App() {
   }
 
   async function handleWorkspaceSelect(workspaceId: string): Promise<void> {
-    await selectWorkspace(workspaceId);
+    const response = await selectWorkspaceById(workspaceId);
     setSelectedFileId(undefined);
     setSelectedTicketId(undefined);
-    setSelectedWorkspaceId(workspaceId);
+    setSelectedWorkspaceId(response.workspace.id);
+    await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+  }
+
+  async function handleWorkspaceOpenPath(root: string): Promise<void> {
+    const response = await selectWorkspaceByRoot(root);
+    setSelectedFileId(undefined);
+    setSelectedTicketId(undefined);
+    setSelectedWorkspaceId(response.workspace.id);
     await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
   }
 
@@ -353,6 +368,7 @@ export function App() {
 
           <ProjectSwitcher
             isLoading={workspacesQuery.isLoading}
+            onOpenPath={handleWorkspaceOpenPath}
             onSelect={handleWorkspaceSelect}
             selectedWorkspaceId={selectedWorkspaceId}
             workspaces={workspacesQuery.data?.workspaces ?? []}
@@ -489,17 +505,41 @@ function FileButton({
 
 function ProjectSwitcher({
   isLoading,
+  onOpenPath,
   onSelect,
   selectedWorkspaceId,
   workspaces,
 }: {
   isLoading: boolean;
+  onOpenPath: (root: string) => Promise<void>;
   onSelect: (workspaceId: string) => Promise<void>;
   selectedWorkspaceId?: string;
   workspaces: WorkspaceSummary[];
 }) {
+  const [pathDraft, setPathDraft] = useState("");
+  const [isOpeningPath, setIsOpeningPath] = useState(false);
+  const [error, setError] = useState<ClientApiError | Error | null>(null);
   const recentWorkspaces = workspaces.filter((workspace) => workspace.lastOpenedAt);
   const discoveredWorkspaces = workspaces.filter((workspace) => !workspace.lastOpenedAt);
+
+  async function openPath(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const root = pathDraft.trim();
+    if (!root) {
+      return;
+    }
+
+    setIsOpeningPath(true);
+    setError(null);
+    try {
+      await onOpenPath(root);
+      setPathDraft("");
+    } catch (nextError) {
+      setError(normalizeClientError(nextError));
+    } finally {
+      setIsOpeningPath(false);
+    }
+  }
 
   return (
     <section className="border-b border-neutral-200 px-3 py-3" aria-label="Projects">
@@ -509,6 +549,52 @@ function ProjectSwitcher({
         </h2>
         {isLoading ? <Loader2 className="size-3 animate-spin text-neutral-500" /> : null}
       </div>
+
+      <form className="mb-3 grid gap-2 px-2" onSubmit={(event) => void openPath(event)}>
+        <label
+          className="text-[11px] font-medium uppercase tracking-normal text-neutral-400"
+          htmlFor="workspace-root-input"
+        >
+          Open path
+        </label>
+        <div className="flex min-w-0 gap-2">
+          <input
+            aria-describedby={error ? "workspace-root-error" : undefined}
+            className="h-8 min-w-0 flex-1 rounded-md border border-neutral-200 bg-white px-2 text-xs text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-400 disabled:bg-neutral-50 disabled:text-neutral-400"
+            disabled={isOpeningPath}
+            id="workspace-root-input"
+            onChange={(event) => {
+              setPathDraft(event.target.value);
+              setError(null);
+            }}
+            placeholder="/Users/.../project"
+            value={pathDraft}
+          />
+          <Button
+            className="shrink-0"
+            disabled={!pathDraft.trim() || isOpeningPath}
+            size="sm"
+            type="submit"
+            variant="outline"
+          >
+            {isOpeningPath ? (
+              <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+            ) : (
+              <FolderKanban className="size-3" aria-hidden="true" />
+            )}
+            Open
+          </Button>
+        </div>
+        {error ? (
+          <p
+            className="break-words rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700"
+            id="workspace-root-error"
+          >
+            {formatClientError(error)}
+          </p>
+        ) : null}
+      </form>
+
       <div className="grid max-h-56 gap-3 overflow-y-auto">
         {recentWorkspaces.length > 0 ? (
           <WorkspaceGroup
@@ -1586,6 +1672,10 @@ function normalizeClientError(error: unknown): ClientApiError | Error {
     : error instanceof Error
       ? error
       : new Error(String(error));
+}
+
+function formatClientError(error: ClientApiError | Error): string {
+  return error instanceof ClientApiError ? `${error.code}: ${error.message}` : error.message;
 }
 
 function upsertEvent(events: CodexRunEvent[], event: CodexRunEvent): CodexRunEvent[] {

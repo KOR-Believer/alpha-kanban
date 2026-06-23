@@ -44,10 +44,10 @@
 
 ## 현재 상태 요약
 
-- 현재 `alpha-kanban.config.json`은 `docRoots: ["docs", "examples"]`, `workspaceRoots: ["."]`, `codexCommand: "codex"`를 가진다.
-- `apps/server/src/config.ts`는 server 실행 root를 `workspaceRoot`로 잡고, `docRoots`와 `workspaceRoots`를 모두 이 root 기준 절대 경로로 변환한다.
+- 현재 `alpha-kanban.config.json`은 `workspaceRoots: [".."]`, `defaultDocRoots: ["docs", "examples"]`, `codexCommand: "codex"`를 가진다.
+- `apps/server/src/config.ts`는 server 실행 root를 control app root로 잡고, `defaultDocRoots`와 `workspaceRoots`를 이 root 기준 절대 경로로 변환한다.
 - `apps/server/src/config.ts`는 `defaultDocRoots`와 `workspaceRoots`를 분리해 읽으며, 기존 `docRoots`는 backward-compatible alias로 유지한다.
-- `apps/server/src/files.ts`는 현재 config의 `docRoots`만 scan하고, file id도 단일 `workspaceRoot` 상대 경로를 기반으로 만든다.
+- legacy `/api/files` route는 control app의 default doc roots를 scan하고, workspace-scoped file API는 selected target workspace의 default doc roots를 scan한다.
 - `apps/server/src/codexRunner.ts`는 Codex process `cwd`를 config의 `workspaceRoot`로 고정하고, prompt에도 같은 root를 project path로 넣는다.
 - `.alpha-kanban/state.json`은 이미 local-only Codex session state 용도로 사용되고 있으며 gitignore 대상이다.
 - `packages/shared`와 `apps/server/src/codexState.ts`는 state schema v2를 사용한다. Recent workspace, last workspace, workspace-scoped document session, run read-state는 control app `.alpha-kanban/state.json`에 저장한다.
@@ -57,6 +57,7 @@
 - `apps/server/src/files.ts`는 control app용 legacy `MarkdownFileStore`와 target workspace용 store를 같은 구현으로 생성할 수 있다. Workspace-scoped file summary는 `workspaceId`, `workspaceRelativePath`를 포함하고 file id도 workspace id를 포함해 같은 relative path 충돌을 피한다.
 - `apps/server/src/app.ts`는 `GET /api/workspaces/:workspaceId/files`, workspace-scoped ticket read/write/instruction/progress-note route를 제공한다. 기존 `/api/files` route는 frontend switcher 전환 전 compatibility route로 유지한다.
 - `apps/web/src/App.tsx`는 project switcher를 통해 `/api/workspaces`와 workspace-scoped file API를 사용한다. Last workspace가 유효하면 바로 board로 진입하고, last workspace가 없으면 project selection empty state를 보여준다.
+- project switcher는 recent/discovered project 선택과 absolute path 직접 입력 fallback을 제공한다. Native folder input은 browser privacy policy 때문에 absolute path를 제공하지 않으므로, 최종 폴더 선택 UX는 server-backed directory browser API로 구현해야 한다.
 - Workspace-scoped board에서 Codex 실행 UI는 AKW-05 전까지 명시적으로 비활성화되어 있다. Ticket status/progress 편집과 document listing은 selected workspace 기준으로 동작한다.
 - 현재 UI는 app 내부 mutation 후에는 query invalidation으로 갱신되지만, 외부 CLI/editor가 Markdown을 직접 수정한 경우 server push나 watcher 기반 invalidation이 없어 사용자가 새로고침해야 한다.
 - 현재 Codex run 로그는 `.alpha-kanban/runs/*.jsonl`에 저장되지만, UI에 ticket/document/workspace 단위 실행 상태 신호가 없어 실행 중인지, 중단됐는지, 완료됐는지 판단하기 어렵다.
@@ -93,6 +94,8 @@ alpha-kanban/
   "codexCommand": "codex"
 }
 ```
+
+`workspaceRoots`는 target project가 정하는 값이 아니라 Alpha Kanban 앱 사용자 또는 운영자가 정하는 최대 allowlist다. 초기에는 config 파일로 관리하고, 제품 UX가 성숙하면 최초 실행 setup 또는 Settings 화면에서 같은 정책을 편집한다. 서버는 이 allowlist 밖 path를 `realpath` 기준으로 항상 거부한다.
 
 `.alpha-kanban/state.json`은 사용자별 동적 상태를 가진다.
 
@@ -150,6 +153,8 @@ File id는 `workspaceId`와 workspace-relative path를 함께 검증한다. 같�
 - last workspace가 없거나 allowlist 밖이면 board 대신 project selection empty state를 보여준다.
 - 좌측 상단에 project switcher를 둔다.
 - switcher는 recent project와 allowlist 아래 discovered project를 함께 보여준다.
+- switcher는 absolute path 직접 입력을 power-user fallback으로 제공하되, 최종 기본 UX는 allowlist 내부 directory를 탐색하는 server-backed folder picker로 둔다.
+- native folder input 또는 `webkitdirectory`는 absolute path를 노출하지 않으므로 selected workspace cwd를 정하는 primary mechanism으로 쓰지 않는다.
 - project 선택 후 기존 file browser는 selected project의 ticket documents만 표시한다.
 - board/detail drawer는 현재처럼 유지하되, header와 prompt preview에 target project context를 명확히 표시한다.
 - ticket drawer 안의 `Run with Codex` draft는 선택 ticket 하나를 실행하는 입력으로 유지한다.
