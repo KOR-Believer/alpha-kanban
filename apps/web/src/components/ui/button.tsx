@@ -4,28 +4,33 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "ak-focus-ring inline-flex h-9 items-center justify-center gap-2 rounded-[var(--ak-radius-md)] text-sm font-medium leading-none transition-[background,border-color,color,box-shadow,transform] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45",
+  "ak-focus-ring group/button inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-transparent bg-clip-padding text-sm font-medium leading-none transition-all select-none active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     defaultVariants: {
       size: "default",
-      variant: "primary",
+      variant: "default",
     },
     variants: {
       size: {
-        default: "px-3.5",
-        icon: "size-9",
-        iconSm: "size-8",
-        sm: "h-8 px-3 text-xs",
+        default: "h-8 px-3.5",
+        icon: "size-8",
+        iconSm: "size-7",
+        sm: "h-7 px-3 text-xs",
+        xs: "h-6 px-2 text-xs",
+        lg: "h-9 px-4",
       },
       variant: {
         default:
-          "border border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-secondary)] hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]",
+          "bg-primary text-primary-foreground shadow-[0_1px_0_color-mix(in_oklch,var(--foreground),transparent_92%)] hover:bg-[var(--ak-primary-active)]",
         ghost:
-          "bg-transparent text-[var(--ak-ink-muted)] hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]",
+          "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
         outline:
-          "border border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-secondary)] shadow-[0_1px_0_rgba(0,0,0,0.02)] hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]",
+          "border-border bg-background text-foreground shadow-[0_1px_0_color-mix(in_oklch,var(--foreground),transparent_94%)] hover:bg-muted",
         primary:
-          "border border-[var(--ak-primary)] bg-[var(--ak-primary)] text-white shadow-[0_1px_0_rgba(0,0,0,0.04)] hover:bg-[var(--ak-primary-active)] hover:border-[var(--ak-primary-active)]",
+          "bg-primary text-primary-foreground shadow-[0_1px_0_color-mix(in_oklch,var(--foreground),transparent_92%)] hover:bg-[var(--ak-primary-active)]",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-muted",
+        destructive: "bg-destructive text-white hover:bg-destructive/90",
+        link: "h-auto rounded-none border-0 bg-transparent p-0 text-primary underline-offset-4 hover:underline",
       },
     },
   },

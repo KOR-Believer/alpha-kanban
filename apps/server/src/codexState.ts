@@ -5,6 +5,7 @@ import {
   alphaKanbanStateSchema,
   type AlphaKanbanState,
   type CodexDocumentState,
+  type CodexRunDefaults,
   type CodexRunReadState,
   type RecentWorkspace,
 } from "@alpha-kanban/shared";
@@ -16,6 +17,7 @@ const EMPTY_STATE: AlphaKanbanState = {
   recentWorkspaces: [],
   documents: {},
   runResults: {},
+  codexRunDefaults: {},
 };
 
 export class CodexStateStore {
@@ -129,6 +131,34 @@ export class CodexStateStore {
     return next;
   }
 
+  async getCodexRunDefaults(): Promise<CodexRunDefaults> {
+    const state = await this.readState();
+    return state.codexRunDefaults;
+  }
+
+  async setCodexRunDefaults(
+    defaults: {
+      model?: string | null;
+      reasoningEffort?: string | null;
+      speedTier?: string | null;
+    },
+  ): Promise<CodexRunDefaults> {
+    const state = await this.readState();
+    const next: CodexRunDefaults = {
+      model: normalizeOptionalSetting(defaults.model, state.codexRunDefaults.model),
+      reasoningEffort: normalizeOptionalSetting(
+        defaults.reasoningEffort,
+        state.codexRunDefaults.reasoningEffort,
+      ),
+      speedTier: normalizeOptionalSetting(defaults.speedTier, state.codexRunDefaults.speedTier),
+    };
+
+    state.codexRunDefaults = next;
+    await this.writeState(state);
+
+    return next;
+  }
+
   private async readState(): Promise<AlphaKanbanState> {
     try {
       const parsed = JSON.parse(await fs.readFile(this.statePath, "utf8")) as AlphaKanbanState;
@@ -164,6 +194,7 @@ function emptyState(): AlphaKanbanState {
     recentWorkspaces: [],
     documents: {},
     runResults: {},
+    codexRunDefaults: {},
   };
 }
 
@@ -181,6 +212,7 @@ function normalizeState(value: unknown, workspaceId: string): AlphaKanbanState {
         : undefined,
     documents: normalizeDocuments(value.documents, workspaceId),
     runResults: normalizeRunResults(value.runResults),
+    codexRunDefaults: normalizeCodexRunDefaults(value.codexRunDefaults),
   });
 }
 
@@ -275,6 +307,32 @@ function normalizeRunResults(value: unknown): Record<string, CodexRunReadState> 
   }
 
   return runResults;
+}
+
+function normalizeCodexRunDefaults(value: unknown): CodexRunDefaults {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    model: asNonEmptyString(value.model),
+    reasoningEffort: asNonEmptyString(value.reasoningEffort),
+    speedTier: asNonEmptyString(value.speedTier),
+  };
+}
+
+function normalizeOptionalSetting(
+  value: string | null | undefined,
+  fallback: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value === null) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function normalizeDocumentPath(relativePath: string): string {

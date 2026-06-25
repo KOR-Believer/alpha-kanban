@@ -12,13 +12,13 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-primary)]",
+          "border-transparent bg-primary text-primary-foreground",
         muted:
-          "border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-muted)]",
+          "border-transparent bg-muted text-muted-foreground",
         outline:
-          "border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-secondary)]",
-        success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-        warning: "border-amber-200 bg-amber-50 text-amber-800",
+          "border-border bg-background text-foreground",
+        success: "border-transparent bg-[var(--ak-success-soft)] text-[var(--ak-success)]",
+        warning: "border-transparent bg-[var(--ak-warning-soft)] text-[var(--ak-warning)]",
       },
     },
   },

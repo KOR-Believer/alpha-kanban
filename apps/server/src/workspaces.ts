@@ -1,7 +1,10 @@
 import { promises as fs } from "node:fs";
+import { execFile } from "node:child_process";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import type {
+  CreateWorkspaceRequest,
   SelectWorkspaceRequest,
   WorkspaceDirectoriesResponse,
   WorkspaceDirectory,
@@ -15,6 +18,8 @@ import { createWorkspaceId, type ServerConfig } from "./config";
 import { CodexStateStore } from "./codexState";
 
 export const WORKSPACE_ERROR = {
+  WORKSPACE_ALREADY_EXISTS: "WORKSPACE_ALREADY_EXISTS",
+  WORKSPACE_CREATE_FAILED: "WORKSPACE_CREATE_FAILED",
   WORKSPACE_NOT_FOUND: "WORKSPACE_NOT_FOUND",
   WORKSPACE_OUTSIDE_ALLOWLIST: "WORKSPACE_OUTSIDE_ALLOWLIST",
   WORKSPACE_UNAVAILABLE: "WORKSPACE_UNAVAILABLE",
@@ -30,6 +35,7 @@ const HIDDEN_DIRECTORY_NAMES = new Set([
   ".next",
   ".turbo",
 ]);
+const execFileAsync = promisify(execFile);
 
 export class WorkspaceError extends Error {
   readonly code: WorkspaceErrorCode;
@@ -127,6 +133,66 @@ export class WorkspaceService {
     });
 
     return workspace;
+  }
+
+  async createWorkspace(
+    request: CreateWorkspaceRequest,
+  ): Promise<{ createdPath: string; gitInitialized: boolean; workspace: WorkspaceSummary }> {
+    const allowlistRoots = await this.allowlistRoots();
+    const parentRoot = await this.resolveDirectory(request.parentRoot, allowlistRoots);
+    const targetRoot = path.resolve(parentRoot, request.projectName);
+
+    if (!isPathInsideAnyRoot(targetRoot, allowlistRoots)) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_OUTSIDE_ALLOWLIST,
+        "New workspace path is outside configured workspaceRoots.",
+      );
+    }
+
+    if (await exists(targetRoot)) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_ALREADY_EXISTS,
+        "Workspace folder already exists.",
+      );
+    }
+
+    try {
+      await fs.mkdir(targetRoot);
+    } catch (error) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_CREATE_FAILED,
+        error instanceof Error ? error.message : "Could not create workspace folder.",
+      );
+    }
+
+    let gitInitialized = false;
+    if (request.gitInit ?? true) {
+      try {
+        await execFileAsync("git", ["init", "-b", "main"], {
+          cwd: targetRoot,
+          timeout: 30_000,
+        });
+        gitInitialized = true;
+      } catch (error) {
+        throw new WorkspaceError(
+          WORKSPACE_ERROR.WORKSPACE_CREATE_FAILED,
+          error instanceof Error ? error.message : "Could not initialize git repository.",
+        );
+      }
+    }
+
+    const workspace = await this.createAvailableSummary(targetRoot);
+    await this.stateStore.recordRecentWorkspace({
+      id: workspace.id,
+      label: workspace.label,
+      root: workspace.root,
+    });
+
+    return {
+      createdPath: workspace.root,
+      gitInitialized,
+      workspace,
+    };
   }
 
   async listWorkspaceDirectories(root?: string): Promise<WorkspaceDirectoriesResponse> {

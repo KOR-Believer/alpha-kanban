@@ -10,9 +10,10 @@
 
 ## Product UI Design
 
-- Before frontend visual or layout work, read `DESIGN-notion.md` from the project root and use it as the local design-system reference.
-- Keep the app chrome Notion-like: warm paper canvas, white surfaces, near-black text, muted stone metadata, hairline borders, restrained radius, and minimal shadows.
-- Reserve blue for primary action/focus/link signals. Do not use decorative color as structural chrome.
+- `DESIGN-notion.md` is deprecated for this project. Do not use it as the design-system source.
+- Use the shadcn b1 preset foundation imported into `apps/web/src/styles.css`: Raleway variable font, OKLCH semantic tokens, olive/acid primary, rounded compact controls, hairline borders, and restrained shadows.
+- Treat `styles.css` semantic variables (`--background`, `--foreground`, `--primary`, `--muted`, `--border`, etc.) and the mapped `--ak-*` aliases as the single source of truth. Do not introduce a second color/radius/spacing system.
+- Use the local `apps/web/src/components/ui/*` wrappers for buttons, badges, dialogs, popovers, selects, and checkboxes. Update those wrappers instead of scattering one-off Tailwind styling when common control styling is wrong.
 - Use a stable internal-scroll model for app shells. Scrollable regions should use the shared `ak-scroll-area` styling so scrollbar gutters, thumb weight, and edge alignment stay consistent.
 - Avoid stacking multiple visibly misaligned scrollbars in one column. When separate scroll regions are necessary, place their scroll boxes on the same outer edge and move padding into shared inner wrappers such as `ak-scroll-content` or `ak-sidebar-scroll-content`.
 - Use the shared spacing/radius tokens in `styles.css` for repeated chrome. If a panel header/body/action alignment needs a custom rhythm, add or reuse a named `ak-*` utility instead of scattering one-off `px-*`, `py-*`, and radius values.

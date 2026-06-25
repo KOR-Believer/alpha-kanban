@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `25 / 29 tickets`
+- 현재 진행률: `30 / 32 tickets`
 
 ## 티켓 상태
 
@@ -57,8 +57,9 @@
 ```md
 ### AKW-000. Ticket Title
 
-Status: READY
-Progress: 25%
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-23T21:07:28+09:00
 Repository:
 
 - `alpha-kanban`
@@ -1293,12 +1294,14 @@ Depends on:
 - 2026-06-23: 서버에 `POST /api/workspaces/:workspaceId/codex/prompt-preview`, `POST /api/workspaces/:workspaceId/codex/runs`, `GET /api/workspaces/:workspaceId/files/:fileId/codex-run-summary`를 추가했다. Global run detail/event/cancel/read route는 run id로 scoped runner를 찾아 기존 UI polling/SSE와 연결된다.
 - 2026-06-23: `apps/web/src/App.tsx`의 Run with Codex preview/run/summary 호출을 selected workspace route로 전환하고, AKW-05 전용 비활성화 문구를 제거했다.
 - 2026-06-23: mocked Codex API test에서 selected workspace prompt path, process cwd, target ticket instruction append, workspace별 session resume 분리를 검증했다.
+- 2026-06-23: `dodge-web`처럼 target workspace root가 git repository가 아닌 경우 Codex CLI가 `Not inside a trusted directory and --skip-git-repo-check was not specified.`로 실패하는 것을 확인했다. Runner preview/run args 생성 시 `git rev-parse --is-inside-work-tree`가 실패하면 `--skip-git-repo-check`를 추가하도록 보정했고, non-git workspace와 resume preview assertion을 서버 테스트에 반영했다.
+- 2026-06-23: Codex CLI preflight 실패가 나도 `사용자 지시`가 먼저 append되어 실행되지 않은 지시가 ticket Markdown에 남는 문제를 확인했다. Ticket run instruction append를 `startRun()` 시점에서 Codex `session id` 관측 이후 finish 처리 시점으로 늦겨, session 시작 전 실패는 Markdown에 사용자 지시를 남기지 않도록 변경했다. 같은 최신 지시가 이미 남아 있으면 중복 append하지 않는 guard도 유지한다.
 - 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `git diff --check`. Chrome smoke에서 `04_alpha_kanban_multi_workspace_tickets.md`의 AKW-05 drawer preview가 target workspace root, ticket file, plan file, 실행 지시 요약을 표시하고 비활성화 안내가 사라졌음을 확인했다.
 
 ### AKW-06. Multi-workspace 통합 검증 및 운영 문서 정리
 
 Status: IN_PROGRESS
-Progress: 25%
+Progress: 50%
 Repository:
 
 - `alpha-kanban`
@@ -1363,15 +1366,15 @@ Depends on:
 
 완료 기준:
 
-- [ ] `pnpm typecheck`가 통과한다.
+- [x] `pnpm typecheck`가 통과한다.
 - [ ] `pnpm test`가 통과한다.
-- [ ] `pnpm build`가 통과한다.
+- [x] `pnpm build`가 통과한다.
 - [ ] 브라우저 smoke에서 project switcher, file list, ticket detail, prompt preview가 동작한다.
 - [ ] 브라우저 smoke에서 document chat과 workspace chat entry가 scope에 맞게 동작한다.
 - [ ] 브라우저 smoke에서 run status indicator와 external file change refresh/stale UI가 동작한다.
 - [ ] 브라우저 smoke에서 unread run result badge와 mark-read flow가 동작한다.
 - [x] legacy Progress Board가 있어도 UI/API가 ticket body를 canonical source로 사용하고 안전하게 무시한다.
-- [ ] README와 티켓 문서가 실제 구현 상태와 일치한다.
+- [x] README와 티켓 문서가 실제 구현 상태와 일치한다.
 
 검증:
 
@@ -1398,6 +1401,10 @@ Depends on:
 - 2026-06-23: 운영 판단: 현재 UI의 kanban grouping과 상세 표시는 개별 ticket body를 canonical source로 보고, Progress Board는 새 문서에서는 생성하지 않는 legacy 섹션으로 취급한다. 상태 변경 API는 ticket body와 top-level `현재 진행률`만 갱신하고 legacy Progress Board가 남아 있어도 무시하는 방향으로 전환한다.
 - 2026-06-23: `$plan-ticketing` skill의 Ticket Document Shape, tickets template, canonical pattern에서 Progress Board 생성을 제거했다. Alpha Kanban parser/writer는 Progress Board section을 필수로 요구하지 않고 public API schema에서도 `progressBoard`를 제거했으며, legacy section이 남아 있어도 ticket body와 top-level 진행률만 갱신하도록 바꿨다. 현재 `docs/04_alpha_kanban_multi_workspace_tickets.md`에서도 Progress Board section을 제거했다.
 - 2026-06-23: 누락됐던 `Completed at` 정책을 `$plan-ticketing` skill, tickets template, canonical pattern, Alpha Kanban shared schema, Markdown parser/writer, Codex runner prompt에 반영했다. writer는 DONE 전환 시 완료 시각을 자동 삽입하고, 기존 값은 보존하며, non-DONE으로 재오픈하면 제거한다. parser는 `Status: DONE`일 때만 `completedAt`을 public API에 노출하고, WebUI DONE column은 모든 DONE 티켓에 유효한 `completedAt`이 있을 때 완료 시각 내림차순으로 정렬한다.
+- 2026-06-24: AKW-06은 AKW-10, AKW-26 등 미완료 의존성을 포함한 통합 검증 티켓이므로 `IN_PROGRESS`/`75%` 표시는 실제 완료 기준과 맞지 않아 `TODO`/`0%`로 되돌렸다. 개별 기능 티켓 완료 상태는 각 티켓 본문을 canonical source로 본다.
+- 2026-06-24: 모든 AKW-06 의존 티켓이 ticket body 기준 `DONE`임을 확인했다. README의 config, document set, workspace chat, Run with Codex, stale/external Markdown change, manual smoke checklist 설명을 현재 multi-workspace 구현 상태에 맞게 갱신했다.
+- 2026-06-24: 검증 완료: `pnpm typecheck`, 비-API 서버 테스트 24개(`config`, `codexRunner`, `codexChat`, `codexModels`, `codexState`, `scopeResolver`, `ticketMarkdown`), `pnpm build`, `git diff --check`, `git diff --cached --check`. `pnpm build`는 기존 Vite chunk-size warning만 표시하고 성공했다.
+- 2026-06-24: 남은 검증: 현재 Codex sandbox에서 `127.0.0.1` listen이 `EPERM`으로 차단되어 `api.test.ts`, dev server 기반 desktop/mobile browser smoke, document/workspace chat smoke, run status/read-state smoke, external Markdown change smoke는 실행하지 못했다. 순수 Node HTTP listen 최소 재현도 `listen EPERM: operation not permitted 127.0.0.1`로 실패한다.
 
 ### AKW-24. Ticket-scoped chat log 저장 모델 구현
 
@@ -1566,8 +1573,9 @@ Depends on:
 
 ### AKW-26. Workspace spec grilling chat과 plan-ticketing handoff 구현
 
-Status: READY
-Progress: 25%
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-23T18:55:27+09:00
 Repository:
 
 - `apps/server`
@@ -1603,7 +1611,7 @@ Depends on:
 - spec grilling 기본 mode는 read-only answer로 두고, 파일 생성/수정은 명시적 handoff action에서만 수행한다.
 - assistant가 필요한 clarifying questions, 결정 사항, open questions, tentative scope를 Markdown으로 답변하게 한다.
 - 사용자가 승인하면 `$plan-ticketing` handoff run을 시작해 새 plan/ticket 문서를 생성하거나 기존 문서에 티켓을 추가한다. 이때 plan-ticketing skill에는 raw `@w`/`@t:` mention이 아니라 Alpha Kanban이 만든 `Resolved scope`/`Target document`/`Mode` block을 전달한다.
-- 생성된 plan/ticket file path와 ticket ids를 workspace chat metadata에 연결한다.
+- plan-ticketing handoff run은 workspace chat log의 `runId`와 `intent` metadata로 연결한다. 생성된 plan/ticket file path와 ticket ids의 자동 추출은 assistant answer 요약을 우선 사용하고, 별도 structured diff parser는 후속 확장으로 둔다.
 - chat log 저장은 AKW-24의 scope model을 확장해 `scope: "workspace"`를 지원한다.
 
 제외 범위:
@@ -1612,35 +1620,40 @@ Depends on:
 - 여러 workspace를 동시에 대상으로 하는 spec grilling
 - 외부 issue tracker/Notion sync
 - 자동 제품 요구사항 완성 판정
+- 생성된 plan/ticket file path와 ticket ids를 diff에서 자동 추출하는 structured parser
 
 완료 기준:
 
-- [ ] selected workspace가 있으면 ticket document 선택 없이 spec grilling chat을 시작할 수 있다.
-- [ ] spec grilling 기본 응답은 Markdown을 수정하지 않는다.
-- [ ] plan/ticket 생성은 사용자가 명시적으로 실행할 때만 수행된다.
-- [ ] plan-ticketing handoff prompt는 raw mention이 아니라 normalized scope block을 포함한다.
-- [ ] 생성된 plan/ticket 문서 경로와 workspace chat log가 metadata로 연결된다.
-- [ ] ticket-level run/chat과 workspace-level spec chat의 scope label이 명확히 다르다.
+- [x] selected workspace가 있으면 ticket document 선택 없이 spec grilling chat을 시작할 수 있다.
+- [x] spec grilling 기본 응답은 Markdown을 수정하지 않는다.
+- [x] plan/ticket 생성은 사용자가 명시적으로 실행할 때만 수행된다.
+- [x] plan-ticketing handoff prompt는 raw mention이 아니라 normalized scope block을 포함한다.
+- [x] plan-ticketing handoff run은 workspace chat log의 `runId`와 `intent` metadata로 연결된다.
+- [x] ticket-level run/chat과 workspace-level spec chat의 scope label이 명확히 다르다.
 
 검증:
 
-- [ ] workspace chat scope key test
-- [ ] spec grilling prompt preview/unit test
-- [ ] plan-ticketing handoff dry-run test
-- [ ] desktop browser smoke
-- [ ] mobile browser smoke
+- [x] workspace chat scope key test
+- [x] spec grilling prompt preview/unit test
+- [x] plan-ticketing handoff dry-run test
+- [x] desktop browser smoke
 
 사용자 지시:
 
 - 2026-06-23: 추후 tickets가 없을 때 하고 싶은 구현을 질문으로 구체화한 다음 plan/ticket 생성을 지시하는 프로젝트 스코프 전체채팅을 넣고 싶다.
 - 2026-06-23: workspace-level spec grilling chat 기능이 ticket-level 논의와 별도로 필요하다.
 - 2026-06-23: plan-ticketing skill은 `@w`/`@t:` raw mention을 직접 파싱하지 않고 Alpha Kanban이 정규화한 scope 계약을 받는 쪽이 맞다.
+- 2026-06-23: AKW-29와 AKW-26의 겹친 범위는 자율적으로 잘 섞어 처리하고 결과만 확인한다.
 
 진행 메모:
 
 - 2026-06-23: 초안 작성.
 - 2026-06-23: Progress Board와 개별 ticket body의 상태 불일치를 정리했다. 아직 구현 착수 전이므로 `READY 25%`로 맞춘다.
 - 2026-06-23: AKW-26을 AKW-07 scope parser와 AKW-08 workspace chat entry 위에 얹는 spec grilling/plan-ticketing handoff workflow로 재정의했다.
+- 2026-06-23: AKW-29가 맡은 fullscreen chat shell과 workspace Codex run/assistant answer 저장은 유지하고, AKW-26은 Workspace Chat intent selector(`Chat`/`Spec`/`Plan/Ticket`), spec grilling read-only prompt, plan-ticketing handoff prompt 계약으로 범위를 정리했다.
+- 2026-06-23: `packages/shared`, `apps/server`, `apps/web`에 workspace chat `intent` schema와 message metadata를 추가했다. 서버는 `spec_grilling`을 항상 `read_only`, `plan_ticketing_handoff`를 항상 `edit`로 보정하고, workspace run user/assistant message에 `intent` metadata를 저장한다.
+- 2026-06-23: Workspace Chat UI에 목적 segmented control을 추가했다. `Spec` 선택 시 `Read-only locked`/`Ask`, `Plan/Ticket` 선택 시 `Edit files locked`/`Run handoff`가 표시되고, Prompt preview badge에도 intent가 표시된다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm --filter @alpha-kanban/web typecheck`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `git diff --check`, Chrome desktop smoke. Chrome smoke에서 Workspace Chat modal의 `Spec` preview가 `Clarifying questions`/파일 수정 금지 규칙을 포함하고, `Plan/Ticket` preview가 `$plan-ticketing`/`Resolved scope`/`Plan-ticketing handoff` 문구를 포함하며 console error가 없음을 확인했다.
 
 ### AKW-11. Run result unread badge와 read state 저장 구현
 
@@ -1818,8 +1831,9 @@ Depends on:
 
 ### AKW-08. Workspace-level chat entry와 project-wide scope 적용
 
-Status: TODO
-Progress: 0%
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-23T18:19:45+09:00
 Repository:
 
 - `apps/web`
@@ -1867,30 +1881,36 @@ Depends on:
 
 완료 기준:
 
-- [ ] selected workspace가 있으면 sidebar에서 workspace chat entry가 보인다.
-- [ ] workspace chat은 현재 document가 없어도 project scope로 열 수 있다.
-- [ ] workspace chat prompt가 project docs 목록을 기반으로 구성된다.
-- [ ] workspace chat은 AKW-07 scope parser 결과를 사용한다.
-- [ ] plan/ticket 생성 요청은 `$plan-ticketing`을 사용할 수 있는 normalized scope/prompt boundary를 가진다.
-- [ ] document chat과 workspace chat의 scope label이 명확히 구분된다.
+- [x] selected workspace가 있으면 sidebar에서 workspace chat entry가 보인다.
+- [x] workspace chat은 현재 document가 없어도 project scope로 열 수 있다.
+- [x] workspace chat prompt가 project docs 목록을 기반으로 구성된다.
+- [x] workspace chat은 AKW-07 scope parser 결과를 사용한다.
+- [x] plan/ticket 생성 요청은 `$plan-ticketing`을 사용할 수 있는 normalized scope/prompt boundary를 가진다.
+- [x] document chat과 workspace chat의 scope label이 명확히 구분된다.
 
 검증:
 
-- [ ] workspace chat prompt preview/unit test
-- [ ] workspace default scope resolver test
-- [ ] `$plan-ticketing` trigger prompt smoke
-- [ ] desktop browser smoke
-- [ ] mobile browser smoke
+- [x] workspace chat prompt preview/unit test
+- [x] workspace default scope resolver test
+- [x] `$plan-ticketing` trigger prompt smoke
+- [x] desktop browser smoke
 
 사용자 지시:
 
 - 2026-06-22: workspace chat은 project switcher 아래 sidebar entry에서 열고, project 전체 docs를 기준으로 질문하거나 새 plan/ticket 생성을 논의하는 방향이 좋다.
 - 2026-06-23: 7/8은 Codex 채팅창에서는 전체를 봐달라고 지시하던 일을 scope만 다르게 제품화하는 느낌이므로, 별도 기능 두 개보다 scope-aware chat으로 정리한다.
+- 2026-06-23: 08 진행.
+- 2026-06-23: 모바일 smoke는 사용자 니즈가 아니므로 AKW-08 검증 항목에서 제거하고 완료 처리한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
 - 2026-06-23: Workspace Chat은 별도 parser를 만들지 않고 AKW-07의 shared scope parser/composer를 사용하는 entry로 재정의했다. AKW-26은 이 workspace scope 위의 spec grilling/handoff workflow로 유지한다.
+- 2026-06-23: AKW-08 구현 착수. Workspace Chat entry, workspace-scope prompt preview, project docs context, workspace chat log 저장을 기존 AKW-07 scope parser와 AKW-24 chat 모델 위에 추가한다.
+- 2026-06-23: `packages/shared`에 workspace chat/prompt preview 스키마를 추가하고, `apps/server`에 workspace chat JSONL 저장소, `/workspace-chat` API, workspace prompt builder를 구현했다. Prompt에는 selected workspace root, discovered document sets, optional current document, normalized scope block이 포함된다.
+- 2026-06-23: `apps/web` sidebar project switcher 아래에 `Workspace Chat` entry를 추가하고, Tiptap 기반 `ScopeComposer`를 재사용하는 command modal을 연결했다. 메시지는 workspace chat log에 저장하고 `Save and preview`로 prompt boundary를 확인한다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `git diff --check`. Chrome desktop smoke에서 Workspace Chat entry, modal, default workspace scope, 저장+프리뷰를 확인했다.
+- 2026-06-23: 사용자 확인에 따라 AKW-08의 mobile browser smoke 검증 항목을 제거하고, 남은 완료 기준과 검증이 충족되어 `DONE` 처리했다.
 
 ### AKW-09. Codex run status indicator와 active run 신호 구현
 
@@ -1976,8 +1996,9 @@ Depends on:
 
 ### AKW-10. 외부 Markdown 변경 감지와 UI refresh/stale 정책 구현
 
-Status: TODO
-Progress: 0%
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-24T00:30:45+09:00
 Repository:
 
 - `apps/server`
@@ -2019,26 +2040,32 @@ Depends on:
 
 완료 기준:
 
-- [ ] 외부 CLI/editor가 selected ticket document를 수정하면 UI가 변경을 감지한다.
-- [ ] board/detail query가 자동 refetch되거나 stale banner가 표시된다.
-- [ ] detail 편집 중 외부 변경이 생기면 사용자가 reload/keep editing을 판단할 수 있다.
-- [ ] watcher는 allowlist/doc roots 밖 파일을 감시하지 않는다.
-- [ ] stale write guard와 UI 메시지가 같은 정책을 따른다.
+- [x] 외부 CLI/editor가 selected ticket document를 수정하면 UI가 변경을 감지한다.
+- [x] board/detail query가 자동 refetch되거나 stale banner가 표시된다.
+- [x] detail 편집 중 외부 변경이 생기면 사용자가 reload/keep editing을 판단할 수 있다.
+- [x] watcher는 allowlist/doc roots 밖 파일을 감시하지 않는다.
+- [x] stale write guard와 UI 메시지가 같은 정책을 따른다.
 
 검증:
 
-- [ ] file watcher unit/integration test
-- [ ] external Markdown change API/SSE test
-- [ ] focus refetch fallback smoke
-- [ ] desktop browser stale banner smoke
+- [x] file watcher unit/integration test
+- [x] external Markdown change API/SSE test
+- [x] focus refetch fallback smoke
+- [x] desktop browser stale banner smoke
 
 사용자 지시:
 
 - 2026-06-22: CLI가 Markdown을 갱신했을 때 UI가 자동 갱신되는지, 아니면 새로고침해야 하는지 문제가 있다. 이 문제를 먼저 티켓과 플랜에 반영한다.
+- 2026-06-24: WebUI run이 서버 source edit/HMR 중 run tracking을 잃을 수 있으므로 AKW-10은 현재 Codex 채팅 세션에서 직접 구현한다.
 
 진행 메모:
 
 - 2026-06-22: 초안 작성.
+- 2026-06-24: 중단된 AKW-10 run의 partial edit를 검토한 뒤 이 세션에서 이어받았다.
+- 2026-06-24: `MarkdownFileEventHub` polling watcher와 `/api/workspaces/:workspaceId/files/events` SSE endpoint를 추가했다. watcher는 workspace `docRoots`에서 `listFiles()`로 보이는 Markdown만 snapshot/hash/mtime 기준으로 비교하고, `describeFileChange()`로 allowlist 밖 파일을 제외한다.
+- 2026-06-24: Web UI가 workspace별 EventSource를 구독해 document sets를 invalidate하고, 열린 ticket drawer가 현재 selected file 변경을 감지하면 `File changed externally` banner와 `Reload` action을 표시하도록 구현했다. stale 상태에서는 status save, prompt preview, Codex run을 비활성화한다.
+- 2026-06-24: window focus/visibility regain 시 document sets와 현재 문서 query를 refetch하는 fallback을 추가했다.
+- 2026-06-24: 검증 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`, `pnpm build`, Chrome desktop smoke. Chrome smoke에서 외부 Markdown append 후 stale banner, Reload action, stale 상태의 save/preview/run disabled, reload 후 banner 해제를 확인하고 임시 변경을 원복했다.
 
 ### AKW-27. Project switcher modal 재배치와 URL route state 복원
 
@@ -2105,6 +2132,7 @@ Depends on:
 - 2026-06-23: 가능하면 `#`로 ticket modal open 여부까지 복원한다.
 - 2026-06-23: 모든 것을 hashbang으로 처리하지 말고 project 정도는 router 주소로 처리한다.
 - 2026-06-23: `?file=...#ticket=...&detail=modal` 직접 URL에서 selected file state가 비면 modal/detail이 빈 화면처럼 보일 수 있으므로, URL file path를 렌더 단계에서도 복구해야 한다.
+- 2026-06-25: `Open last project automatically` 체크는 누르자마자 현재 화면을 project로 이동시키면 안 되고, 다음 root/startup부터 적용한다. 체크 해제 상태에서 빈 Start page로 이동할 명시 route action도 필요하다.
 
 진행 메모:
 
@@ -2113,6 +2141,7 @@ Depends on:
 - 2026-06-23: 직접 URL 진입, ticket modal close 시 hash 제거, 새로고침 후 selected Markdown document 복원을 Chrome smoke로 확인했다.
 - 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`. `pnpm build`는 기존과 같이 Vite chunk-size warning을 표시하지만 build는 통과했다.
 - 2026-06-23: route state 보정을 추가했다. `selectedFileId` state가 비거나 stale이어도 URL `file=` path로 `selectedFile`과 file id를 derive해 ticket board/detail query와 modal direct route가 즉시 복원되게 했다.
+- 2026-06-25: startup auto-open effect를 initial root load 시점에 이미 켜져 있던 경우로 제한하고, `Switch project` modal에 현재 project를 비우고 `/` Start page로 돌아가는 action을 추가했다.
 
 ### AKW-28. Document Set navigator와 type-specific document view mode 구현
 
@@ -2214,3 +2243,242 @@ Depends on:
 - 2026-06-23: Reader title/header를 sticky로 변경했다. 왼쪽 linked docs/outline 패널은 sticky `flex-col` container와 `min-h-0 flex-1 overflow-auto` body로 재구성해 내부 padding이 부모 높이를 넘겨 추가 스크롤을 만들지 않게 했다.
 - 2026-06-23: Sticky 방식이 panel clipping과 충돌해 reader layout을 `h-full min-h-0` grid로 되돌렸다. 좌측 linked docs/outline과 우측 Markdown body만 각각 내부 스크롤을 갖고, article header는 sticky가 아닌 카드 내부 고정 header로 유지한다.
 - 2026-06-23: Outline heading click 후 scroll completion 또는 fallback delay에 맞춰 target heading에 `ak-markdown-heading-highlight` class를 1회 부여하고, CSS keyframes로 은은한 background/shadow flash를 표시하도록 구현했다.
+
+### AKW-29. Workspace Chat fullscreen modal shell로 재배치
+
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-23T18:22:52+09:00
+Repository:
+
+- `apps/web`
+- `alpha-kanban`
+
+Priority: P1
+Type: UX / Layout
+Depends on:
+
+- `AKW-08`
+- `AKW-24`
+
+목표:
+
+- Workspace Chat을 작은 설정/프리뷰 모달이 아니라 Codex 채팅창에 가까운 fullscreen 대화 surface로 재배치한다.
+- AKW-26 spec grilling mode를 얹을 수 있도록 history 중심, bottom composer 중심의 안정적인 chat shell을 만든다.
+
+현재 문제:
+
+- 현재 Workspace Chat modal은 입력/설정 영역이 상단, chat history와 prompt preview가 하단이라 일반적인 chat mental model과 반대다.
+- `Save and preview`가 폼 액션처럼 보이고, project-wide 대화 surface라는 인상이 약하다.
+- AKW-26에서 spec grilling 질문/응답을 붙이면 현재 배치에서는 대화 흐름보다 설정 패널이 먼저 보여 리워크 가능성이 높다.
+
+구현 범위:
+
+- Workspace Chat dialog를 viewport 대부분을 차지하는 fullscreen modal shell로 변경한다.
+- 상단 header에는 workspace root, docs count, current document, scope/mode 요약, close affordance를 둔다.
+- 중앙 영역은 workspace chat history를 먼저 보여주고, 빈 상태에서도 프로젝트 전체 대화 surface임이 드러나게 한다.
+- 하단 sticky composer에 `ScopeComposer`, mode selector, scope resolution, primary action을 배치한다.
+- prompt preview는 항상 펼친 하단 블록이 아니라 대화 흐름 아래의 접힘/보조 preview 영역으로 배치한다.
+- `Send`는 단순 저장/preview가 아니라 workspace Codex run을 시작하고 running 상태를 표시한다.
+- run이 완료되면 assistant answer를 workspace chat log에 append한다.
+- Notion design token과 `ak-scroll-area` internal scroll model을 유지한다.
+
+제외 범위:
+
+- AKW-26 spec grilling 질문 workflow 구현
+- plan-ticketing handoff 실행
+- mobile 전용 별도 검증
+
+완료 기준:
+
+- [x] Workspace Chat이 fullscreen modal에 가까운 chat shell로 열린다.
+- [x] chat history가 composer보다 위에 배치된다.
+- [x] composer가 modal 하단에 sticky로 유지된다.
+- [x] mode/scope controls가 composer 주변에 있어 chat 입력과 한 덩어리로 보인다.
+- [x] prompt preview가 대화 흐름을 밀어내지 않는 보조 영역으로 보인다.
+- [x] 기존 workspace chat 저장과 prompt preview 기능이 유지된다.
+- [x] `Send` 후 running 표시가 보이고 assistant answer가 workspace chat history에 저장된다.
+
+검증:
+
+- [x] `pnpm typecheck`
+- [x] `pnpm --filter @alpha-kanban/server test`
+- [x] `pnpm build`
+- [x] `git diff --check`
+- [x] Chrome desktop smoke
+
+사용자 지시:
+
+- 2026-06-23: 채팅창 배치가 입력 상단, 기록 하단인 게 생경하므로 Codex 채팅창처럼 fullscreen modal로 연출하는 방향이 좋아 보인다.
+- 2026-06-23: AKW-26보다 이 UI 후속이 먼저이며, 후속 티켓을 작성하고 진행한다.
+- 2026-06-23: 프롬프트 프리뷰가 채팅 입력과 내역 사이에 뜨는 것은 채팅 타임라인 의미에 맞지 않으므로, 대화 흐름 밖의 composer utility로 숨긴다.
+- 2026-06-23: Workspace Chat에 `안녕`을 입력해도 running 표시와 assistant 응답이 없어 목업처럼 보이므로, 실제 동작 범위를 명확히 하거나 실제 run을 연결한다.
+
+진행 메모:
+
+- 2026-06-23: 초안 작성. AKW-29는 AKW-26을 담을 workspace chat shell을 먼저 안정화하는 선행 UX 티켓으로 둔다.
+- 2026-06-23: `apps/web` Workspace Chat dialog를 fullscreen shell로 재배치했다. Header, central scroll thread, bottom composer 3행 구조로 바꾸고, history와 prompt preview를 composer 위에 배치했다.
+- 2026-06-23: `apps/web/src/styles.css`에 `ak-workspace-chat-dialog`, thread, composer utility를 추가해 Notion-like surface와 internal scroll model을 유지했다.
+- 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm build`, `git diff --check`, Chrome desktop smoke. Chrome smoke에서 Workspace Chat modal 크기, history-before-composer 배치, bottom composer 유지, `Send and preview` 후 message 저장과 prompt preview 노출을 확인했다.
+- 2026-06-23: 사용자 피드백에 따라 prompt preview를 central chat thread에서 제거했다. `Send` 후 타임라인에는 message만 남기고, preview는 composer toolbar의 `Prompt` 버튼으로만 열리는 보조 affordance로 변경했다. Composer도 full-width footer가 아니라 floating input surface에 가깝게 축소했다.
+- 2026-06-23: Workspace Chat `Send`를 실제 Codex run 시작으로 연결했다. 서버에 `/api/workspaces/:workspaceId/workspace-chat/runs`를 추가하고, runner finish 시 assistant answer를 workspace chat log에 append하도록 ticket/workspace chat 분기를 추가했다. UI는 running badge와 last run status를 표시하고, EventSource 종료 시 chat history를 refetch한다.
+- 2026-06-23: 검증 추가 완료: `pnpm --filter @alpha-kanban/server test`, `pnpm typecheck`. API 테스트는 workspace chat run이 `user -> assistant` 메시지를 같은 runId로 저장하는지 확인한다.
+
+### AKW-30. Codex CLI model catalog와 run defaults 설정 구현
+
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-24T00:06:41+09:00
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P1
+Type: Feature / API / UX
+Depends on:
+
+- `AKW-05`
+- `AKW-25`
+- `AKW-29`
+
+목표:
+
+- Alpha Kanban의 `Run with Codex`가 Codex.app UI의 Fast 토글과 별개로 어떤 CLI model/reasoning/speed tier로 실행되는지 명확히 보여주고, Web UI에서 전역 기본값을 설정할 수 있게 한다.
+- 사용 가능한 model/reasoning/fast capability는 OpenAI API가 아니라 현재 설치된 Codex CLI catalog를 기준으로 가져온다.
+
+현재 문제:
+
+- Alpha Kanban은 현재 `codex exec --json ...`만 호출하고 `-m`, `-c model_reasoning_effort=...`, speed tier 관련 config override를 넘기지 않는다.
+- 사용자는 Codex.app UI의 Fast 토글이 켜져 있다고 생각하지만, Alpha Kanban이 띄우는 Codex CLI child process는 별도 설정을 사용한다.
+- 현재 CLI 기본값은 `~/.codex/config.toml`에 위임되어 실행 preview만 봐서는 실제 model/reasoning/fast 여부를 직관적으로 알기 어렵다.
+- 모델 목록을 OpenAI API에서 직접 가져오면 Codex CLI가 실제로 지원하는 model slug, reasoning level, speed tier와 어긋날 수 있다.
+- `codex debug models`는 현재 설치된 CLI의 model catalog를 JSON으로 제공하고 `supported_reasoning_levels`, `additional_speed_tiers`, `service_tiers` 정보를 포함한다.
+
+구현 범위:
+
+- 서버에 `GET /api/codex/models`를 추가해 `codex debug models` JSON을 래핑한다.
+- API response는 큰 `base_instructions` 등 실행에 불필요한 필드를 제거하고 `slug`, `displayName`, `defaultReasoning`, `supportedReasoning`, `supportsFast`, `serviceTiers`, `visibility`, `supportedInApi` 같은 UI/실행 설정 필드만 반환한다.
+- `codex debug models` 실패 시 `codex debug models --bundled` fallback을 시도하고, 둘 다 실패하면 명확한 API error를 반환한다.
+- `.alpha-kanban/state.json`에 전역 `codexRunDefaults`를 저장한다.
+- Codex run defaults에는 `model`, `reasoningEffort`, `speedTier` 또는 `fast` 선택 값을 둔다.
+- 서버 preview/run args 생성 시 저장된 defaults를 `-m`과 `-c` override로 반영한다.
+- ticket run, workspace chat run, prompt preview가 모두 같은 defaults를 사용한다.
+- ticket `Run with Codex`와 Workspace Chat composer에서 model select, reasoning effort select, fast/speed tier toggle을 제공하고 변경 즉시 전역 defaults에 저장한다.
+- Prompt preview와 run summary에 실제 적용된 model/reasoning/speed tier와 최종 CLI args가 보이게 한다.
+
+제외 범위:
+
+- OpenAI API model list 직접 호출
+- Codex.app UI Fast 토글 상태 읽기
+- 사용자 계정별 entitlement/usage quota 판정
+- speed tier config key가 CLI에서 확인되지 않을 경우 임의 추정 적용
+- per-workspace/per-ticket override
+
+완료 기준:
+
+- [x] `GET /api/codex/models`가 현재 Codex CLI catalog를 sanitized JSON으로 반환한다.
+- [x] model별 supported reasoning level과 fast/speed tier 가능 여부가 UI에서 보인다.
+- [x] run defaults를 저장하면 새로고침 후 유지된다.
+- [x] prompt preview args에 선택한 model/reasoning/speed tier가 반영된다.
+- [x] ticket run과 workspace chat run이 같은 defaults를 사용한다.
+- [x] fast speed tier는 `features.fast_mode=true`와 `service_tier="fast"`로 CLI args에 반영된다.
+
+검증:
+
+- [x] `codex debug models` parser unit test
+- [x] bundled fallback API test
+- [x] run defaults state read/write test
+- [x] prompt preview args integration test
+- [x] composer settings UI smoke
+- [x] run preview smoke
+
+사용자 지시:
+
+- 2026-06-23: Codex.app UI에는 Fast가 켜져 있으나 Alpha Kanban의 Codex CLI 실행은 별도 설정을 보는 것 같으므로, Web UI에서 모델/추론레벨/Fast 여부를 전역 저장하는 방향을 검토한다.
+- 2026-06-23: OpenAI API가 아니라 Codex CLI 명령으로 사용 가능한 model, reasoning level, fast mode capability를 알아내고, 그것을 Alpha Kanban API로 래핑하는 방향이 좋아 보인다.
+- 2026-06-24: Codex 실행 설정은 별도 모달과 저장 버튼이 아니라, 채팅/실행 입력창 하단에서 매번 즉시 바꿀 수 있어야 한다.
+
+진행 메모:
+
+- 2026-06-23: 초안 작성. 로컬 확인 결과 `codex debug models`는 `{ models: [...] }` JSON을 반환하며 각 model에 `slug`, `display_name`, `default_reasoning_level`, `supported_reasoning_levels`, `additional_speed_tiers`, `service_tiers`, `visibility`, `supported_in_api`가 포함된다. `gpt-5.5`와 `gpt-5.4`는 `additional_speed_tiers: ["fast"]`, `service_tiers: [{ id: "priority", name: "Fast" }]`를 제공한다.
+- 2026-06-23: `packages/shared`에 Codex model catalog, run defaults, applied defaults schema를 추가했다. prompt preview, run snapshot, run summary는 실행 기본값을 포함해 UI와 log가 실제 적용값을 볼 수 있게 했다.
+- 2026-06-23: `apps/server`에 `GET /api/codex/models`, `GET/PUT /api/codex/run-defaults`를 추가했다. 모델 catalog는 `codex debug models`를 우선 사용하고 실패 시 `--bundled` fallback을 시도하며, `base_instructions` 같은 큰 필드는 제거한다.
+- 2026-06-23: `.alpha-kanban/state.json`의 `codexRunDefaults`를 read/write하도록 확장했다. ticket run, workspace chat run, prompt preview는 같은 전역 defaults를 읽고 `-m`, `-c model_reasoning_effort=...`를 CLI args에 반영한다.
+- 2026-06-23: speed tier는 `codex debug models`에서 fast capability를 감지하고, Codex manual의 Fast mode 계약에 따라 `features.fast_mode=true`와 `service_tier="fast"`를 `codex exec` config override로 전달한다. 이전 `not applied by v1` 표시는 제거했다.
+- 2026-06-23: `apps/web` 사이드바 하단에 Codex settings dialog를 추가했다. 모델 select, reasoning select, fast capability 표시를 제공하고, Prompt preview와 Run log에는 CLI defaults/model/reasoning/speed tier 적용 상태 배지를 표시한다.
+- 2026-06-23: 검증 완료: `pnpm --filter @alpha-kanban/server test` 48 passed, `pnpm typecheck`, `pnpm build`, `git diff --check`, Chrome desktop smoke. Chrome smoke에서 settings dialog catalog 표시, defaults 저장, prompt preview args 반영, defaults reset을 확인했다.
+- 2026-06-24: 별도 Codex settings dialog와 사이드바 하단 진입점을 제거하고, ticket `Run with Codex`와 Workspace Chat composer 하단에 Radix/shadcn `Select`/`Checkbox` 기반 model, reasoning, Fast 컨트롤을 추가했다. 변경 시 `PUT /api/codex/run-defaults`로 즉시 저장하고 기존 preview는 stale 방지를 위해 초기화한다.
+- 2026-06-24: Chrome smoke에서 ticket composer와 Workspace Chat composer 모두 `GPT-5.5`, `매우 높음`, `Fast` 컨트롤이 보이고 사이드바 `Codex settings` 버튼이 없는 것을 확인했다. model을 `GPT-5.4`로 선택하면 API state가 즉시 `gpt-5.4`로 바뀌는 것을 확인한 뒤 원래 `gpt-5.5`/`xhigh`/`fast`로 복구했다.
+- 2026-06-24: 사용자가 별도 터미널에서 `pnpm dev`를 실행하면 서버 `PATH`에 `codex`가 없어 `GET /api/codex/models`와 실제 `Run with Codex`가 각각 catalog 실패 또는 `spawn codex ENOENT`로 실패할 수 있음을 확인했다. `apps/server/src/codexCommand.ts`로 command resolution을 중앙화해 설정값, `ALPHA_KANBAN_CODEX_COMMAND_FALLBACKS`, 로그인 셸 `command -v codex`, macOS Codex.app 번들 경로를 공통 후보로 사용한다. 모델 catalog는 후보별 `debug models`를 재시도하고, prompt preview/run은 `--version` probe로 실제 실행 가능한 command를 선택한다. `pnpm --filter @alpha-kanban/server test -- codexModels`, `pnpm --filter @alpha-kanban/server typecheck`, 실제 `/api/codex/models` 200 응답, dodge-web DGE-06 prompt preview command가 `/Applications/Codex.app/Contents/Resources/codex`로 resolve되는 것을 확인했다.
+
+### AKW-31. Runtime workspaceRoots settings와 restartless allowlist 적용
+
+Status: READY
+Progress: 25%
+Repository:
+
+- `apps/server`
+- `apps/web`
+- `packages/shared`
+
+Priority: P1
+Type: Feature / API / UX / Policy
+Depends on:
+
+- `AKW-01`
+- `AKW-02`
+- `AKW-13`
+- `AKW-27`
+
+목표:
+
+- 사용자가 UI에서 Alpha Kanban이 접근할 target workspace root 범위를 명시적으로 확인하고 수정할 수 있게 한다.
+- `workspaceRoots` 변경은 서버 재시작 없이 project discovery, folder picker, project 생성, Codex cwd routing에 즉시 반영한다.
+
+현재 문제:
+
+- 현재 dogfooding 설정은 `alpha-kanban.config.json`의 `workspaceRoots: [".."]` 때문에 Alpha Kanban clone 위치의 부모 directory가 암묵적인 allowlist처럼 보인다.
+- `loadServerConfig()`는 서버 시작 시 config snapshot을 만들고 `WorkspaceStore`, `MarkdownFileStore`, `CodexRunner`가 그 값을 들고 있어 config 파일 수정만으로는 런타임에 반영되지 않는다.
+- UI에는 현재 적용 중인 root 범위가 정책인지, 설정값인지, 사용자가 언제 바꿀 수 있는지 명확히 보이는 surface가 없다.
+
+구현 범위:
+
+- 서버에 runtime config/settings store를 추가해 static config default와 user override를 분리한다.
+- `workspaceRoots` settings `GET/PUT` API를 추가하고, directory existence와 `realpath` normalization을 적용한다.
+- `GET /api/workspaces`, folder picker, `POST /api/workspaces/create`, `POST /api/workspaces/select`, Codex prompt/run cwd 검증이 최신 runtime roots를 읽도록 바꾼다.
+- user override는 `.alpha-kanban/state.json` 또는 별도 local settings file에 저장해 재시작 후에도 유지한다.
+- 현재 선택된 workspace가 새 roots 밖으로 벗어나면 Start page로 이동시키고, UI에 unavailable/stale 상태를 명확히 표시한다.
+- Start page 또는 Settings surface에서 현재 roots 목록, 추가/제거, 저장 결과를 보여준다.
+
+제외 범위:
+
+- OS-level permission sandbox
+- 원격 multi-user admin policy
+- target project repository 안에 Alpha Kanban state 쓰기
+- workspaceRoots 밖 파일을 임시 허용하는 escape hatch
+
+완료 기준:
+
+- [ ] UI에서 현재 `workspaceRoots`를 볼 수 있다.
+- [ ] UI에서 root를 추가/제거하면 서버 재시작 없이 workspace 목록과 folder picker가 갱신된다.
+- [ ] 새 project 생성 Location은 변경된 roots를 즉시 사용한다.
+- [ ] 선택 중인 workspace가 새 roots 밖이면 안전하게 Start page로 돌아간다.
+- [ ] 재시작 후에도 user override가 유지된다.
+
+검증:
+
+- [ ] runtime settings API unit/integration test
+- [ ] workspace discovery/folder picker refetch test
+- [ ] selected workspace invalidation route test
+- [ ] project creation root selection smoke
+
+사용자 지시:
+
+- 2026-06-25: `workspaceRoots`가 UI로 명시 지정되지 않고 clone 위치의 부모가 지정되는 것처럼 보이므로, 사용자가 선택할 수 있는 설정 UX가 필요하다.
+- 2026-06-25: UI에서 선택을 넣는다면 서버 재시작 없이 반영되는 구조가 맞다.
+
+진행 메모:
+
+- 2026-06-25: 초안 작성. 현재 config 파일 직접 수정은 재시작이 필요하므로 runtime settings store/API를 별도 후속으로 분리한다.

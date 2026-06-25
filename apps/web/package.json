@@ -12,8 +12,11 @@
   },
   "dependencies": {
     "@alpha-kanban/shared": "workspace:*",
+    "@fontsource-variable/raleway": "^5.2.8",
+    "@radix-ui/react-checkbox": "^1.3.5",
     "@radix-ui/react-dialog": "^1.1.17",
     "@radix-ui/react-popover": "^1.1.17",
+    "@radix-ui/react-select": "^2.3.1",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.16",
     "@tiptap/core": "^3.27.1",

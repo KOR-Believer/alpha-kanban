@@ -3,11 +3,16 @@ import { ZodError } from "zod";
 
 import {
   appendTicketLogRequestSchema,
+  appendWorkspaceChatMessageRequestSchema,
+  createWorkspaceRequestSchema,
   createHealthResponse,
   codexPromptPreviewRequestSchema,
+  codexWorkspacePromptPreviewRequestSchema,
   createCodexRunRequestSchema,
+  createWorkspaceCodexRunRequestSchema,
   patchTicketRequestSchema,
   selectWorkspaceRequestSchema,
+  updateCodexRunDefaultsRequestSchema,
   workspaceDirectoriesRequestSchema,
 } from "@alpha-kanban/shared";
 
@@ -19,6 +24,7 @@ import {
   FileStoreError,
   MarkdownFileStore,
 } from "./files";
+import { MarkdownFileEventHub } from "./markdownFileEvents";
 import { TicketMarkdownWriteError } from "./markdown/ticketMarkdown";
 import { WORKSPACE_ERROR, WorkspaceError, WorkspaceService } from "./workspaces";
 
@@ -36,6 +42,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
   const workspaceService = new WorkspaceService(config);
   const fileStore = new MarkdownFileStore(config);
   const codexRunner = new CodexRunner(config, fileStore);
+  const markdownFileEvents = new MarkdownFileEventHub();
   const scopedCodexRunners = new Map<string, CodexRunner>([
     [fileStore.workspaceId, codexRunner],
   ]);
@@ -46,6 +53,31 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
 
   app.get("/api/health", (_request, response) => {
     response.json(createHealthResponse("server"));
+  });
+
+  app.get("/api/codex/models", async (_request, response, next) => {
+    try {
+      response.json(await codexRunner.listModels());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/codex/run-defaults", async (_request, response, next) => {
+    try {
+      response.json(await codexRunner.getRunDefaults());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/codex/run-defaults", async (request, response, next) => {
+    try {
+      const body = updateCodexRunDefaultsRequestSchema.parse(request.body);
+      response.json(await codexRunner.setRunDefaults(body));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/api/workspaces", async (_request, response, next) => {
@@ -74,6 +106,15 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     }
   });
 
+  app.post("/api/workspaces/create", async (request, response, next) => {
+    try {
+      const body = createWorkspaceRequestSchema.parse(request.body);
+      response.status(201).json(await workspaceService.createWorkspace(body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/api/workspaces/:workspaceId/files", async (request, response, next) => {
     try {
       const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
@@ -87,6 +128,27 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     try {
       const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
       response.json({ sets: await scopedFileStore.listDocumentSets() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/workspaces/:workspaceId/files/events", async (request, response, next) => {
+    try {
+      const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
+      const unsubscribe = await markdownFileEvents.subscribe(scopedFileStore, (event) => {
+        response.write("event: markdown-file\n");
+        response.write(`data: ${JSON.stringify(event)}\n\n`);
+      });
+
+      response.writeHead(200, {
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "Content-Type": "text/event-stream",
+      });
+      response.write(": connected\n\n");
+
+      request.on("close", unsubscribe);
     } catch (error) {
       next(error);
     }
@@ -199,6 +261,76 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
             request.params.ticketId ?? "",
           ),
         );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.delete(
+    "/api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId/chat/:messageId",
+    async (request, response, next) => {
+      try {
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        response.json(
+          await runner.deleteTicketChatMessage(
+            request.params.fileId ?? "",
+            request.params.ticketId ?? "",
+            request.params.messageId ?? "",
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.get("/api/workspaces/:workspaceId/workspace-chat", async (request, response, next) => {
+    try {
+      const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+      response.json(await runner.getWorkspaceChat());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post(
+    "/api/workspaces/:workspaceId/workspace-chat/messages",
+    async (request, response, next) => {
+      try {
+        const body = appendWorkspaceChatMessageRequestSchema.parse(request.body);
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        response.json(
+          await runner.appendWorkspaceUserMessage({
+            instructionDraft: body.content,
+          }),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/workspaces/:workspaceId/workspace-chat/prompt-preview",
+    async (request, response, next) => {
+      try {
+        const body = codexWorkspacePromptPreviewRequestSchema.parse(request.body);
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        response.json(await runner.previewWorkspacePrompt(body));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/workspaces/:workspaceId/workspace-chat/runs",
+    async (request, response, next) => {
+      try {
+        const body = createWorkspaceCodexRunRequestSchema.parse(request.body);
+        const runner = await createScopedCodexRunner(request.params.workspaceId ?? "");
+        response.status(202).json({ run: await runner.startWorkspaceRun(body) });
       } catch (error) {
         next(error);
       }
@@ -353,6 +485,23 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     }
   });
 
+  app.delete(
+    "/api/files/:fileId/tickets/:ticketId/chat/:messageId",
+    async (request, response, next) => {
+      try {
+        response.json(
+          await codexRunner.deleteTicketChatMessage(
+            request.params.fileId ?? "",
+            request.params.ticketId ?? "",
+            request.params.messageId ?? "",
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   app.post("/api/codex/prompt-preview", async (request, response, next) => {
     try {
       const body = codexPromptPreviewRequestSchema.parse(request.body);
@@ -381,11 +530,18 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     }
   });
 
-  app.get("/api/codex/runs/:runId", (request, response, next) => {
+  app.get("/api/codex/runs/:runId", async (request, response, next) => {
     try {
       const runId = request.params.runId ?? "";
-      const runner = findCodexRunnerByRunId(runId);
-      response.json({ run: runner.getRun(runId) });
+      try {
+        const runner = findCodexRunnerByRunId(runId);
+        response.json({ run: runner.getRun(runId) });
+      } catch (error) {
+        if (!(error instanceof CodexRunError) || error.code !== CODEX_RUN_ERROR.RUN_NOT_FOUND) {
+          throw error;
+        }
+        response.json({ run: await codexRunner.getArchivedRun(runId) });
+      }
     } catch (error) {
       next(error);
     }
@@ -537,6 +693,8 @@ function codexRunErrorStatus(code: string): number {
   switch (code) {
     case CODEX_RUN_ERROR.DOCUMENT_RUN_ACTIVE:
       return 409;
+    case CODEX_RUN_ERROR.CHAT_MESSAGE_NOT_FOUND:
+      return 404;
     case CODEX_RUN_ERROR.SCOPE_NOT_ALLOWED:
       return 409;
     case CODEX_RUN_ERROR.RUN_NOT_FOUND:
@@ -565,8 +723,12 @@ function workspaceErrorStatus(code: string): number {
   switch (code) {
     case WORKSPACE_ERROR.WORKSPACE_NOT_FOUND:
       return 404;
+    case WORKSPACE_ERROR.WORKSPACE_ALREADY_EXISTS:
+      return 409;
     case WORKSPACE_ERROR.WORKSPACE_OUTSIDE_ALLOWLIST:
       return 403;
+    case WORKSPACE_ERROR.WORKSPACE_CREATE_FAILED:
+      return 500;
     case WORKSPACE_ERROR.WORKSPACE_UNAVAILABLE:
       return 410;
     default:

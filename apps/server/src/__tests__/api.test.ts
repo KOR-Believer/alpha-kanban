@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -17,13 +18,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   apiErrorResponseSchema,
   codexDocumentRunSummaryResponseSchema,
+  codexModelsResponseSchema,
   codexPromptPreviewResponseSchema,
+  codexRunDefaultsResponseSchema,
   codexRunResponseSchema,
   codexRunSummarySchema,
   codexTicketChatResponseSchema,
+  codexWorkspaceChatResponseSchema,
+  codexWorkspacePromptPreviewResponseSchema,
   createCodexRunResponseSchema,
+  createWorkspaceResponseSchema,
   documentSetsResponseSchema,
   filesResponseSchema,
+  markdownFileChangeEventSchema,
   selectWorkspaceResponseSchema,
   markdownDocumentResponseSchema,
   ticketDocumentResponseSchema,
@@ -98,19 +105,29 @@ describe("API", () => {
       fakeCodexPath,
       [
         "#!/usr/bin/env node",
+        "const argv = process.argv.slice(2);",
+        "if (argv[0] === 'debug' && argv[1] === 'models') {",
+        "  console.log(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', default_reasoning_level: 'high', supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }, { effort: 'xhigh' }], additional_speed_tiers: ['fast'], service_tiers: [{ id: 'priority', name: 'Fast' }], visibility: 'default', supported_in_api: true }, { slug: 'gpt-5.4-mini', display_name: 'GPT-5.4 mini', supported_reasoning_levels: [{ effort: 'minimal' }, { effort: 'medium' }], additional_speed_tiers: [], service_tiers: [], visibility: 'default' }] }));",
+        "  process.exit(0);",
+        "}",
         "let stdin = '';",
         "for await (const chunk of process.stdin) { stdin += chunk; }",
         "if (stdin) {",
         "  console.error('unexpected stdin input');",
         "  process.exit(9);",
         "}",
+        "const argvString = process.argv.join(' ');",
+        "if (argvString.includes('preflight-fail')) {",
+        "  console.error('Not inside a trusted directory and --skip-git-repo-check was not specified.');",
+        "  process.exit(1);",
+        "}",
         "console.log(JSON.stringify({ type: 'cwd', cwd: process.cwd(), argv: process.argv.slice(2) }));",
         "console.log(JSON.stringify({ type: 'session', thread_id: 'fake-thread-id' }));",
-        "if (process.argv.join(' ').includes('auth-fail')) {",
+        "if (argvString.includes('auth-fail')) {",
         "  console.error('not logged in');",
         "  process.exit(1);",
         "}",
-        "if (process.argv.join(' ').includes('slow-cancel')) {",
+        "if (argvString.includes('slow-cancel')) {",
         "  setTimeout(() => process.exit(0), 10000);",
         "} else {",
         "console.log(JSON.stringify({ type: 'message', message: 'fake final message' }));",
@@ -295,6 +312,39 @@ describe("API", () => {
     });
   });
 
+  it("creates a project folder under an allowlisted root and initializes git", async () => {
+    const created = createWorkspaceResponseSchema.parse(
+      await postJson("/api/workspaces/create", {
+        parentRoot: projectsRoot,
+        projectName: "new-scaffold",
+        gitInit: true,
+      }),
+    );
+    const realNewProjectRoot = realpathSync.native(path.join(projectsRoot, "new-scaffold"));
+
+    expect(created.createdPath).toBe(realNewProjectRoot);
+    expect(created.workspace).toMatchObject({
+      root: realNewProjectRoot,
+      label: "new-scaffold",
+      isAvailable: true,
+      hasDocs: false,
+    });
+    expect(created.gitInitialized).toBe(true);
+    expect(existsSync(path.join(realNewProjectRoot, ".git"))).toBe(true);
+
+    const state = JSON.parse(
+      readFileSync(path.join(workspaceRoot, ".alpha-kanban", "state.json"), "utf8"),
+    ) as {
+      lastWorkspaceId?: string;
+      recentWorkspaces?: Array<{ id: string; root: string }>;
+    };
+    expect(state.lastWorkspaceId).toBe(created.workspace.id);
+    expect(state.recentWorkspaces?.[0]).toMatchObject({
+      id: created.workspace.id,
+      root: realNewProjectRoot,
+    });
+  });
+
   it("lists allowlisted workspace directories for the folder picker", async () => {
     const realProjectsRoot = realpathSync.native(projectsRoot);
 
@@ -434,6 +484,7 @@ describe("API", () => {
     const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
     const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
     const projectTwo = requireWorkspaceByRoot(listed.workspaces, realProjectTwoRoot);
+    const projectOneFile = await requireWorkspaceTicketFile(projectOne.id);
 
     const projectOneFiles = filesResponseSchema.parse(
       await getJson(`/api/workspaces/${projectOne.id}/files`),
@@ -512,6 +563,36 @@ describe("API", () => {
       { level: 1, line: 1, title: "Feature Plan" },
       { level: 2, line: 3, title: "목표" },
     ]);
+  });
+
+  it("streams workspace markdown file change events", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const projectOneFile = await requireWorkspaceTicketFile(projectOne.id);
+    const eventsResponse = await fetch(
+      `${baseUrl}/api/workspaces/${projectOne.id}/files/events`,
+    );
+    expect(eventsResponse.ok).toBe(true);
+
+    const ticketPath = path.join(projectOneRoot, "docs", "02_alpha_kanban_tickets.md");
+    writeFileSync(
+      ticketPath,
+      `${readFileSync(ticketPath, "utf8")}\n<!-- alpha-kanban-sse-smoke -->\n`,
+    );
+
+    const event = markdownFileChangeEventSchema.parse(
+      await readNextMarkdownFileEvent(eventsResponse),
+    );
+    expect(event).toMatchObject({
+      eventType: "changed",
+      workspaceId: projectOne.id,
+      fileId: projectOneFile.id,
+      relativePath: "docs/02_alpha_kanban_tickets.md",
+      workspaceRelativePath: "docs/02_alpha_kanban_tickets.md",
+      absolutePath: realpathSync.native(ticketPath),
+    });
+    expect(event.file?.hash).toBeDefined();
+    expect(event.file?.hash).not.toBe(projectOneFile.hash);
   });
 
   it("reads and writes tickets only in the selected workspace", async () => {
@@ -595,6 +676,136 @@ describe("API", () => {
     expect(projectTwoTicket?.progressNotes.at(-1)?.text).not.toBe("workspace scoped progress");
   });
 
+  it("stores workspace chat messages and previews project-wide prompts", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const projectTwo = requireWorkspaceByRoot(listed.workspaces, realProjectTwoRoot);
+    const projectOneFile = await requireWorkspaceTicketFile(projectOne.id);
+
+    const emptyChat = codexWorkspaceChatResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/workspace-chat`),
+    );
+    expect(emptyChat.messages).toEqual([]);
+
+    const savedChat = codexWorkspaceChatResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/workspace-chat/messages`, {
+        content: "새 기능 plan/ticket을 만들 수 있을지 봐줘",
+      }),
+    );
+    expect(savedChat.messages).toHaveLength(1);
+    expect(savedChat.messages[0]).toMatchObject({
+      scope: "workspace",
+      role: "user",
+      contentFormat: "markdown",
+      content: "새 기능 plan/ticket을 만들 수 있을지 봐줘",
+      workspaceId: projectOne.id,
+    });
+    expect(savedChat.messages[0]?.fileRelativePath).toBeUndefined();
+    expect(savedChat.messages[0]?.ticketId).toBeUndefined();
+
+    const preview = codexWorkspacePromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/workspace-chat/prompt-preview`, {
+        currentFileId: projectOneFile.id,
+        instructionDraft: "@workspace 새 plan/ticket 작성 방향을 논의해줘",
+      }),
+    );
+    expect(preview.mode).toBe("read_only");
+    expect(preview.intent).toBe("general");
+    expect(preview.scopeResolution).toMatchObject({
+      scope: "workspace",
+      targetWorkspaceId: projectOne.id,
+      cleanedMessage: "새 plan/ticket 작성 방향을 논의해줘",
+    });
+    expect(preview.prompt).toContain(`${realProjectOneRoot} 프로젝트`);
+    expect(preview.prompt).toContain("Workspace documents:");
+    expect(preview.prompt).toContain(
+      "Recent selected document: [tickets] docs/02_alpha_kanban_tickets.md",
+    );
+    expect(preview.prompt).toContain("[plan] docs/18_feature_plan.md");
+    expect(preview.prompt).toContain("[tickets] docs/19_feature_tickets.md");
+    expect(preview.prompt).toContain("작업 모드: Read-only workspace chat");
+    expect(preview.documentSets.some((set) => set.slug === "feature")).toBe(true);
+    expect(preview.args.slice(0, 3)).toEqual([
+      "exec",
+      "--skip-git-repo-check",
+      "--json",
+    ]);
+
+    const specPreview = codexWorkspacePromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/workspace-chat/prompt-preview`, {
+        instructionDraft: "새 기능을 만들기 전에 요구사항을 질문으로 좁혀줘",
+        intent: "spec_grilling",
+        mode: "edit",
+      }),
+    );
+    expect(specPreview.intent).toBe("spec_grilling");
+    expect(specPreview.mode).toBe("read_only");
+    expect(specPreview.prompt).toContain("작업 모드: Spec grilling read-only workspace chat");
+    expect(specPreview.prompt).toContain("Clarifying questions");
+    expect(specPreview.prompt).toContain("Open questions");
+    expect(specPreview.prompt).toContain("직접 파일을 수정하지 마");
+
+    const planTicketingPreview = codexWorkspacePromptPreviewResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/workspace-chat/prompt-preview`, {
+        intent: "plan_ticketing_handoff",
+        instructionDraft: "새 feature plan/ticket을 만들어줘",
+        mode: "read_only",
+      }),
+    );
+    expect(planTicketingPreview.intent).toBe("plan_ticketing_handoff");
+    expect(planTicketingPreview.mode).toBe("edit");
+    expect(planTicketingPreview.scopeResolution.scope).toBe("workspace");
+    expect(planTicketingPreview.prompt).toContain("$plan-ticketing");
+    expect(planTicketingPreview.prompt).toContain("작업 모드: Plan-ticketing handoff");
+    expect(planTicketingPreview.prompt).toContain("Resolved scope:");
+    expect(planTicketingPreview.prompt).toContain("raw `@w`/`@t:` mention");
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson(`/api/workspaces/${projectOne.id}/workspace-chat/runs`, {
+        currentFileId: projectOneFile.id,
+        instructionDraft: "안녕",
+      }),
+    );
+    expect(created.run).toMatchObject({
+      fileId: "workspace",
+      ticketId: "workspace",
+      mode: "read_only",
+      status: "running",
+    });
+    expect(created.run.prompt).toContain("안녕");
+
+    const finished = await waitForRun(created.run.id);
+    expect(finished.run.status).toBe("succeeded");
+
+    const chatAfterRun = codexWorkspaceChatResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectOne.id}/workspace-chat`),
+    );
+    expect(chatAfterRun.messages.map((message) => message.role)).toEqual([
+      "user",
+      "user",
+      "assistant",
+    ]);
+    expect(chatAfterRun.messages.at(-2)).toMatchObject({
+      scope: "workspace",
+      role: "user",
+      content: "안녕",
+      runId: created.run.id,
+      metadata: { intent: "general" },
+    });
+    expect(chatAfterRun.messages.at(-1)).toMatchObject({
+      scope: "workspace",
+      role: "assistant",
+      content: "fake final message",
+      runId: created.run.id,
+      metadata: { intent: "general" },
+    });
+
+    const projectTwoChat = codexWorkspaceChatResponseSchema.parse(
+      await getJson(`/api/workspaces/${projectTwo.id}/workspace-chat`),
+    );
+    expect(projectTwoChat.messages).toEqual([]);
+  });
+
   it("previews and runs Codex in the selected workspace", async () => {
     const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
     const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
@@ -668,7 +879,12 @@ describe("API", () => {
       }),
     );
     expect(resumedPreview.resumeSessionId).toBe("fake-thread-id");
-    expect(resumedPreview.args.slice(0, 3)).toEqual(["exec", "resume", "--json"]);
+    expect(resumedPreview.args.slice(0, 4)).toEqual([
+      "exec",
+      "resume",
+      "--skip-git-repo-check",
+      "--json",
+    ]);
 
     const projectTwoPreview = codexPromptPreviewResponseSchema.parse(
       await postJson(`/api/workspaces/${projectTwo.id}/codex/prompt-preview`, {
@@ -723,6 +939,90 @@ describe("API", () => {
       ),
     );
     expect(projectTwoChat.messages).toEqual([]);
+  });
+
+  it("lists Codex CLI models and applies saved run defaults to prompts", async () => {
+    const models = codexModelsResponseSchema.parse(await getJson("/api/codex/models"));
+    expect(models.source).toBe("live");
+    expect(models.models.map((model) => model.slug)).toContain("gpt-5.5");
+    expect(models.models.find((model) => model.slug === "gpt-5.5")).toMatchObject({
+      displayName: "GPT-5.5",
+      defaultReasoning: "high",
+      supportsFast: true,
+    });
+
+    const emptyDefaults = codexRunDefaultsResponseSchema.parse(
+      await getJson("/api/codex/run-defaults"),
+    );
+    expect(emptyDefaults.defaults).toEqual({});
+
+    const savedDefaults = codexRunDefaultsResponseSchema.parse(
+      await putJson("/api/codex/run-defaults", {
+        model: "gpt-5.5",
+        reasoningEffort: "xhigh",
+        speedTier: "fast",
+      }),
+    );
+    expect(savedDefaults.defaults).toEqual({
+      model: "gpt-5.5",
+      reasoningEffort: "xhigh",
+      speedTier: "fast",
+    });
+
+    const files = filesResponseSchema.parse(await getJson("/api/files"));
+    const file = files.files[0];
+    expect(file).toBeDefined();
+
+    const preview = codexPromptPreviewResponseSchema.parse(
+      await postJson("/api/codex/prompt-preview", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "defaults smoke",
+      }),
+    );
+    expect(preview.runDefaults).toEqual({
+      model: "gpt-5.5",
+      reasoningEffort: "xhigh",
+      speedTier: "fast",
+      speedTierApplied: true,
+      speedTierConfigKey: "service_tier",
+    });
+    expect(preview.args.slice(0, 10)).toEqual([
+      "exec",
+      "-m",
+      "gpt-5.5",
+      "-c",
+      'model_reasoning_effort="xhigh"',
+      "-c",
+      "features.fast_mode=true",
+      "-c",
+      'service_tier="fast"',
+      "--skip-git-repo-check",
+    ]);
+
+    const dryRun = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        dryRun: true,
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "defaults dry run",
+      }),
+    );
+    expect(dryRun.run.runDefaults).toEqual(preview.runDefaults);
+    expect(dryRun.run.args).toEqual(
+      preview.args.map((arg, index) =>
+        index === preview.args.length - 1 ? dryRun.run.prompt : arg,
+      ),
+    );
+
+    const clearedDefaults = codexRunDefaultsResponseSchema.parse(
+      await putJson("/api/codex/run-defaults", {
+        model: null,
+        reasoningEffort: null,
+        speedTier: null,
+      }),
+    );
+    expect(clearedDefaults.defaults).toEqual({});
   });
 
   it("previews and runs Codex with file-level session state", async () => {
@@ -803,7 +1103,12 @@ describe("API", () => {
       }),
     );
     expect(resumedPreview.resumeSessionId).toBe("fake-thread-id");
-    expect(resumedPreview.args.slice(0, 3)).toEqual(["exec", "resume", "--json"]);
+    expect(resumedPreview.args.slice(0, 4)).toEqual([
+      "exec",
+      "resume",
+      "--skip-git-repo-check",
+      "--json",
+    ]);
 
     writeFileSync(path.join(workspaceRoot, "docs", "03_other_tickets.md"), realTicketDocument);
     const filesAfterSecondDocument = filesResponseSchema.parse(await getJson("/api/files"));
@@ -819,7 +1124,11 @@ describe("API", () => {
       }),
     );
     expect(otherPreview.resumeSessionId).toBeUndefined();
-    expect(otherPreview.args.slice(0, 2)).toEqual(["exec", "--json"]);
+    expect(otherPreview.args.slice(0, 3)).toEqual([
+      "exec",
+      "--skip-git-repo-check",
+      "--json",
+    ]);
   });
 
   it("runs Codex in read-only mode without appending ticket markdown", async () => {
@@ -882,6 +1191,84 @@ describe("API", () => {
       content: "fake final message",
       runId: created.run.id,
     });
+  });
+
+  it("does not append a ticket user instruction when Codex fails before session start", async () => {
+    const files = filesResponseSchema.parse(await getJson("/api/files"));
+    const file = files.files[0];
+    expect(file).toBeDefined();
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "preflight-fail 완료기준 충족 여부를 검토해줘",
+      }),
+    );
+
+    const finished = await waitForRun(created.run.id);
+    expect(finished.run.status).toBe("failed");
+    expect(finished.run.capturedSessionId).toBeUndefined();
+
+    const documentAfterFailure = ticketDocumentResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/tickets`),
+    );
+    const ticketAfterFailure = documentAfterFailure.document.tickets.find(
+      (item) => item.id === "AKB-05",
+    );
+    expect(
+      ticketAfterFailure?.userInstructions.some((entry) =>
+        entry.text.includes("preflight-fail"),
+      ),
+    ).toBe(false);
+  });
+
+  it("retries and deletes failed ticket chat messages without duplicating chat", async () => {
+    const files = filesResponseSchema.parse(await getJson("/api/files"));
+    const file = files.files[0];
+    expect(file).toBeDefined();
+
+    const created = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        instructionDraft: "preflight-fail retry candidate",
+      }),
+    );
+    const failed = await waitForRun(created.run.id);
+    expect(failed.run.status).toBe("failed");
+
+    const chatAfterFailure = codexTicketChatResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/tickets/AKB-05/chat`),
+    );
+    expect(chatAfterFailure.messages).toHaveLength(1);
+    const sourceMessage = chatAfterFailure.messages[0];
+    expect(sourceMessage?.runId).toBe(created.run.id);
+
+    const retry = createCodexRunResponseSchema.parse(
+      await postJson("/api/codex/runs", {
+        fileId: file?.id,
+        ticketId: "AKB-05",
+        sourceMessageId: sourceMessage?.id,
+      }),
+    );
+    expect(retry.run.id).not.toBe(created.run.id);
+    expect(retry.run.sourceMessageId).toBe(sourceMessage?.id);
+    expect(retry.run.retryOfRunId).toBe(created.run.id);
+    await waitForRun(retry.run.id);
+
+    const chatAfterRetry = codexTicketChatResponseSchema.parse(
+      await getJson(`/api/files/${file?.id}/tickets/AKB-05/chat`),
+    );
+    expect(chatAfterRetry.messages).toHaveLength(1);
+    expect(chatAfterRetry.messages[0]?.id).toBe(sourceMessage?.id);
+    expect(chatAfterRetry.messages[0]?.runId).toBe(retry.run.id);
+    expect(chatAfterRetry.messages[0]?.metadata?.previousRunIds).toContain(created.run.id);
+
+    const chatAfterDelete = codexTicketChatResponseSchema.parse(
+      await deleteJson(`/api/files/${file?.id}/tickets/AKB-05/chat/${sourceMessage?.id}`),
+    );
+    expect(chatAfterDelete.messages).toHaveLength(0);
   });
 
   it("cancels a running Codex process", async () => {
@@ -1051,6 +1438,24 @@ describe("API", () => {
     return response.json();
   }
 
+  async function deleteJson(route: string): Promise<unknown> {
+    const response = await fetch(`${baseUrl}${route}`, {
+      method: "DELETE",
+    });
+    expect(response.ok).toBe(true);
+    return response.json();
+  }
+
+  async function putJson(route: string, body: unknown): Promise<unknown> {
+    const response = await fetch(`${baseUrl}${route}`, {
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+      method: "PUT",
+    });
+    expect(response.ok).toBe(true);
+    return response.json();
+  }
+
   async function waitForRun(runId: string) {
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const snapshot = codexRunResponseSchema.parse(
@@ -1063,6 +1468,42 @@ describe("API", () => {
     }
 
     throw new Error(`Codex run ${runId} did not finish.`);
+  }
+
+  async function readNextMarkdownFileEvent(response: Response): Promise<unknown> {
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const startedAt = Date.now();
+
+    try {
+      while (Date.now() - startedAt < 5_000) {
+        const chunk = await reader?.read();
+        if (!chunk || chunk.done) {
+          break;
+        }
+
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() ?? "";
+        for (const block of blocks) {
+          if (!block.includes("event: markdown-file")) {
+            continue;
+          }
+          const dataLine = block
+            .split("\n")
+            .find((line) => line.startsWith("data: "));
+          if (dataLine) {
+            return JSON.parse(dataLine.slice("data: ".length));
+          }
+        }
+      }
+    } finally {
+      await reader?.cancel();
+    }
+
+    throw new Error("Timed out waiting for markdown-file SSE event.");
   }
 
   function requireWorkspaceByRoot(

@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type {
   DocumentSetSummary,
+  MarkdownFileChangeEvent,
   MarkdownDocumentResponse,
   MarkdownFileSummary,
   MarkdownFileType,
@@ -119,6 +120,58 @@ export class MarkdownFileStore {
       file,
       document: parseTicketDocument(markdown),
     };
+  }
+
+  async describeFileChange(filePath: string): Promise<MarkdownFileChangeEvent | undefined> {
+    const resolvedFile = path.resolve(filePath);
+    if (path.extname(resolvedFile) !== ".md") {
+      return undefined;
+    }
+
+    try {
+      this.assertAllowedFile(resolvedFile);
+    } catch (error) {
+      if (
+        error instanceof FileStoreError &&
+        error.code === FILE_ERROR.FORBIDDEN_PATH
+      ) {
+        return undefined;
+      }
+      throw error;
+    }
+
+    try {
+      const file = await this.createSummary(resolvedFile);
+      return {
+        eventType: "changed",
+        workspaceId: this.workspaceId,
+        fileId: file.id,
+        relativePath: file.relativePath,
+        workspaceRelativePath: file.workspaceRelativePath,
+        absolutePath: file.absolutePath,
+        observedAt: new Date().toISOString(),
+        file,
+      };
+    } catch (error) {
+      if (
+        error instanceof FileStoreError &&
+        error.code === FILE_ERROR.FILE_NOT_FOUND
+      ) {
+        const relativePath = normalizeRelativePath(
+          path.relative(this.workspaceRoot, resolvedFile),
+        );
+        return {
+          eventType: "removed",
+          workspaceId: this.workspaceId,
+          fileId: this.encodeFileId(resolvedFile),
+          relativePath,
+          workspaceRelativePath: relativePath,
+          absolutePath: resolvedFile,
+          observedAt: new Date().toISOString(),
+        };
+      }
+      throw error;
+    }
   }
 
   async patchTicket(

@@ -147,12 +147,21 @@ export const codexRunReadStateSchema = z.object({
 
 export type CodexRunReadState = z.infer<typeof codexRunReadStateSchema>;
 
+export const codexRunDefaultsSchema = z.object({
+  model: z.string().min(1).optional(),
+  reasoningEffort: z.string().min(1).optional(),
+  speedTier: z.string().min(1).optional(),
+});
+
+export type CodexRunDefaults = z.infer<typeof codexRunDefaultsSchema>;
+
 export const alphaKanbanStateSchema = z.object({
   version: z.literal(2),
   recentWorkspaces: z.array(recentWorkspaceSchema).default([]),
   lastWorkspaceId: z.string().min(1).optional(),
   documents: z.record(z.string(), codexDocumentStateSchema).default({}),
   runResults: z.record(z.string(), codexRunReadStateSchema).default({}),
+  codexRunDefaults: codexRunDefaultsSchema.default({}),
 });
 
 export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;
@@ -191,6 +200,28 @@ export const selectWorkspaceResponseSchema = z.object({
 });
 
 export type SelectWorkspaceResponse = z.infer<typeof selectWorkspaceResponseSchema>;
+
+export const createWorkspaceRequestSchema = z.object({
+  parentRoot: z.string().min(1),
+  projectName: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, {
+      message: "projectName must be a safe folder name",
+    }),
+  gitInit: z.boolean().optional(),
+});
+
+export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema>;
+
+export const createWorkspaceResponseSchema = z.object({
+  workspace: workspaceSummarySchema,
+  createdPath: z.string().min(1),
+  gitInitialized: z.boolean(),
+});
+
+export type CreateWorkspaceResponse = z.infer<typeof createWorkspaceResponseSchema>;
 
 export const workspaceDirectoryRootSchema = z.object({
   path: z.string().min(1),
@@ -258,6 +289,21 @@ export const filesResponseSchema = z.object({
 });
 
 export type FilesResponse = z.infer<typeof filesResponseSchema>;
+
+export const markdownFileChangeEventSchema = z.object({
+  eventType: z.enum(["changed", "removed"]),
+  workspaceId: z.string().min(1),
+  fileId: z.string().min(1),
+  relativePath: z.string().min(1),
+  workspaceRelativePath: z.string().min(1),
+  absolutePath: z.string().min(1),
+  observedAt: z.string().datetime(),
+  file: markdownFileSummarySchema.optional(),
+});
+
+export type MarkdownFileChangeEvent = z.infer<
+  typeof markdownFileChangeEventSchema
+>;
 
 export const markdownHeadingSchema = z.object({
   level: z.number().int().min(1).max(6),
@@ -359,6 +405,67 @@ export const codexRunModeSchema = z.enum(["edit", "read_only"]);
 
 export type CodexRunMode = z.infer<typeof codexRunModeSchema>;
 
+export const codexAppliedRunDefaultsSchema = codexRunDefaultsSchema.extend({
+  speedTierApplied: z.boolean().default(false),
+  speedTierConfigKey: z.string().min(1).optional(),
+});
+
+export type CodexAppliedRunDefaults = z.infer<typeof codexAppliedRunDefaultsSchema>;
+
+export const codexReasoningLevelSchema = z.object({
+  effort: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export type CodexReasoningLevel = z.infer<typeof codexReasoningLevelSchema>;
+
+export const codexServiceTierSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export type CodexServiceTier = z.infer<typeof codexServiceTierSchema>;
+
+export const codexModelCatalogItemSchema = z.object({
+  slug: z.string().min(1),
+  displayName: z.string().min(1),
+  description: z.string().optional(),
+  defaultReasoning: z.string().min(1).optional(),
+  supportedReasoning: z.array(codexReasoningLevelSchema),
+  additionalSpeedTiers: z.array(z.string().min(1)),
+  supportsFast: z.boolean(),
+  serviceTiers: z.array(codexServiceTierSchema),
+  visibility: z.string().optional(),
+  supportedInApi: z.boolean().optional(),
+});
+
+export type CodexModelCatalogItem = z.infer<typeof codexModelCatalogItemSchema>;
+
+export const codexModelsResponseSchema = z.object({
+  models: z.array(codexModelCatalogItemSchema),
+  source: z.enum(["live", "bundled"]),
+  generatedAt: z.string().datetime(),
+});
+
+export type CodexModelsResponse = z.infer<typeof codexModelsResponseSchema>;
+
+export const updateCodexRunDefaultsRequestSchema = z.object({
+  model: z.string().min(1).nullable().optional(),
+  reasoningEffort: z.string().min(1).nullable().optional(),
+  speedTier: z.string().min(1).nullable().optional(),
+});
+
+export type UpdateCodexRunDefaultsRequest = z.infer<
+  typeof updateCodexRunDefaultsRequestSchema
+>;
+
+export const codexRunDefaultsResponseSchema = z.object({
+  defaults: codexRunDefaultsSchema,
+});
+
+export type CodexRunDefaultsResponse = z.infer<typeof codexRunDefaultsResponseSchema>;
+
 export const codexChatScopeSchema = z.enum(["ticket", "document", "workspace"]);
 
 export type CodexChatScope = z.infer<typeof codexChatScopeSchema>;
@@ -399,6 +506,7 @@ export type ResolveCodexChatScopeInput = {
 };
 
 export const codexPromptPreviewRequestSchema = z.object({
+  bypassSandbox: z.boolean().optional(),
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
   instructionDraft: z.string().optional(),
@@ -412,6 +520,7 @@ export const codexPromptPreviewResponseSchema = z.object({
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
   mode: codexRunModeSchema,
+  runDefaults: codexAppliedRunDefaultsSchema,
   prompt: z.string().min(1),
   command: z.string().min(1),
   args: z.array(z.string()),
@@ -424,10 +533,61 @@ export const codexPromptPreviewResponseSchema = z.object({
 
 export type CodexPromptPreviewResponse = z.infer<typeof codexPromptPreviewResponseSchema>;
 
+export const codexWorkspaceChatIntentSchema = z.enum([
+  "general",
+  "spec_grilling",
+  "plan_ticketing_handoff",
+]);
+
+export type CodexWorkspaceChatIntent = z.infer<typeof codexWorkspaceChatIntentSchema>;
+
+export const codexWorkspacePromptPreviewRequestSchema = z.object({
+  bypassSandbox: z.boolean().optional(),
+  currentFileId: z.string().min(1).optional(),
+  intent: codexWorkspaceChatIntentSchema.optional(),
+  instructionDraft: z.string().optional(),
+  instruction: z.string().optional(),
+  mode: codexRunModeSchema.optional(),
+});
+
+export type CodexWorkspacePromptPreviewRequest = z.infer<
+  typeof codexWorkspacePromptPreviewRequestSchema
+>;
+
+export const codexWorkspacePromptPreviewResponseSchema = z.object({
+  workspaceId: z.string().min(1),
+  workspaceRoot: z.string().min(1),
+  intent: codexWorkspaceChatIntentSchema,
+  mode: codexRunModeSchema,
+  runDefaults: codexAppliedRunDefaultsSchema,
+  prompt: z.string().min(1),
+  command: z.string().min(1),
+  args: z.array(z.string()),
+  currentFile: markdownFileSummarySchema.optional(),
+  instructionDraft: z.string().optional(),
+  instructionSummary: z.string().optional(),
+  scopeResolution: codexChatScopeResolutionSchema,
+  documentSets: z.array(documentSetSummarySchema),
+});
+
+export type CodexWorkspacePromptPreviewResponse = z.infer<
+  typeof codexWorkspacePromptPreviewResponseSchema
+>;
+
+export const createWorkspaceCodexRunRequestSchema =
+  codexWorkspacePromptPreviewRequestSchema.extend({
+    dryRun: z.boolean().optional(),
+  });
+
+export type CreateWorkspaceCodexRunRequest = z.infer<
+  typeof createWorkspaceCodexRunRequestSchema
+>;
+
 export const createCodexRunRequestSchema = codexPromptPreviewRequestSchema.extend({
   dryRun: z.boolean().optional(),
   expectedHash: z.string().min(1).optional(),
   expectedMtimeMs: z.number().nonnegative().optional(),
+  sourceMessageId: z.string().min(1).optional(),
 });
 
 export type CreateCodexRunRequest = z.infer<typeof createCodexRunRequestSchema>;
@@ -447,6 +607,7 @@ export const codexRunSnapshotSchema = z.object({
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
   mode: codexRunModeSchema,
+  runDefaults: codexAppliedRunDefaultsSchema,
   status: codexRunStatusSchema,
   prompt: z.string().min(1),
   command: z.string().min(1),
@@ -454,6 +615,8 @@ export const codexRunSnapshotSchema = z.object({
   dryRun: z.boolean(),
   instructionDraft: z.string().optional(),
   instructionSummary: z.string().optional(),
+  retryOfRunId: z.string().min(1).optional(),
+  sourceMessageId: z.string().min(1).optional(),
   startedAt: z.string().datetime(),
   finishedAt: z.string().datetime().optional(),
   exitCode: z.number().int().nullable().optional(),
@@ -484,6 +647,7 @@ export const codexRunSummarySchema = z.object({
   fileId: z.string().min(1),
   ticketId: z.string().min(1),
   mode: codexRunModeSchema,
+  runDefaults: codexAppliedRunDefaultsSchema,
   status: codexRunSignalStatusSchema,
   rawStatus: codexRunStatusSchema,
   instructionSummary: z.string().optional(),
@@ -605,6 +769,7 @@ export const codexChatMessageSchema = z.object({
   fileRelativePath: z.string().min(1).optional(),
   ticketId: z.string().min(1).optional(),
   runId: z.string().min(1).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type CodexChatMessage = z.infer<typeof codexChatMessageSchema>;
@@ -614,6 +779,21 @@ export const codexTicketChatResponseSchema = z.object({
 });
 
 export type CodexTicketChatResponse = z.infer<typeof codexTicketChatResponseSchema>;
+
+export const codexWorkspaceChatResponseSchema = z.object({
+  messages: z.array(codexChatMessageSchema),
+});
+
+export type CodexWorkspaceChatResponse = z.infer<typeof codexWorkspaceChatResponseSchema>;
+
+export const appendWorkspaceChatMessageRequestSchema = z.object({
+  content: z.string().min(1),
+  contentFormat: codexChatContentFormatSchema.optional(),
+});
+
+export type AppendWorkspaceChatMessageRequest = z.infer<
+  typeof appendWorkspaceChatMessageRequestSchema
+>;
 
 function parseCodexScopeMentions(rawMessage: string): MentionMatch[] {
   const mentions: MentionMatch[] = [];
