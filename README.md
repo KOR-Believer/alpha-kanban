@@ -16,7 +16,12 @@ Local kanban workspace for selecting a target project, browsing plan-ticketing M
 
 ```bash
 pnpm install
+pnpm install:skill
 ```
+
+`pnpm install:skill` installs the bundled `plan-ticketing` Codex skill from
+`skills/plan-ticketing` into `${CODEX_HOME:-~/.codex}/skills/plan-ticketing`.
+Restart Codex after installing so the skill list refreshes.
 
 ## Run
 
@@ -49,6 +54,38 @@ Alpha Kanban reads `alpha-kanban.config.json` from the workspace root.
 - `codexCommand`: executable used for `Run with Codex`.
 
 If the config file is missing, the server defaults to `defaultDocRoots: ["docs"]`, `workspaceRoots: ["."]`, and `codexCommand: "codex"`.
+
+## Required Codex Skill
+
+Alpha Kanban is designed around the bundled `plan-ticketing` Codex skill. The
+app can browse and edit Markdown without the skill, but Workspace Chat handoffs
+and `Run with Codex` prompts assume the skill is installed.
+
+The full skill directory is vendored in this repository:
+
+```text
+skills/plan-ticketing/
+  SKILL.md
+  agents/openai.yaml
+  assets/
+  references/
+```
+
+Install or refresh it with:
+
+```bash
+pnpm install:skill
+```
+
+By default the installer writes to `~/.codex/skills/plan-ticketing`. Set
+`CODEX_HOME` if your Codex home directory is elsewhere:
+
+```bash
+CODEX_HOME=/path/to/.codex pnpm install:skill
+```
+
+After installation, restart Codex. Then prompts can reference `$plan-ticketing`
+to create or update plan, ticket, and inventory documents.
 
 ## Ticket Editing
 
@@ -119,3 +156,7 @@ Manual smoke checklist:
 - Do not commit `.alpha-kanban/`.
 - Do not pass user input through shell-interpolated command strings.
 - Treat Markdown content as local project data; avoid adding secrets to ticket logs.
+
+## License
+
+TBD. No open-source license has been selected yet.

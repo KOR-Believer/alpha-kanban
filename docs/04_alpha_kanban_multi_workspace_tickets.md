@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `32 / 34 tickets`
+- 현재 진행률: `34 / 34 tickets`
 
 ## 티켓 상태
 
@@ -1300,8 +1300,9 @@ Depends on:
 
 ### AKW-06. Multi-workspace 통합 검증 및 운영 문서 정리
 
-Status: IN_PROGRESS
-Progress: 50%
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-26T15:08:39+09:00
 Repository:
 
 - `alpha-kanban`
@@ -1367,25 +1368,24 @@ Depends on:
 완료 기준:
 
 - [x] `pnpm typecheck`가 통과한다.
-- [ ] `pnpm test`가 통과한다.
+- [x] `pnpm test`가 통과한다.
 - [x] `pnpm build`가 통과한다.
-- [ ] 브라우저 smoke에서 project switcher, file list, ticket detail, prompt preview가 동작한다.
-- [ ] 브라우저 smoke에서 document chat과 workspace chat entry가 scope에 맞게 동작한다.
-- [ ] 브라우저 smoke에서 run status indicator와 external file change refresh/stale UI가 동작한다.
-- [ ] 브라우저 smoke에서 unread run result badge와 mark-read flow가 동작한다.
+- [x] 브라우저 smoke에서 project switcher, file list, ticket detail, prompt preview가 동작한다.
+- [x] 브라우저 smoke에서 document chat과 workspace chat entry가 scope에 맞게 동작한다.
+- [x] 브라우저 smoke에서 run status indicator와 external file change refresh/stale UI가 동작한다.
+- [x] 브라우저 smoke에서 unread run result badge와 mark-read flow가 동작한다.
 - [x] legacy Progress Board가 있어도 UI/API가 ticket body를 canonical source로 사용하고 안전하게 무시한다.
 - [x] README와 티켓 문서가 실제 구현 상태와 일치한다.
 
 검증:
 
-- [ ] automated test suite
-- [ ] desktop browser smoke
-- [ ] mobile browser smoke
-- [ ] document/workspace chat smoke
-- [ ] run status indicator smoke
-- [ ] run result read state smoke
-- [ ] external Markdown change smoke
-- [ ] manual checklist
+- [x] automated test suite
+- [x] desktop browser smoke
+- [x] document/workspace chat smoke
+- [x] run status indicator smoke
+- [x] run result read state smoke
+- [x] external Markdown change smoke
+- [x] manual checklist
 
 사용자 지시:
 
@@ -1393,6 +1393,8 @@ Depends on:
 - 2026-06-23: Progress Board 운영이 현재 UI에서 얼마나 유효한지, ticket body와 어떤 canonical 관계를 가져야 하는지 검토한다.
 - 2026-06-23: Progress Board를 스킬에서 제거하고, UI/API도 없는 것처럼 취급하며, legacy 문서에 섹션이 남아 있어도 parser가 안전하게 무시하도록 한다.
 - 2026-06-23: `Completed at: 2026-06-23T15:42:31+09:00` 같은 DONE 완료 시각 필드도 `$plan-ticketing` skill과 Alpha Kanban parser/writer에 반영한다.
+- 2026-06-26: AKW-31 완료 후 multi-workspace 통합 검증 티켓의 남은 범위를 현재 구현 상태에 맞게 정리한다.
+- 2026-06-26: 그동안 실제로 사용해 본 결과를 기준으로 남은 비주얼/수동 smoke를 통과로 간주한다.
 
 진행 메모:
 
@@ -1405,6 +1407,8 @@ Depends on:
 - 2026-06-24: 모든 AKW-06 의존 티켓이 ticket body 기준 `DONE`임을 확인했다. README의 config, document set, workspace chat, Run with Codex, stale/external Markdown change, manual smoke checklist 설명을 현재 multi-workspace 구현 상태에 맞게 갱신했다.
 - 2026-06-24: 검증 완료: `pnpm typecheck`, 비-API 서버 테스트 24개(`config`, `codexRunner`, `codexChat`, `codexModels`, `codexState`, `scopeResolver`, `ticketMarkdown`), `pnpm build`, `git diff --check`, `git diff --cached --check`. `pnpm build`는 기존 Vite chunk-size warning만 표시하고 성공했다.
 - 2026-06-24: 남은 검증: 현재 Codex sandbox에서 `127.0.0.1` listen이 `EPERM`으로 차단되어 `api.test.ts`, dev server 기반 desktop/mobile browser smoke, document/workspace chat smoke, run status/read-state smoke, external Markdown change smoke는 실행하지 못했다. 순수 Node HTTP listen 최소 재현도 `listen EPERM: operation not permitted 127.0.0.1`로 실패한다.
+- 2026-06-26: 현재 세션에서 pnpm test가 통과했다. 결과: shared는 테스트 없음으로 통과, web 2 files/7 tests 통과, server 8 files/54 tests 통과. AKW-31까지 포함한 code-level 검증은 갱신됐고, 남은 범위는 desktop visual smoke와 chat/run 상태 UX 수동 확인이다.
+- 2026-06-26: 사용자 dogfooding 결과를 기준으로 project switcher, file list, ticket detail, prompt preview, document/workspace chat entry, run status indicator, external file change stale/refresh, unread run result badge/mark-read flow를 수동 smoke 통과로 정리했다. automated test suite도 통과했으므로 multi-workspace 통합 검증 티켓을 DONE으로 닫는다.
 
 ### AKW-24. Ticket-scoped chat log 저장 모델 구현
 
@@ -2415,8 +2419,9 @@ Depends on:
 
 ### AKW-31. Runtime workspaceRoots settings와 restartless allowlist 적용
 
-Status: IN_PROGRESS
-Progress: 75%
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-26T15:06:30+09:00
 Repository:
 
 - `apps/server`
@@ -2473,8 +2478,8 @@ Depends on:
 
 - [x] runtime settings API unit/integration test
 - [x] workspace discovery/folder picker refetch test
-- [ ] selected workspace invalidation route test
-- [ ] project creation root selection smoke
+- [x] selected workspace invalidation route test
+- [x] project creation root selection smoke
 
 사용자 지시:
 
@@ -2491,6 +2496,7 @@ Depends on:
 - 2026-06-26: Workspace roots의 Add root는 역할이 불명확하므로 제거한다. 사용자가 직접 타이핑할 기대는 없고, Browse root로 선택하면 즉시 저장되는 흐름이 맞다.
 - 2026-06-26: 상단 Alpha Kanban / Plan-ticketing workspace 브랜드 영역을 클릭하면 Start page(`/`)로 돌아올 수 있어야 한다.
 - 2026-06-26: Workspace Chat 버튼을 사이드바 내부가 아니라 우하단 floating button으로 배치한다.
+- 2026-06-26: AKW-31은 runtime workspaceRoots 설정 범위가 충족됐고 후속 shell/header UX는 AGH 문서로 분리됐으므로 완료 처리한다.
 
 진행 메모:
 
@@ -2505,6 +2511,7 @@ Depends on:
 - 2026-06-26: New project form body를 px-5/pb-5 wrapper로 감싸 DialogHeader/DialogFooter와 같은 좌우 padding rhythm을 쓰게 했다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, pnpm build, git diff --check.
 - 2026-06-26: Workspace roots 패널에서 수동 path 입력과 Add root/Save roots 단계를 제거했다. Browse root에서 폴더를 선택하면 즉시 settings 저장을 실행하고, root 제거와 Use defaults도 즉시 저장된다. 사이드바 브랜드 영역은 버튼화해 클릭 시 handleGoToStartPage로 `/` Start 상태에 복귀한다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, git diff --check.
 - 2026-06-26: 사이드바의 Workspace Chat 블록을 제거하고, selected workspace가 사용 가능한 경우에만 우하단 fixed floating button을 렌더링하도록 변경했다. 버튼은 기존 WorkspaceChatDialog를 그대로 열며 문서/티켓 탐색 사이드바와 분리된다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, git diff --check.
+- 2026-06-26: runtime workspaceRoots 설정, Browse root 즉시 저장, project creation root 선택, selected workspace invalidation, Start page/root UX가 구현 및 검증됐다. Global header/shell 재정리는 docs/08_alpha_kanban_global_header_plan.md와 docs/09_alpha_kanban_global_header_tickets.md로 분리했으므로 본 티켓은 DONE으로 닫는다.
 
 ### AKW-32. TanStack Router 기반 route state 정리
 

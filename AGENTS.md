@@ -10,7 +10,7 @@
 
 ## Product UI Design
 
-- `DESIGN-notion.md` is deprecated for this project. Do not use it as the design-system source.
+- `DESIGN-notion.md` was deprecated and removed from this project. Do not recreate it or use it as the design-system source.
 - Use the shadcn b1 preset foundation imported into `apps/web/src/styles.css`: Raleway variable font, OKLCH semantic tokens, olive/acid primary, rounded compact controls, hairline borders, and restrained shadows.
 - Treat `styles.css` semantic variables (`--background`, `--foreground`, `--primary`, `--muted`, `--border`, etc.) and the mapped `--ak-*` aliases as the single source of truth. Do not introduce a second color/radius/spacing system.
 - Use the local `apps/web/src/components/ui/*` wrappers for buttons, badges, dialogs, popovers, selects, and checkboxes. Update those wrappers instead of scattering one-off Tailwind styling when common control styling is wrong.

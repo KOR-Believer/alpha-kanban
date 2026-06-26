@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -705,7 +706,7 @@ async function markCodexRunRead(runId: string) {
 
 export function App() {
   const queryClient = useQueryClient();
-  const appShellRef = useRef<HTMLElement>(null);
+  const appShellRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const routeLocation = useLocation({
     select: (location) => ({
@@ -1329,32 +1330,39 @@ export function App() {
     );
   }
 
+  if (!selectedWorkspaceId) {
+    return (
+      <main className="min-h-dvh overflow-auto bg-[var(--ak-canvas-soft)] px-5 py-5 text-[var(--ak-ink-secondary)]">
+        <StartWorkspacePage
+          autoOpenLastWorkspace={autoOpenLastWorkspace}
+          onAutoOpenLastWorkspaceChange={setAutoOpenLastWorkspace}
+          onWorkspaceCreate={handleWorkspaceCreate}
+          onWorkspaceOpenPath={handleWorkspaceOpenPath}
+          onWorkspaceRootsChange={handleWorkspaceRootsChange}
+          onWorkspaceSelect={handleWorkspaceSelect}
+          workspaceRootsError={workspaceRootsSettingsQuery.error}
+          workspaceRootsIsLoading={workspaceRootsSettingsQuery.isLoading}
+          workspaceRootsSettings={workspaceRootsSettingsQuery.data}
+          workspaces={workspacesQuery.data?.workspaces ?? []}
+        />
+      </main>
+    );
+  }
+
   return (
     <>
       <main
-        className="grid h-dvh min-h-0 grid-cols-[var(--sidebar-width)_8px_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-secondary)] max-[860px]:h-auto max-[860px]:min-h-dvh max-[860px]:grid-cols-1 max-[860px]:overflow-visible"
-        ref={appShellRef}
-        style={shellStyle}
+        className="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-secondary)] max-[860px]:h-auto max-[860px]:min-h-dvh max-[860px]:overflow-visible"
       >
-        <aside
-          className="flex min-h-0 flex-col overflow-hidden border-r border-[var(--ak-hairline)] bg-[var(--ak-surface)] max-[860px]:max-h-[70dvh] max-[860px]:border-b max-[860px]:border-r-0"
-          aria-label="Workspace files"
-        >
-          <div className="border-b border-[var(--ak-hairline)] px-3 py-3">
-            <button
-              className="ak-row grid w-full justify-start gap-1 rounded-md px-2 py-1.5 text-left hover:bg-[var(--ak-canvas-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ak-focus)]"
-              onClick={handleGoToStartPage}
-              type="button"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <FolderKanban className="size-5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-                <span className="ak-title truncate text-base">{APP_NAME}</span>
-              </span>
-              <span className="ak-body-muted truncate pl-7 text-xs">
-                Plan-ticketing workspace
-              </span>
-            </button>
-          </div>
+        <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-4 py-2 max-[720px]:flex-wrap">
+          <button
+            className="ak-row flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--ak-canvas-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ak-focus)]"
+            onClick={handleGoToStartPage}
+            type="button"
+          >
+            <FolderKanban className="size-5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
+            <span className="ak-title truncate text-sm">{APP_NAME}</span>
+          </button>
 
           <ProjectSwitcher
             autoOpenLastWorkspace={autoOpenLastWorkspace}
@@ -1368,146 +1376,148 @@ export function App() {
             workspaces={workspacesQuery.data?.workspaces ?? []}
           />
 
-          <div className="border-b border-[var(--ak-hairline)] p-3">
-            <DocumentListHeader
-              disabled={!canLoadWorkspace}
-              onPreferenceChange={updateDocumentSetSortPreference}
-              preference={documentSetSortPreference}
-            />
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <HealthPill status={healthQuery.status} />
           </div>
+        </header>
 
-          <div className="ak-scroll-area min-h-0 flex-1 overflow-y-auto">
-            <div className="ak-scroll-content grid gap-1">
-              {!selectedWorkspaceId ? <SidebarState label="Select a project" /> : null}
-              {selectedWorkspace && !selectedWorkspace.isAvailable ? (
-                <SidebarState label="Project unavailable" tone="error" />
-              ) : null}
-              {documentSetsQuery.isLoading ? <SidebarState label="Loading documents" /> : null}
-              {documentSetsQuery.isError ? (
-                <SidebarState label="Could not load documents" tone="error" />
-              ) : null}
-              {documentSetsQuery.isSuccess && sortedDocumentSets.length === 0 ? (
-                <SidebarState label="No documents" />
-              ) : null}
-              <DocumentSetNavigator
-                documentSets={sortedDocumentSets}
-                onSelectFile={(file) => {
+        <div
+          className="grid min-h-0 grid-cols-[var(--sidebar-width)_8px_minmax(0,1fr)] overflow-hidden max-[860px]:grid-cols-1 max-[860px]:overflow-visible"
+          ref={appShellRef}
+          style={shellStyle}
+        >
+          <aside
+            className="flex min-h-0 flex-col overflow-hidden border-r border-[var(--ak-hairline)] bg-[var(--ak-surface)] max-[860px]:max-h-[68dvh] max-[860px]:border-b max-[860px]:border-r-0"
+            aria-label="Workspace files"
+          >
+            <div className="border-b border-[var(--ak-hairline)] p-3">
+              <DocumentListHeader
+                disabled={!canLoadWorkspace}
+                onPreferenceChange={updateDocumentSetSortPreference}
+                preference={documentSetSortPreference}
+              />
+            </div>
+
+            <div className="ak-scroll-area min-h-0 flex-1 overflow-y-auto">
+              <div className="ak-scroll-content grid gap-1">
+                {selectedWorkspace && !selectedWorkspace.isAvailable ? (
+                  <SidebarState label="Project unavailable" tone="error" />
+                ) : null}
+                {documentSetsQuery.isLoading ? <SidebarState label="Loading documents" /> : null}
+                {documentSetsQuery.isError ? (
+                  <SidebarState label="Could not load documents" tone="error" />
+                ) : null}
+                {documentSetsQuery.isSuccess && sortedDocumentSets.length === 0 ? (
+                  <SidebarState label="No documents" />
+                ) : null}
+                <DocumentSetNavigator
+                  documentSets={sortedDocumentSets}
+                  onSelectFile={(file) => {
+                    setSelectedFileId(file.id);
+                    setPreferredFilePath(file.workspaceRelativePath);
+                    if (file.type !== "tickets") {
+                      setSelectedTicketId(undefined);
+                    }
+                  }}
+                  selectedFileId={resolvedSelectedFileId}
+                />
+              </div>
+            </div>
+          </aside>
+
+          <SidebarResizeHandle
+            isDragging={isSidebarResizing}
+            onChangeWidth={setSidebarWidth}
+            onNudge={(delta) => setSidebarWidth((width) => clampSidebarWidth(width + delta))}
+            onPointerDown={(clientX) => {
+              resizeSidebarFromClientX(clientX);
+              setIsSidebarResizing(true);
+            }}
+            onReset={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
+            width={sidebarWidth}
+          />
+
+          <section
+            className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+            aria-labelledby="workspace-title"
+          >
+            <header className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-3 max-[720px]:flex-col max-[720px]:items-start">
+              <div className="min-w-0">
+                <p className="ak-muted-label truncate">
+                  {selectedWorkspace?.root ?? "Project unavailable"}
+                </p>
+                <h2 id="workspace-title" className="ak-title mt-1 truncate text-lg">
+                  {selectedWorkspace
+                    ? ticketQuery.data?.document.title ??
+                      markdownQuery.data?.outline[0]?.title ??
+                      selectedFile?.workspaceRelativePath ??
+                      "Document workspace"
+                    : "Project unavailable"}
+                </h2>
+                {selectedFile ? (
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                    <DocumentTypeBadge type={selectedFile.type} />
+                    <p className="ak-body-muted min-w-0 truncate text-xs">
+                      {selectedFile.workspaceRelativePath}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+              <DocumentSummary
+                file={ticketQuery.data?.file}
+                fallbackFile={selectedFile}
+                isLoading={
+                  selectedFile?.type === "tickets"
+                    ? ticketQuery.isLoading
+                    : markdownQuery.isLoading
+                }
+                markdownDocument={markdownQuery.data}
+                runSummary={codexRunSummaryQuery.data}
+                selectedDocumentSet={selectedDocumentSet}
+                ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
+              />
+            </header>
+
+            <div className="ak-scroll-area min-h-0 overflow-auto p-5">
+              <DocumentContent
+                documentSetsError={documentSetsQuery.error}
+                documentSetsIsError={documentSetsQuery.isError}
+                documentSetsIsLoading={documentSetsQuery.isLoading}
+                markdownDocument={markdownQuery.data}
+                markdownError={markdownQuery.error}
+                markdownIsError={markdownQuery.isError}
+                markdownIsLoading={markdownQuery.isLoading}
+                hasDocumentSets={sortedDocumentSets.length > 0}
+                onOpenWorkspaceChat={() => setIsWorkspaceChatOpen(true)}
+                onFileSelect={(file) => {
                   setSelectedFileId(file.id);
                   setPreferredFilePath(file.workspaceRelativePath);
                   if (file.type !== "tickets") {
                     setSelectedTicketId(undefined);
                   }
                 }}
+                onTicketSelect={setSelectedTicketId}
+                runSummaryByTicket={runSummaryByTicket}
+                selectedDocumentSet={selectedDocumentSet}
+                selectedFile={selectedFile}
                 selectedFileId={resolvedSelectedFileId}
+                selectedWorkspace={selectedWorkspace}
+                ticketError={ticketQuery.error}
+                ticketIsError={ticketQuery.isError}
+                ticketIsLoading={ticketQuery.isLoading}
+                workspaceError={workspacesQuery.error}
+                workspacesError={workspacesQuery.isError}
+                workspacesIsLoading={workspacesQuery.isLoading}
+                ticketsByStatus={ticketsByStatus}
               />
             </div>
-          </div>
-
-          <div className="border-t border-[var(--ak-hairline)] p-3">
-            <HealthPill status={healthQuery.status} />
-          </div>
-        </aside>
-
-        <SidebarResizeHandle
-          isDragging={isSidebarResizing}
-          onChangeWidth={setSidebarWidth}
-          onNudge={(delta) => setSidebarWidth((width) => clampSidebarWidth(width + delta))}
-          onPointerDown={(clientX) => {
-            resizeSidebarFromClientX(clientX);
-            setIsSidebarResizing(true);
-          }}
-          onReset={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
-          width={sidebarWidth}
-        />
-
-        <section
-          className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
-          aria-labelledby="workspace-title"
-        >
-          <header className="flex min-h-20 items-center justify-between gap-4 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-6 py-4 max-[720px]:flex-col max-[720px]:items-start">
-            <div>
-              <p className="ak-muted-label">
-                {selectedWorkspace?.root ?? "Select a project"}
-              </p>
-              <h2 id="workspace-title" className="ak-title mt-1 text-xl">
-                {selectedWorkspace
-                  ? ticketQuery.data?.document.title ??
-                    markdownQuery.data?.outline[0]?.title ??
-                    selectedFile?.workspaceRelativePath ??
-                    "Document workspace"
-                  : "Start"}
-              </h2>
-              {selectedFile ? (
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <DocumentTypeBadge type={selectedFile.type} />
-                  <p className="ak-body-muted text-xs">
-                    {selectedFile.workspaceRelativePath}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-            <DocumentSummary
-              file={ticketQuery.data?.file}
-              fallbackFile={selectedFile}
-              isLoading={
-                selectedFile?.type === "tickets"
-                  ? ticketQuery.isLoading
-                  : markdownQuery.isLoading
-              }
-              markdownDocument={markdownQuery.data}
-              runSummary={codexRunSummaryQuery.data}
-              selectedDocumentSet={selectedDocumentSet}
-              ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
-            />
-          </header>
-
-          <div className="ak-scroll-area min-h-0 overflow-auto p-5">
-            <DocumentContent
-              documentSetsError={documentSetsQuery.error}
-              documentSetsIsError={documentSetsQuery.isError}
-              documentSetsIsLoading={documentSetsQuery.isLoading}
-              markdownDocument={markdownQuery.data}
-              markdownError={markdownQuery.error}
-              markdownIsError={markdownQuery.isError}
-              markdownIsLoading={markdownQuery.isLoading}
-              onFileSelect={(file) => {
-                setSelectedFileId(file.id);
-                setPreferredFilePath(file.workspaceRelativePath);
-                if (file.type !== "tickets") {
-                  setSelectedTicketId(undefined);
-                }
-              }}
-              onTicketSelect={setSelectedTicketId}
-              runSummaryByTicket={runSummaryByTicket}
-              autoOpenLastWorkspace={autoOpenLastWorkspace}
-              onAutoOpenLastWorkspaceChange={setAutoOpenLastWorkspace}
-              onWorkspaceCreate={handleWorkspaceCreate}
-              onWorkspaceOpenPath={handleWorkspaceOpenPath}
-              onWorkspaceRootsChange={handleWorkspaceRootsChange}
-              onWorkspaceSelect={handleWorkspaceSelect}
-              selectedDocumentSet={selectedDocumentSet}
-              selectedFile={selectedFile}
-              selectedFileId={resolvedSelectedFileId}
-              selectedWorkspace={selectedWorkspace}
-              ticketError={ticketQuery.error}
-              ticketIsError={ticketQuery.isError}
-              ticketIsLoading={ticketQuery.isLoading}
-              workspaceError={workspacesQuery.error}
-              workspaceRootsError={workspaceRootsSettingsQuery.error}
-              workspaceRootsIsLoading={workspaceRootsSettingsQuery.isLoading}
-              workspaceRootsSettings={workspaceRootsSettingsQuery.data}
-              workspaces={workspacesQuery.data?.workspaces ?? []}
-              workspacesError={workspacesQuery.isError}
-              workspacesIsLoading={workspacesQuery.isLoading}
-              ticketsByStatus={ticketsByStatus}
-            />
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
 
       {canLoadWorkspace ? (
         <Button
-          className="fixed bottom-5 right-5 z-40 h-11 rounded-full px-4 shadow-[0_14px_40px_color-mix(in_oklch,var(--foreground),transparent_84%)] max-[720px]:bottom-4 max-[720px]:right-4"
+          className="fixed bottom-6 right-6 z-40 h-11 rounded-full px-4 shadow-[0_14px_40px_color-mix(in_oklch,var(--foreground),transparent_84%)] max-[720px]:bottom-5 max-[720px]:right-5"
           onClick={() => setIsWorkspaceChatOpen(true)}
           title={`Workspace chat for ${selectedWorkspace?.root ?? "selected project"}`}
           type="button"
@@ -1992,25 +2002,22 @@ function ProjectSwitcher({
   }
 
   return (
-    <section className="border-b border-[var(--ak-hairline)] p-3" aria-label="Projects">
+    <div className="min-w-0 flex-1" aria-label="Projects">
       <button
-        className="ak-row grid w-full min-w-0 gap-1 px-3 py-2 text-left transition-colors hover:bg-[var(--ak-surface-hover)]"
+        className="ak-row flex h-10 w-full min-w-0 items-center gap-3 px-3 text-left transition-colors hover:bg-[var(--ak-surface-hover)]"
         onClick={() => setIsSwitcherOpen(true)}
         title={selectedWorkspace?.root ?? "Select a project"}
         type="button"
       >
-        <span className="flex min-w-0 items-center justify-between gap-2">
-          <span className="ak-muted-label">Project</span>
-          {isLoading ? (
-            <Loader2 className="size-3 animate-spin text-[var(--ak-ink-muted)]" />
-          ) : (
-            <ChevronDown className="size-3 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-          )}
-        </span>
-        <span className="flex min-w-0 items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-[var(--ak-ink)]">
+        <span className="grid min-w-0 flex-1 gap-0.5">
+          <span className="truncate text-sm font-semibold text-[var(--ak-ink)]">
             {selectedWorkspace?.label ?? "Select project"}
           </span>
+          <span className="ak-body-muted truncate text-xs">
+            {selectedWorkspace?.root ?? "Open recent or browse a workspace"}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
           {selectedWorkspace ? (
             <Badge variant={selectedWorkspace.isAvailable ? "muted" : "warning"}>
               {selectedWorkspace.isAvailable
@@ -2020,12 +2027,12 @@ function ProjectSwitcher({
                 : "missing"}
             </Badge>
           ) : null}
+          {isLoading ? (
+            <Loader2 className="size-3 animate-spin text-[var(--ak-ink-muted)]" />
+          ) : (
+            <ChevronDown className="size-3 text-[var(--ak-ink-muted)]" aria-hidden="true" />
+          )}
         </span>
-        {selectedWorkspace ? (
-          <span className="ak-body-muted truncate text-xs">{selectedWorkspace.root}</span>
-        ) : (
-          <span className="ak-body-muted text-xs">Open recent or browse a workspace</span>
-        )}
       </button>
 
       <Dialog onOpenChange={setIsSwitcherOpen} open={isSwitcherOpen}>
@@ -2185,7 +2192,7 @@ function ProjectSwitcher({
         onOpenChange={setIsBrowserOpen}
         open={isBrowserOpen}
       />
-    </section>
+    </div>
   );
 }
 
@@ -2543,21 +2550,17 @@ function DocumentSummary({
 }
 
 function DocumentContent({
-  autoOpenLastWorkspace,
   documentSetsError,
   documentSetsIsError,
   documentSetsIsLoading,
+  hasDocumentSets,
   markdownDocument,
   markdownError,
   markdownIsError,
   markdownIsLoading,
-  onAutoOpenLastWorkspaceChange,
   onFileSelect,
+  onOpenWorkspaceChat,
   onTicketSelect,
-  onWorkspaceCreate,
-  onWorkspaceOpenPath,
-  onWorkspaceRootsChange,
-  onWorkspaceSelect,
   runSummaryByTicket,
   selectedDocumentSet,
   selectedFile,
@@ -2568,32 +2571,20 @@ function DocumentContent({
   ticketIsLoading,
   ticketsByStatus,
   workspaceError,
-  workspaceRootsError,
-  workspaceRootsIsLoading,
-  workspaceRootsSettings,
-  workspaces,
   workspacesError,
   workspacesIsLoading,
 }: {
-  autoOpenLastWorkspace: boolean;
   documentSetsError: Error | null;
   documentSetsIsError: boolean;
   documentSetsIsLoading: boolean;
+  hasDocumentSets: boolean;
   markdownDocument?: MarkdownDocumentResponse;
   markdownError: Error | null;
   markdownIsError: boolean;
   markdownIsLoading: boolean;
-  onAutoOpenLastWorkspaceChange: (enabled: boolean) => void;
   onFileSelect: (file: MarkdownFileSummary) => void;
+  onOpenWorkspaceChat: () => void;
   onTicketSelect: (ticketId: string) => void;
-  onWorkspaceCreate: (input: {
-    gitInit: boolean;
-    parentRoot: string;
-    projectName: string;
-  }) => Promise<void>;
-  onWorkspaceOpenPath: (root: string) => Promise<void>;
-  onWorkspaceRootsChange: (roots: string[]) => Promise<void>;
-  onWorkspaceSelect: (workspaceId: string) => Promise<void>;
   runSummaryByTicket: Map<string, CodexRunSummary>;
   selectedDocumentSet?: DocumentSetSummary;
   selectedFile?: MarkdownFileSummary;
@@ -2604,10 +2595,6 @@ function DocumentContent({
   ticketIsLoading: boolean;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
   workspaceError: Error | null;
-  workspaceRootsError: Error | null;
-  workspaceRootsIsLoading: boolean;
-  workspaceRootsSettings?: WorkspaceRootsSettingsResponse;
-  workspaces: WorkspaceSummary[];
   workspacesError: boolean;
   workspacesIsLoading: boolean;
 }) {
@@ -2635,24 +2622,7 @@ function DocumentContent({
     );
   }
 
-  if (!selectedWorkspace) {
-    return (
-      <StartWorkspacePage
-        autoOpenLastWorkspace={autoOpenLastWorkspace}
-        onAutoOpenLastWorkspaceChange={onAutoOpenLastWorkspaceChange}
-        onWorkspaceCreate={onWorkspaceCreate}
-        onWorkspaceOpenPath={onWorkspaceOpenPath}
-        onWorkspaceRootsChange={onWorkspaceRootsChange}
-        onWorkspaceSelect={onWorkspaceSelect}
-        workspaceRootsError={workspaceRootsError}
-        workspaceRootsIsLoading={workspaceRootsIsLoading}
-        workspaceRootsSettings={workspaceRootsSettings}
-        workspaces={workspaces}
-      />
-    );
-  }
-
-  if (!selectedWorkspace.isAvailable) {
+  if (!selectedWorkspace?.isAvailable) {
     return (
       <BoardState
         icon="error"
@@ -2663,7 +2633,27 @@ function DocumentContent({
   }
 
   if (!selectedFileId) {
-    return <BoardState title="No document selected" />;
+    if (!hasDocumentSets) {
+      return (
+        <BoardState
+          title="Start with Workspace Chat"
+          description="This project has no Alpha Kanban documents yet. Describe what you want to build, fix, or investigate, then ask Codex to create a plan, tickets, and an inventory if needed."
+          action={
+            <Button onClick={onOpenWorkspaceChat} type="button">
+              <Bot className="size-4" aria-hidden="true" />
+              Open Workspace Chat
+            </Button>
+          }
+        />
+      );
+    }
+
+    return (
+      <BoardState
+        title="No document selected"
+        description="Choose a plan, ticket, or inventory document from the sidebar."
+      />
+    );
   }
 
   if (!selectedFile) {
@@ -3358,28 +3348,28 @@ function HowAlphaKanbanWorksPanel() {
     <section className="ak-panel grid content-start gap-3 p-5">
       <div>
         <p className="ak-muted-label">Guide</p>
-        <h3 className="ak-title mt-1 text-base">How Alpha Kanban works</h3>
+        <h3 className="ak-title mt-1 text-base">Plan work with Codex</h3>
       </div>
       <div className="grid gap-2">
         <StartGuideStep
-          description="Pick a project inside the configured roots. Local app state stays in this control repo."
+          description="Open an existing folder or create a new project. It is fine if there are no Alpha Kanban docs yet."
           icon={FolderKanban}
-          title="Select a workspace"
+          title="Open or create a project"
         />
         <StartGuideStep
-          description="Plans, tickets, and inventories are grouped by document set and opened in the matching view."
-          icon={BookOpen}
-          title="Open a document set"
-        />
-        <StartGuideStep
-          description="Use ticket chat for one ticket, or Workspace Chat for project-wide questions."
+          description="Describe what you want to build, investigate, fix, or organize before creating tickets."
           icon={Bot}
-          title="Chat from the right scope"
+          title="Discuss the work"
         />
         <StartGuideStep
-          description="Durable summaries, status, progress, and completion time stay in ticket Markdown."
+          description="Ask Codex to create a plan, tickets, and an inventory when the direction is clear."
+          icon={BookOpen}
+          title="Generate planning docs"
+        />
+        <StartGuideStep
+          description="Read the generated docs, refine scope in Workspace Chat, then run focused ticket work one by one."
           icon={ListChecks}
-          title="Keep progress durable"
+          title="Review, revise, and run"
         />
       </div>
     </section>
@@ -3548,11 +3538,13 @@ function MarkdownDocumentReader({
 }
 
 function BoardState({
+  action,
   description,
   icon = "empty",
   isLoading = false,
   title,
 }: {
+  action?: ReactNode;
   description?: string;
   icon?: "empty" | "error";
   isLoading?: boolean;
@@ -3570,6 +3562,7 @@ function BoardState({
         )}
         <h3 className="ak-title text-sm">{title}</h3>
         {description ? <p className="ak-body-muted text-sm">{description}</p> : null}
+        {action ? <div className="pt-1">{action}</div> : null}
       </div>
     </div>
   );
