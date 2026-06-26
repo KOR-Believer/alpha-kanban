@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   alphaKanbanStateSchema,
   type AlphaKanbanState,
+  type AlphaKanbanRuntimeSettings,
   type CodexDocumentState,
   type CodexRunDefaults,
   type CodexRunReadState,
@@ -18,6 +19,7 @@ const EMPTY_STATE: AlphaKanbanState = {
   documents: {},
   runResults: {},
   codexRunDefaults: {},
+  runtimeSettings: {},
 };
 
 export class CodexStateStore {
@@ -159,6 +161,24 @@ export class CodexStateStore {
     return next;
   }
 
+  async getRuntimeSettings(): Promise<AlphaKanbanRuntimeSettings> {
+    const state = await this.readState();
+    return state.runtimeSettings;
+  }
+
+  async setWorkspaceRootsOverride(
+    roots: string[] | undefined,
+  ): Promise<AlphaKanbanRuntimeSettings> {
+    const state = await this.readState();
+    state.runtimeSettings = {
+      ...state.runtimeSettings,
+      workspaceRoots: roots,
+    };
+    await this.writeState(state);
+
+    return state.runtimeSettings;
+  }
+
   private async readState(): Promise<AlphaKanbanState> {
     try {
       const parsed = JSON.parse(await fs.readFile(this.statePath, "utf8")) as AlphaKanbanState;
@@ -195,6 +215,7 @@ function emptyState(): AlphaKanbanState {
     documents: {},
     runResults: {},
     codexRunDefaults: {},
+    runtimeSettings: {},
   };
 }
 
@@ -213,6 +234,7 @@ function normalizeState(value: unknown, workspaceId: string): AlphaKanbanState {
     documents: normalizeDocuments(value.documents, workspaceId),
     runResults: normalizeRunResults(value.runResults),
     codexRunDefaults: normalizeCodexRunDefaults(value.codexRunDefaults),
+    runtimeSettings: normalizeRuntimeSettings(value.runtimeSettings),
   });
 }
 
@@ -318,6 +340,18 @@ function normalizeCodexRunDefaults(value: unknown): CodexRunDefaults {
     model: asNonEmptyString(value.model),
     reasoningEffort: asNonEmptyString(value.reasoningEffort),
     speedTier: asNonEmptyString(value.speedTier),
+  };
+}
+
+function normalizeRuntimeSettings(value: unknown): AlphaKanbanRuntimeSettings {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    workspaceRoots: Array.isArray(value.workspaceRoots)
+      ? value.workspaceRoots.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : undefined,
   };
 }
 

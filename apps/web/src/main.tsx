@@ -17,8 +17,13 @@ const indexRoute = createRoute({
   path: "/",
 });
 
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/w/$workspaceId",
+});
+
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, workspaceRoute]),
 });
 
 declare module "@tanstack/react-router" {

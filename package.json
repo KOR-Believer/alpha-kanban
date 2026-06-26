@@ -8,6 +8,7 @@
     "dev": "concurrently -n server,web -c cyan,magenta \"pnpm --filter @alpha-kanban/server dev\" \"pnpm --filter @alpha-kanban/web dev\"",
     "build": "pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/server build && pnpm --filter @alpha-kanban/web build",
     "typecheck": "pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/server typecheck && pnpm --filter @alpha-kanban/web typecheck",
+    "ticket-md": "node scripts/ticket-md.mjs",
     "test": "pnpm -r --if-present test"
   },
   "devDependencies": {

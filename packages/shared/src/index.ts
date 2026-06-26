@@ -155,6 +155,14 @@ export const codexRunDefaultsSchema = z.object({
 
 export type CodexRunDefaults = z.infer<typeof codexRunDefaultsSchema>;
 
+export const alphaKanbanRuntimeSettingsSchema = z.object({
+  workspaceRoots: z.array(z.string().min(1)).optional(),
+});
+
+export type AlphaKanbanRuntimeSettings = z.infer<
+  typeof alphaKanbanRuntimeSettingsSchema
+>;
+
 export const alphaKanbanStateSchema = z.object({
   version: z.literal(2),
   recentWorkspaces: z.array(recentWorkspaceSchema).default([]),
@@ -162,6 +170,7 @@ export const alphaKanbanStateSchema = z.object({
   documents: z.record(z.string(), codexDocumentStateSchema).default({}),
   runResults: z.record(z.string(), codexRunReadStateSchema).default({}),
   codexRunDefaults: codexRunDefaultsSchema.default({}),
+  runtimeSettings: alphaKanbanRuntimeSettingsSchema.default({}),
 });
 
 export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;
@@ -265,6 +274,24 @@ export const workspaceDirectoriesResponseSchema = z.object({
 
 export type WorkspaceDirectoriesResponse = z.infer<
   typeof workspaceDirectoriesResponseSchema
+>;
+
+export const workspaceRootsSettingsResponseSchema = z.object({
+  roots: z.array(workspaceDirectoryRootSchema),
+  defaultRoots: z.array(workspaceDirectoryRootSchema),
+  hasOverride: z.boolean(),
+});
+
+export type WorkspaceRootsSettingsResponse = z.infer<
+  typeof workspaceRootsSettingsResponseSchema
+>;
+
+export const updateWorkspaceRootsSettingsRequestSchema = z.object({
+  roots: z.array(z.string().min(1)).min(1),
+});
+
+export type UpdateWorkspaceRootsSettingsRequest = z.infer<
+  typeof updateWorkspaceRootsSettingsRequestSchema
 >;
 
 export const markdownFileSummarySchema = z.object({

@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Node as TiptapNode, mergeAttributes, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -42,6 +43,7 @@ import {
   ticketDocumentResponseSchema,
   selectWorkspaceResponseSchema,
   workspaceDirectoriesResponseSchema,
+  workspaceRootsSettingsResponseSchema,
   workspacesResponseSchema,
   type ApiErrorResponse,
   type CodexDocumentRunSummaryResponse,
@@ -75,6 +77,7 @@ import {
   type WorkspaceDirectoryEntry,
   type WorkspaceDirectoryRoot,
   type WorkspaceDirectoriesResponse,
+  type WorkspaceRootsSettingsResponse,
   type WorkspaceSummary,
 } from "@alpha-kanban/shared";
 import {
@@ -129,6 +132,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  buildAppRoute,
+  parseAppRouteState,
+  type AppRouteState,
+  type TicketDetailMode,
+} from "./appRoute";
+import {
   DEFAULT_DOCUMENT_SET_SORT_PREFERENCE,
   DOCUMENT_SET_SORT_OPTIONS,
   defaultDirectionForDocumentSetSortMode,
@@ -159,19 +168,9 @@ const TICKET_DETAIL_WIDTH_STORAGE_KEY = "alpha-kanban.ticketDetailWidth";
 const DEFAULT_TICKET_DETAIL_WIDTH = 720;
 const MIN_TICKET_DETAIL_WIDTH = 520;
 const MAX_TICKET_DETAIL_WIDTH = 1040;
-const WORKSPACE_ROUTE_PREFIX = "/w/";
 const SCOPE_MENTION_NODE_TYPE = "scopeMention";
 const CLI_DEFAULT_SELECT_VALUE = "__cli_default__";
 const MODEL_DEFAULT_SELECT_VALUE = "__model_default__";
-
-type TicketDetailMode = "side" | "modal";
-
-type AppRouteState = {
-  detailMode?: TicketDetailMode;
-  filePath?: string;
-  ticketId?: string;
-  workspaceId?: string;
-};
 
 type PromptPreviewModel = {
   args: string[];
@@ -396,72 +395,6 @@ function normalizeDocumentSetSortPreference(
     : undefined;
 }
 
-function readAppRouteState(): AppRouteState {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  const route: AppRouteState = {};
-  const pathname = window.location.pathname;
-  if (pathname.startsWith(WORKSPACE_ROUTE_PREFIX)) {
-    const encodedWorkspaceId = pathname.slice(WORKSPACE_ROUTE_PREFIX.length).split("/")[0];
-    if (encodedWorkspaceId) {
-      route.workspaceId = decodeURIComponent(encodedWorkspaceId);
-    }
-  }
-
-  const searchParams = new URLSearchParams(window.location.search);
-  const filePath = searchParams.get("file");
-  if (filePath) {
-    route.filePath = filePath;
-  }
-
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const ticketId = hashParams.get("ticket");
-  if (ticketId) {
-    route.ticketId = ticketId;
-  }
-
-  const detailMode = hashParams.get("detail");
-  if (detailMode === "modal" || detailMode === "side") {
-    route.detailMode = detailMode;
-  }
-
-  return route;
-}
-
-function buildAppRoute(state: AppRouteState): string {
-  const pathname = state.workspaceId
-    ? `${WORKSPACE_ROUTE_PREFIX}${encodeURIComponent(state.workspaceId)}`
-    : "/";
-  const searchParams = new URLSearchParams();
-  if (state.filePath) {
-    searchParams.set("file", state.filePath);
-  }
-
-  const hashParams = new URLSearchParams();
-  if (state.ticketId) {
-    hashParams.set("ticket", state.ticketId);
-    hashParams.set("detail", state.detailMode ?? "side");
-  }
-
-  const search = searchParams.toString();
-  const hash = hashParams.toString();
-  return `${pathname}${search ? `?${search}` : ""}${hash ? `#${hash}` : ""}`;
-}
-
-function replaceAppRoute(state: AppRouteState): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const nextPath = buildAppRoute(state);
-  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  if (nextPath !== currentPath) {
-    window.history.replaceState(null, "", nextPath);
-  }
-}
-
 const documentSetsKey = (workspaceId?: string) => ["document-sets", workspaceId] as const;
 const markdownDocumentKey = (workspaceId?: string, fileId?: string) =>
   ["markdown-document", workspaceId, fileId] as const;
@@ -473,6 +406,8 @@ const ticketChatKey = (workspaceId?: string, fileId?: string, ticketId?: string)
   ["ticket-chat", workspaceId, fileId, ticketId] as const;
 const workspaceChatKey = (workspaceId?: string) => ["workspace-chat", workspaceId] as const;
 const workspaceDirectoriesKey = (root?: string) => ["workspace-directories", root] as const;
+const workspaceRootBrowserKey = (root?: string) => ["workspace-root-browser", root] as const;
+const workspaceRootsSettingsKey = ["workspace-roots-settings"] as const;
 const codexModelsKey = ["codex-models"] as const;
 const codexRunDefaultsKey = ["codex-run-defaults"] as const;
 
@@ -521,6 +456,31 @@ async function fetchWorkspaceDirectories(root?: string) {
     `/api/workspace-directories${query ? `?${query}` : ""}`,
     workspaceDirectoriesResponseSchema,
   );
+}
+
+async function fetchWorkspaceRootBrowserDirectories(root?: string) {
+  const params = new URLSearchParams();
+  if (root) {
+    params.set("root", root);
+  }
+  const query = params.toString();
+  return requestJson(
+    `/api/settings/workspace-root-browser${query ? `?${query}` : ""}`,
+    workspaceDirectoriesResponseSchema,
+  );
+}
+
+async function fetchWorkspaceRootsSettings() {
+  return requestJson("/api/settings/workspace-roots", workspaceRootsSettingsResponseSchema);
+}
+
+async function updateWorkspaceRootsSettings(
+  roots: string[],
+): Promise<WorkspaceRootsSettingsResponse> {
+  return requestJson("/api/settings/workspace-roots", workspaceRootsSettingsResponseSchema, {
+    body: JSON.stringify({ roots }),
+    method: "PUT",
+  });
 }
 
 async function selectWorkspaceById(workspaceId: string) {
@@ -746,7 +706,20 @@ async function markCodexRunRead(runId: string) {
 export function App() {
   const queryClient = useQueryClient();
   const appShellRef = useRef<HTMLElement>(null);
-  const initialRouteRef = useRef<AppRouteState>(readAppRouteState());
+  const navigate = useNavigate();
+  const routeLocation = useLocation({
+    select: (location) => ({
+      hash: location.hash,
+      href: location.href,
+      pathname: location.pathname,
+      searchStr: location.searchStr,
+    }),
+  });
+  const routeState = useMemo<AppRouteState>(
+    () => parseAppRouteState(routeLocation),
+    [routeLocation],
+  );
+  const initialRouteRef = useRef<AppRouteState>(routeState);
   const previousFileSelectionRef = useRef<{ id?: string; path?: string }>({});
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | undefined>(
     initialRouteRef.current.workspaceId,
@@ -808,6 +781,10 @@ export function App() {
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
     queryFn: fetchWorkspaces,
+  });
+  const workspaceRootsSettingsQuery = useQuery({
+    queryKey: workspaceRootsSettingsKey,
+    queryFn: fetchWorkspaceRootsSettings,
   });
   const selectedWorkspace = workspacesQuery.data?.workspaces.find(
     (workspace) => workspace.id === selectedWorkspaceId,
@@ -948,6 +925,25 @@ export function App() {
   }, [autoOpenLastWorkspace, selectedWorkspaceId, workspacesQuery.data]);
 
   useEffect(() => {
+    if (!selectedWorkspaceId || !workspacesQuery.data) {
+      return;
+    }
+
+    const currentWorkspace = workspacesQuery.data.workspaces.find(
+      (workspace) => workspace.id === selectedWorkspaceId,
+    );
+    if (currentWorkspace?.isAvailable) {
+      return;
+    }
+
+    shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
+    setSelectedFileId(undefined);
+    setPreferredFilePath(undefined);
+    setSelectedTicketId(undefined);
+    setSelectedWorkspaceId(undefined);
+  }, [selectedWorkspaceId, workspacesQuery.data]);
+
+  useEffect(() => {
     if (!selectedWorkspaceId || sortedDocumentSets.length === 0) {
       return;
     }
@@ -999,15 +995,19 @@ export function App() {
   }, [selectedFile, selectedTicketId]);
 
   useEffect(() => {
-    replaceAppRoute({
+    const nextHref = buildAppRoute({
       workspaceId: selectedWorkspaceId,
       filePath: currentSelectedFilePath,
       ticketId: selectedTicketId,
       detailMode: selectedTicketId ? ticketDetailMode : undefined,
     });
+    if (nextHref !== routeLocation.href) {
+      void navigate({ href: nextHref, replace: true, resetScroll: false });
+    }
   }, [
     currentSelectedFilePath,
-    preferredFilePath,
+    navigate,
+    routeLocation.href,
     selectedTicketId,
     selectedWorkspaceId,
     ticketDetailMode,
@@ -1114,24 +1114,14 @@ export function App() {
   ]);
 
   useEffect(() => {
-    function syncRouteFromLocation(): void {
-      const route = readAppRouteState();
-      setSelectedWorkspaceId(route.workspaceId);
-      setPreferredFilePath(route.filePath);
-      setSelectedFileId(undefined);
-      setSelectedTicketId(route.ticketId);
-      if (route.detailMode) {
-        setTicketDetailMode(route.detailMode);
-      }
+    setSelectedWorkspaceId(routeState.workspaceId);
+    setPreferredFilePath(routeState.filePath);
+    setSelectedFileId(undefined);
+    setSelectedTicketId(routeState.ticketId);
+    if (routeState.detailMode) {
+      setTicketDetailMode(routeState.detailMode);
     }
-
-    window.addEventListener("hashchange", syncRouteFromLocation);
-    window.addEventListener("popstate", syncRouteFromLocation);
-    return () => {
-      window.removeEventListener("hashchange", syncRouteFromLocation);
-      window.removeEventListener("popstate", syncRouteFromLocation);
-    };
-  }, []);
+  }, [routeState.detailMode, routeState.filePath, routeState.ticketId, routeState.workspaceId]);
 
   useEffect(() => {
     try {
@@ -1289,6 +1279,29 @@ export function App() {
     await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
   }
 
+  async function handleWorkspaceRootsChange(roots: string[]): Promise<void> {
+    const settings = await updateWorkspaceRootsSettings(roots);
+    queryClient.setQueryData(workspaceRootsSettingsKey, settings);
+    await queryClient.invalidateQueries({ queryKey: ["workspace-directories"] });
+    const nextWorkspaces = await queryClient.fetchQuery({
+      queryKey: ["workspaces"],
+      queryFn: fetchWorkspaces,
+    });
+
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const currentWorkspace = nextWorkspaces.workspaces.find(
+      (workspace) => workspace.id === selectedWorkspaceId,
+    );
+    if (currentWorkspace?.isAvailable) {
+      return;
+    }
+
+    handleGoToStartPage();
+  }
+
   function handleGoToStartPage(): void {
     shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
     setSelectedFileId(undefined);
@@ -1327,12 +1340,20 @@ export function App() {
           className="flex min-h-0 flex-col overflow-hidden border-r border-[var(--ak-hairline)] bg-[var(--ak-surface)] max-[860px]:max-h-[70dvh] max-[860px]:border-b max-[860px]:border-r-0"
           aria-label="Workspace files"
         >
-          <div className="border-b border-[var(--ak-hairline)] px-5 py-4">
-            <div className="flex items-center gap-2">
-              <FolderKanban className="size-5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-              <h1 className="ak-title text-base">{APP_NAME}</h1>
-            </div>
-            <p className="ak-body-muted mt-1 text-xs">Plan-ticketing workspace</p>
+          <div className="border-b border-[var(--ak-hairline)] px-3 py-3">
+            <button
+              className="ak-row grid w-full justify-start gap-1 rounded-md px-2 py-1.5 text-left hover:bg-[var(--ak-canvas-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ak-focus)]"
+              onClick={handleGoToStartPage}
+              type="button"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <FolderKanban className="size-5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
+                <span className="ak-title truncate text-base">{APP_NAME}</span>
+              </span>
+              <span className="ak-body-muted truncate pl-7 text-xs">
+                Plan-ticketing workspace
+              </span>
+            </button>
           </div>
 
           <ProjectSwitcher
@@ -1346,28 +1367,6 @@ export function App() {
             selectedWorkspaceId={selectedWorkspaceId}
             workspaces={workspacesQuery.data?.workspaces ?? []}
           />
-
-          <div className="border-b border-[var(--ak-hairline)] p-3">
-            <Button
-              className="ak-row w-full justify-start gap-3 px-3 py-2 text-left"
-              disabled={!canLoadWorkspace}
-              onClick={() => setIsWorkspaceChatOpen(true)}
-              title={
-                selectedWorkspace
-                  ? `Workspace chat for ${selectedWorkspace.root}`
-                  : "Select a project before opening workspace chat"
-              }
-              variant="ghost"
-            >
-              <Bot className="size-4 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-              <span className="grid min-w-0 gap-0.5">
-                <span className="ak-title truncate text-sm">Workspace Chat</span>
-                <span className="ak-body-muted truncate text-xs">
-                  {selectedWorkspace ? "All discovered docs" : "Select a project"}
-                </span>
-              </span>
-            </Button>
-          </div>
 
           <div className="border-b border-[var(--ak-hairline)] p-3">
             <DocumentListHeader
@@ -1481,9 +1480,10 @@ export function App() {
               onTicketSelect={setSelectedTicketId}
               runSummaryByTicket={runSummaryByTicket}
               autoOpenLastWorkspace={autoOpenLastWorkspace}
-              lastWorkspaceId={workspacesQuery.data?.lastWorkspaceId}
               onAutoOpenLastWorkspaceChange={setAutoOpenLastWorkspace}
               onWorkspaceCreate={handleWorkspaceCreate}
+              onWorkspaceOpenPath={handleWorkspaceOpenPath}
+              onWorkspaceRootsChange={handleWorkspaceRootsChange}
               onWorkspaceSelect={handleWorkspaceSelect}
               selectedDocumentSet={selectedDocumentSet}
               selectedFile={selectedFile}
@@ -1493,6 +1493,9 @@ export function App() {
               ticketIsError={ticketQuery.isError}
               ticketIsLoading={ticketQuery.isLoading}
               workspaceError={workspacesQuery.error}
+              workspaceRootsError={workspaceRootsSettingsQuery.error}
+              workspaceRootsIsLoading={workspaceRootsSettingsQuery.isLoading}
+              workspaceRootsSettings={workspaceRootsSettingsQuery.data}
               workspaces={workspacesQuery.data?.workspaces ?? []}
               workspacesError={workspacesQuery.isError}
               workspacesIsLoading={workspacesQuery.isLoading}
@@ -1501,6 +1504,18 @@ export function App() {
           </div>
         </section>
       </main>
+
+      {canLoadWorkspace ? (
+        <Button
+          className="fixed bottom-5 right-5 z-40 h-11 rounded-full px-4 shadow-[0_14px_40px_color-mix(in_oklch,var(--foreground),transparent_84%)] max-[720px]:bottom-4 max-[720px]:right-4"
+          onClick={() => setIsWorkspaceChatOpen(true)}
+          title={`Workspace chat for ${selectedWorkspace?.root ?? "selected project"}`}
+          type="button"
+        >
+          <Bot className="size-4" aria-hidden="true" />
+          Workspace Chat
+        </Button>
+      ) : null}
 
       {selectedTicket && resolvedSelectedFileId && ticketQuery.data ? (
         <TicketDetailDrawer
@@ -2532,7 +2547,6 @@ function DocumentContent({
   documentSetsError,
   documentSetsIsError,
   documentSetsIsLoading,
-  lastWorkspaceId,
   markdownDocument,
   markdownError,
   markdownIsError,
@@ -2541,6 +2555,8 @@ function DocumentContent({
   onFileSelect,
   onTicketSelect,
   onWorkspaceCreate,
+  onWorkspaceOpenPath,
+  onWorkspaceRootsChange,
   onWorkspaceSelect,
   runSummaryByTicket,
   selectedDocumentSet,
@@ -2552,6 +2568,9 @@ function DocumentContent({
   ticketIsLoading,
   ticketsByStatus,
   workspaceError,
+  workspaceRootsError,
+  workspaceRootsIsLoading,
+  workspaceRootsSettings,
   workspaces,
   workspacesError,
   workspacesIsLoading,
@@ -2560,7 +2579,6 @@ function DocumentContent({
   documentSetsError: Error | null;
   documentSetsIsError: boolean;
   documentSetsIsLoading: boolean;
-  lastWorkspaceId?: string;
   markdownDocument?: MarkdownDocumentResponse;
   markdownError: Error | null;
   markdownIsError: boolean;
@@ -2573,6 +2591,8 @@ function DocumentContent({
     parentRoot: string;
     projectName: string;
   }) => Promise<void>;
+  onWorkspaceOpenPath: (root: string) => Promise<void>;
+  onWorkspaceRootsChange: (roots: string[]) => Promise<void>;
   onWorkspaceSelect: (workspaceId: string) => Promise<void>;
   runSummaryByTicket: Map<string, CodexRunSummary>;
   selectedDocumentSet?: DocumentSetSummary;
@@ -2584,6 +2604,9 @@ function DocumentContent({
   ticketIsLoading: boolean;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
   workspaceError: Error | null;
+  workspaceRootsError: Error | null;
+  workspaceRootsIsLoading: boolean;
+  workspaceRootsSettings?: WorkspaceRootsSettingsResponse;
   workspaces: WorkspaceSummary[];
   workspacesError: boolean;
   workspacesIsLoading: boolean;
@@ -2616,10 +2639,14 @@ function DocumentContent({
     return (
       <StartWorkspacePage
         autoOpenLastWorkspace={autoOpenLastWorkspace}
-        lastWorkspaceId={lastWorkspaceId}
         onAutoOpenLastWorkspaceChange={onAutoOpenLastWorkspaceChange}
         onWorkspaceCreate={onWorkspaceCreate}
+        onWorkspaceOpenPath={onWorkspaceOpenPath}
+        onWorkspaceRootsChange={onWorkspaceRootsChange}
         onWorkspaceSelect={onWorkspaceSelect}
+        workspaceRootsError={workspaceRootsError}
+        workspaceRootsIsLoading={workspaceRootsIsLoading}
+        workspaceRootsSettings={workspaceRootsSettings}
         workspaces={workspaces}
       />
     );
@@ -2688,120 +2715,193 @@ function DocumentContent({
 
 function StartWorkspacePage({
   autoOpenLastWorkspace,
-  lastWorkspaceId,
   onAutoOpenLastWorkspaceChange,
   onWorkspaceCreate,
+  onWorkspaceOpenPath,
+  onWorkspaceRootsChange,
   onWorkspaceSelect,
+  workspaceRootsError,
+  workspaceRootsIsLoading,
+  workspaceRootsSettings,
   workspaces,
 }: {
   autoOpenLastWorkspace: boolean;
-  lastWorkspaceId?: string;
   onAutoOpenLastWorkspaceChange: (enabled: boolean) => void;
   onWorkspaceCreate: (input: {
     gitInit: boolean;
     parentRoot: string;
     projectName: string;
   }) => Promise<void>;
+  onWorkspaceOpenPath: (root: string) => Promise<void>;
+  onWorkspaceRootsChange: (roots: string[]) => Promise<void>;
   onWorkspaceSelect: (workspaceId: string) => Promise<void>;
+  workspaceRootsError: Error | null;
+  workspaceRootsIsLoading: boolean;
+  workspaceRootsSettings?: WorkspaceRootsSettingsResponse;
   workspaces: WorkspaceSummary[];
 }) {
   const availableWorkspaces = workspaces.filter((workspace) => workspace.isAvailable);
   const recentWorkspaces = availableWorkspaces
     .filter((workspace) => workspace.lastOpenedAt)
     .slice(0, 5);
-  const lastWorkspace = availableWorkspaces.find((workspace) => workspace.id === lastWorkspaceId);
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-5 py-6">
-      <section className="ak-panel grid gap-5 p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
+    <div className="mx-auto grid w-full max-w-6xl gap-4 py-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 px-1">
+        <div className="grid min-w-0 gap-2">
+          <div>
             <p className="ak-muted-label">Start</p>
-            <h2 className="ak-title mt-2 text-2xl">Choose a project to begin</h2>
-            <p className="ak-body-muted mt-2 max-w-2xl text-sm leading-6">
-              Alpha Kanban stays empty on startup unless you choose to reopen the last project.
-            </p>
+            <h2 className="ak-title mt-1.5 text-xl">Choose a project</h2>
           </div>
-          {lastWorkspace ? (
-            <Button onClick={() => void onWorkspaceSelect(lastWorkspace.id)} size="sm">
-              <FolderKanban className="size-3.5" aria-hidden="true" />
-              Open {lastWorkspace.label}
-            </Button>
-          ) : null}
-        </div>
-
-        <label className="ak-panel-muted flex items-start gap-3 p-3 text-sm">
-          <Checkbox
-            checked={autoOpenLastWorkspace}
-            className="mt-0.5"
-            onCheckedChange={(checked) => onAutoOpenLastWorkspaceChange(checked === true)}
-          />
-          <span className="grid gap-1">
-            <span className="font-medium text-[var(--ak-ink)]">
-              Open the last project automatically
+          <label className="flex items-center gap-2 text-sm text-[var(--ak-ink-secondary)]">
+            <Checkbox
+              checked={autoOpenLastWorkspace}
+              onCheckedChange={(checked) => onAutoOpenLastWorkspaceChange(checked === true)}
+            />
+            <span>Open last project automatically</span>
+            <span className="text-xs text-[var(--ak-ink-muted)]">
+              Applies on next root URL load.
             </span>
-            <span className="text-xs leading-5 text-[var(--ak-ink-muted)]">
-              When enabled, root URL visits use the saved last workspace. When disabled, this start page is shown first.
-            </span>
-          </span>
-        </label>
-      </section>
-
-      <NewProjectPanel onCreate={onWorkspaceCreate} />
-
-      <section className="grid gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="ak-title text-sm">Recent projects</h3>
-          <Badge variant="muted">{recentWorkspaces.length}</Badge>
+          </label>
         </div>
-        {recentWorkspaces.length > 0 ? (
-          <div className="grid gap-2">
-            {recentWorkspaces.map((workspace) => (
-              <WorkspaceButton
-                isSelected={false}
-                key={workspace.id}
-                onSelect={() => onWorkspaceSelect(workspace.id)}
-                workspace={workspace}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="ak-body-muted text-sm">
-            No recent projects yet. Use the project switcher to open a workspace.
-          </p>
-        )}
-      </section>
-
-      <section className="grid gap-3 border-t border-[var(--ak-hairline)] pt-5">
-        <h3 className="ak-title text-sm">How Alpha Kanban works</h3>
-        <div className="grid gap-2">
-          <StartGuideStep
-            description="Pick a project inside the configured roots. Alpha Kanban keeps local app state in this control repo."
-            icon={FolderKanban}
-            title="Select a workspace"
-          />
-          <StartGuideStep
-            description="Document sets are grouped by slug, then shown as Kanban, plan reader, or Markdown reader depending on type."
-            icon={BookOpen}
-            title="Open a plan, ticket, or inventory document"
-          />
-          <StartGuideStep
-            description="Use ticket chat for one ticket, or Workspace Chat for project-wide questions and plan-ticketing handoff."
-            icon={Bot}
-            title="Chat with Codex from the right scope"
-          />
-          <StartGuideStep
-            description="Run answers stay in chat logs; durable summaries, status, progress, and completion time stay in ticket Markdown."
-            icon={ListChecks}
-            title="Keep durable progress in Markdown"
-          />
+        <div className="flex flex-wrap justify-end gap-2">
+          <ProjectBrowseButton onOpen={onWorkspaceOpenPath} />
+          <NewProjectButton onCreate={onWorkspaceCreate} />
         </div>
-      </section>
+      </header>
+
+      <RecentProjectsPanel
+        onWorkspaceSelect={onWorkspaceSelect}
+        recentWorkspaces={recentWorkspaces}
+      />
+
+      <WorkspaceRootsPanel
+        error={workspaceRootsError}
+        isLoading={workspaceRootsIsLoading}
+        onSave={onWorkspaceRootsChange}
+        settings={workspaceRootsSettings}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)]">
+        <HowAlphaKanbanWorksPanel />
+      </div>
     </div>
   );
 }
 
-function NewProjectPanel({
+function RecentProjectsPanel({
+  onWorkspaceSelect,
+  recentWorkspaces,
+}: {
+  onWorkspaceSelect: (workspaceId: string) => Promise<void>;
+  recentWorkspaces: WorkspaceSummary[];
+}) {
+  return (
+    <section className="ak-panel grid content-start gap-3 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="ak-muted-label">Recent</p>
+          <h3 className="ak-title mt-1 text-base">Recent projects</h3>
+        </div>
+        <Badge variant="muted">{recentWorkspaces.length}</Badge>
+      </div>
+      {recentWorkspaces.length > 0 ? (
+        <div className="grid gap-2">
+          {recentWorkspaces.map((workspace) => (
+            <WorkspaceButton
+              isSelected={false}
+              key={workspace.id}
+              onSelect={() => onWorkspaceSelect(workspace.id)}
+              workspace={workspace}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="ak-panel-muted px-3 py-4 text-sm text-[var(--ak-ink-muted)]">
+          No recent projects yet.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ProjectBrowseButton({
+  onOpen,
+}: {
+  onOpen: (root: string) => Promise<void>;
+}) {
+  const [browseRoot, setBrowseRoot] = useState<string | undefined>();
+  const [isBrowserOpen, setIsBrowserOpen] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
+  const [error, setError] = useState<ClientApiError | Error | null>(null);
+  const directoriesQuery = useQuery({
+    enabled: isBrowserOpen,
+    queryFn: () => fetchWorkspaceDirectories(browseRoot),
+    queryKey: workspaceDirectoriesKey(browseRoot),
+  });
+
+  async function openProject(root: string): Promise<void> {
+    const nextRoot = root.trim();
+    if (!nextRoot) {
+      return;
+    }
+
+    setIsOpening(true);
+    setError(null);
+    try {
+      await onOpen(nextRoot);
+      setIsBrowserOpen(false);
+    } catch (nextError) {
+      setError(normalizeClientError(nextError));
+    } finally {
+      setIsOpening(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        disabled={isOpening}
+        onClick={() => {
+          setError(null);
+          setIsBrowserOpen(true);
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {isOpening ? (
+          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+        ) : (
+          <Folder className="size-3" aria-hidden="true" />
+        )}
+        Browse project
+      </Button>
+
+      {error ? (
+        <p className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+          {formatClientError(error)}
+        </p>
+      ) : null}
+
+      <FolderPickerDialog
+        data={directoriesQuery.data}
+        error={directoriesQuery.isError ? normalizeClientError(directoriesQuery.error) : null}
+        isLoading={directoriesQuery.isLoading}
+        isOpening={isOpening}
+        onBrowse={(root) => {
+          setError(null);
+          setBrowseRoot(root);
+        }}
+        onOpen={(root) => void openProject(root)}
+        onOpenChange={setIsBrowserOpen}
+        open={isBrowserOpen}
+      />
+    </>
+  );
+}
+
+function NewProjectButton({
   onCreate,
 }: {
   onCreate: (input: {
@@ -2813,9 +2913,11 @@ function NewProjectPanel({
   const [parentRoot, setParentRoot] = useState("");
   const [projectName, setProjectName] = useState("");
   const [gitInit, setGitInit] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<ClientApiError | Error | null>(null);
   const directoriesQuery = useQuery({
+    enabled: isOpen,
     queryFn: () => fetchWorkspaceDirectories(),
     queryKey: workspaceDirectoriesKey(undefined),
     staleTime: 30_000,
@@ -2844,6 +2946,7 @@ function NewProjectPanel({
         projectName: nextProjectName,
       });
       setProjectName("");
+      setIsOpen(false);
     } catch (nextError) {
       setError(normalizeClientError(nextError));
     } finally {
@@ -2852,85 +2955,433 @@ function NewProjectPanel({
   }
 
   return (
+    <>
+      <Button
+        onClick={() => {
+          setError(null);
+          setIsOpen(true);
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <FolderKanban className="size-3" aria-hidden="true" />
+        New project
+      </Button>
+
+      <Dialog onOpenChange={setIsOpen} open={isOpen}>
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)]">
+          <DialogHeader className="pr-12">
+            <DialogTitle>New project</DialogTitle>
+            <DialogDescription>
+              Create a new project folder under a configured root.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="grid gap-0" onSubmit={(event) => void createProject(event)}>
+            <div className="grid gap-4 px-5 pb-5 pt-2">
+              <label className="grid gap-1.5 text-xs font-medium text-[var(--ak-ink-muted)]">
+                Location
+                <Select
+                  disabled={isCreating || directoriesQuery.isLoading || roots.length === 0}
+                  onValueChange={setParentRoot}
+                  value={parentRoot}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="No configured roots" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roots.map((root) => (
+                      <SelectItem key={root.path} value={root.path}>
+                        {root.label} · {root.path}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <label className="grid gap-1.5 text-xs font-medium text-[var(--ak-ink-muted)]">
+                Project name
+                <input
+                  className="ak-control-field h-9 px-3 text-sm placeholder:text-[var(--ak-ink-faint)]"
+                  disabled={isCreating}
+                  onChange={(event) => {
+                    setProjectName(event.target.value);
+                    setError(null);
+                  }}
+                  placeholder="my-new-project"
+                  value={projectName}
+                />
+              </label>
+
+              <label className="flex items-center gap-2 text-xs font-medium text-[var(--ak-ink-secondary)]">
+                <Checkbox
+                  checked={gitInit}
+                  disabled={isCreating}
+                  onCheckedChange={(checked) => setGitInit(checked === true)}
+                />
+                Initialize git repository with main branch
+              </label>
+
+              {directoriesQuery.isError ? (
+                <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+                  {formatClientError(normalizeClientError(directoriesQuery.error))}
+                </p>
+              ) : null}
+              {error ? (
+                <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+                  {formatClientError(error)}
+                </p>
+              ) : null}
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => setIsOpen(false)}
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!parentRoot || !projectName.trim() || isCreating}
+                type="submit"
+              >
+                {isCreating ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                ) : (
+                  <FolderKanban className="size-3" aria-hidden="true" />
+                )}
+                Create project
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function WorkspaceRootsPanel({
+  error,
+  isLoading,
+  onSave,
+  settings,
+}: {
+  error: Error | null;
+  isLoading: boolean;
+  onSave: (roots: string[]) => Promise<void>;
+  settings?: WorkspaceRootsSettingsResponse;
+}) {
+  const [localRoots, setLocalRoots] = useState<string[]>([]);
+  const [browseRoot, setBrowseRoot] = useState<string | undefined>();
+  const [isBrowserOpen, setIsBrowserOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<ClientApiError | Error | null>(null);
+  const browserQueryRoot = browseRoot ?? settings?.roots[0]?.path;
+  const browserQuery = useQuery({
+    enabled: isBrowserOpen,
+    queryKey: workspaceRootBrowserKey(browserQueryRoot),
+    queryFn: () => fetchWorkspaceRootBrowserDirectories(browserQueryRoot),
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setLocalRoots(settings.roots.map((root) => root.path));
+    }
+  }, [settings]);
+
+  const defaultRootPaths = settings?.defaultRoots.map((root) => root.path) ?? [];
+
+  function withAddedRoot(root: string): string[] | null {
+    const nextRoot = root.trim();
+    if (!nextRoot || localRoots.includes(nextRoot)) {
+      return null;
+    }
+
+    return [...localRoots, nextRoot];
+  }
+
+  async function saveRoots(nextRoots: string[]): Promise<void> {
+    if (nextRoots.length === 0) {
+      setSaveError(new Error("At least one workspace root is required."));
+      return;
+    }
+
+    const previousRoots = localRoots;
+    setLocalRoots(nextRoots);
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(nextRoots);
+    } catch (nextError) {
+      setLocalRoots(previousRoots);
+      setSaveError(normalizeClientError(nextError));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
     <section className="ak-panel grid gap-4 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="ak-muted-label">New project</p>
-          <h3 className="ak-title mt-1 text-base">Create a workspace folder</h3>
+          <p className="ak-muted-label">Workspace roots</p>
+          <h3 className="ak-title mt-1 text-base">Allowed project locations</h3>
           <p className="ak-body-muted mt-1 text-sm leading-6">
-            Choose a configured root, create a named folder, and initialize git.
+            Project discovery, folder browsing, project creation, and Codex run cwd validation use these roots immediately after selection.
           </p>
         </div>
-        <Badge variant="outline">before selection</Badge>
+        <Badge variant={settings?.hasOverride ? "warning" : "outline"}>
+          {settings?.hasOverride ? "override" : "default"}
+        </Badge>
       </div>
 
-      <form className="grid gap-3" onSubmit={(event) => void createProject(event)}>
-        <label className="grid gap-1.5 text-xs font-medium text-[var(--ak-ink-muted)]">
-          Location
-          <select
-            className="ak-control-field h-9 px-2 text-sm"
-            disabled={isCreating || directoriesQuery.isLoading || roots.length === 0}
-            onChange={(event) => setParentRoot(event.target.value)}
-            value={parentRoot}
-          >
-            {roots.length === 0 ? <option value="">No configured roots</option> : null}
-            {roots.map((root) => (
-              <option key={root.path} value={root.path}>
-                {root.label} · {root.path}
-              </option>
-            ))}
-          </select>
-        </label>
+      {isLoading ? (
+        <div className="ak-panel-muted flex items-center gap-2 p-3 text-sm text-[var(--ak-ink-muted)]">
+          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+          Loading roots
+        </div>
+      ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <label className="grid gap-1.5 text-xs font-medium text-[var(--ak-ink-muted)]">
-            Project name
-            <input
-              className="ak-control-field h-9 px-3 text-sm placeholder:text-[var(--ak-ink-faint)]"
-              disabled={isCreating}
-              onChange={(event) => {
-                setProjectName(event.target.value);
-                setError(null);
-              }}
-              placeholder="my-new-project"
-              value={projectName}
-            />
-          </label>
-          <Button
-            className="shrink-0"
-            disabled={!parentRoot || !projectName.trim() || isCreating}
-            size="sm"
-            type="submit"
+      {error ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+          {formatClientError(normalizeClientError(error))}
+        </p>
+      ) : null}
+
+      <div className="grid gap-2">
+        {localRoots.map((root, index) => (
+          <div
+            className="ak-control flex min-h-10 min-w-0 items-center gap-2 px-3 py-2 text-sm"
+            key={`${root}-${index}`}
           >
-            {isCreating ? (
-              <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-            ) : (
-              <FolderKanban className="size-3" aria-hidden="true" />
-            )}
-            Create
-          </Button>
+            <Folder className="size-4 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
+            <span className="min-w-0 flex-1 break-all text-[var(--ak-ink)]">{root}</span>
+            <Button
+              aria-label={`Remove ${root}`}
+              disabled={isSaving || localRoots.length <= 1}
+              onClick={() =>
+                void saveRoots(localRoots.filter((_, rootIndex) => rootIndex !== index))
+              }
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          disabled={isSaving || defaultRootPaths.length === 0}
+          onClick={() => void saveRoots(defaultRootPaths)}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          Use defaults
+        </Button>
+        <Button
+          disabled={isSaving}
+          onClick={() => {
+            setBrowseRoot(settings?.roots[0]?.path);
+            setIsBrowserOpen(true);
+          }}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {isSaving ? (
+            <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+          ) : (
+            <Folder className="size-3" aria-hidden="true" />
+          )}
+          Browse root
+        </Button>
+      </div>
+
+      {saveError ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+          {formatClientError(saveError)}
+        </p>
+      ) : null}
+
+      <WorkspaceRootBrowserDialog
+        data={browserQuery.data}
+        error={browserQuery.isError ? normalizeClientError(browserQuery.error) : null}
+        isLoading={browserQuery.isLoading}
+        onBrowse={setBrowseRoot}
+        onOpenChange={setIsBrowserOpen}
+        onSelect={(root) => {
+          setIsBrowserOpen(false);
+          const nextRoots = withAddedRoot(root);
+          if (nextRoots) {
+            void saveRoots(nextRoots);
+          }
+        }}
+        open={isBrowserOpen}
+      />
+    </section>
+  );
+}
+
+function WorkspaceRootBrowserDialog({
+  data,
+  error,
+  isLoading,
+  onBrowse,
+  onOpenChange,
+  onSelect,
+  open,
+}: {
+  data?: WorkspaceDirectoriesResponse;
+  error: ClientApiError | Error | null;
+  isLoading: boolean;
+  onBrowse: (root: string | undefined) => void;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (root: string) => void;
+  open: boolean;
+}) {
+  const currentDirectory = data?.directory;
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="h-[min(720px,calc(100vh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto]">
+        <DialogHeader className="pr-12">
+          <DialogTitle>Select workspace root</DialogTitle>
+          <DialogDescription>
+            Choose a local folder to use as an Alpha Kanban project root.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid min-h-0 grid-cols-[190px_minmax(0,1fr)] border-y border-[var(--ak-hairline)] max-[720px]:grid-cols-1">
+          <aside className="min-h-0 border-r border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] p-3 max-[720px]:border-b max-[720px]:border-r-0">
+            <p className="ak-muted-label mb-2 px-1">Shortcuts</p>
+            <div className="grid gap-1 max-[720px]:grid-cols-2">
+              {data?.roots.map((root) => (
+                <DirectoryRootButton
+                  isSelected={isRootSelected(root, currentDirectory?.path)}
+                  key={root.path}
+                  onBrowse={() => onBrowse(root.path)}
+                  root={root}
+                />
+              ))}
+            </div>
+          </aside>
+
+          <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-[var(--ak-surface)]">
+            <div className="grid gap-3 border-b border-[var(--ak-hairline)] p-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  aria-label="Parent folder"
+                  disabled={!currentDirectory?.parentPath || isLoading}
+                  onClick={() => onBrowse(currentDirectory?.parentPath)}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </Button>
+                <div className="ak-control flex h-9 min-w-0 flex-1 items-center gap-2 px-3 text-sm">
+                  <Folder className="size-4 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
+                  <span className="truncate">{currentDirectory?.path ?? "Loading"}</span>
+                </div>
+              </div>
+              {currentDirectory ? (
+                <div className="flex flex-wrap items-center gap-1">
+                  <Badge variant={currentDirectory.hasDocs ? "muted" : "outline"}>
+                    {currentDirectory.hasDocs ? "docs" : "empty"}
+                  </Badge>
+                  {currentDirectory.isWorkspaceCandidate ? (
+                    <Badge variant="success">project</Badge>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="ak-scroll-area min-h-0 overflow-auto">
+              <div className="grid min-w-[700px] grid-cols-[minmax(190px,1.25fr)_150px_minmax(300px,2fr)] border-b border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] px-3 py-2 ak-muted-label">
+                <span>Name</span>
+                <span>Type</span>
+                <span>Path</span>
+              </div>
+              {isLoading ? (
+                <div className="ak-body-muted flex items-center gap-2 px-4 py-5 text-sm">
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Loading folders
+                </div>
+              ) : null}
+              {error ? (
+                <p className="m-3 break-words rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {formatClientError(error)}
+                </p>
+              ) : null}
+              {currentDirectory?.children.map((entry) => (
+                <DirectoryEntryButton
+                  entry={entry}
+                  key={entry.path}
+                  onBrowse={() => onBrowse(entry.path)}
+                />
+              ))}
+              {!isLoading && currentDirectory?.children.length === 0 ? (
+                <p className="ak-panel-muted m-3 border-dashed px-3 py-8 text-center text-sm text-[var(--ak-ink-muted)]">
+                  Empty folder
+                </p>
+              ) : null}
+            </div>
+          </section>
         </div>
 
-        <label className="flex items-center gap-2 text-xs font-medium text-[var(--ak-ink-secondary)]">
-          <Checkbox
-            checked={gitInit}
-            disabled={isCreating}
-            onCheckedChange={(checked) => setGitInit(checked === true)}
-          />
-          Initialize git repository with main branch
-        </label>
+        <DialogFooter className="max-[720px]:flex-col max-[720px]:items-stretch">
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            Cancel
+          </Button>
+          <Button
+            disabled={!currentDirectory?.path}
+            onClick={() => onSelect(currentDirectory?.path ?? "")}
+            type="button"
+          >
+            <Folder className="size-4" aria-hidden="true" />
+            Select Root
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-        {directoriesQuery.isError ? (
-          <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
-            {formatClientError(normalizeClientError(directoriesQuery.error))}
-          </p>
-        ) : null}
-        {error ? (
-          <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
-            {formatClientError(error)}
-          </p>
-        ) : null}
-      </form>
+function HowAlphaKanbanWorksPanel() {
+  return (
+    <section className="ak-panel grid content-start gap-3 p-5">
+      <div>
+        <p className="ak-muted-label">Guide</p>
+        <h3 className="ak-title mt-1 text-base">How Alpha Kanban works</h3>
+      </div>
+      <div className="grid gap-2">
+        <StartGuideStep
+          description="Pick a project inside the configured roots. Local app state stays in this control repo."
+          icon={FolderKanban}
+          title="Select a workspace"
+        />
+        <StartGuideStep
+          description="Plans, tickets, and inventories are grouped by document set and opened in the matching view."
+          icon={BookOpen}
+          title="Open a document set"
+        />
+        <StartGuideStep
+          description="Use ticket chat for one ticket, or Workspace Chat for project-wide questions."
+          icon={Bot}
+          title="Chat from the right scope"
+        />
+        <StartGuideStep
+          description="Durable summaries, status, progress, and completion time stay in ticket Markdown."
+          icon={ListChecks}
+          title="Keep progress durable"
+        />
+      </div>
     </section>
   );
 }

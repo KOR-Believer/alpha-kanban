@@ -87,4 +87,21 @@ describe("CodexStateStore", () => {
       false,
     );
   });
+
+  it("stores runtime workspace roots in the control app state file", async () => {
+    const config = loadServerConfig({ workspaceRoot });
+    const store = new CodexStateStore(config);
+    const firstRoot = path.join(workspaceRoot, "first");
+    const secondRoot = path.join(workspaceRoot, "second");
+
+    await store.setWorkspaceRootsOverride([firstRoot, secondRoot]);
+
+    expect(await store.getRuntimeSettings()).toEqual({
+      workspaceRoots: [firstRoot, secondRoot],
+    });
+    const state = JSON.parse(readFileSync(store.statePath, "utf8")) as {
+      runtimeSettings?: { workspaceRoots?: string[] };
+    };
+    expect(state.runtimeSettings?.workspaceRoots).toEqual([firstRoot, secondRoot]);
+  });
 });

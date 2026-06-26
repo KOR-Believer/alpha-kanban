@@ -12,6 +12,7 @@ import {
   createWorkspaceCodexRunRequestSchema,
   patchTicketRequestSchema,
   selectWorkspaceRequestSchema,
+  updateWorkspaceRootsSettingsRequestSchema,
   updateCodexRunDefaultsRequestSchema,
   workspaceDirectoriesRequestSchema,
 } from "@alpha-kanban/shared";
@@ -75,6 +76,32 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     try {
       const body = updateCodexRunDefaultsRequestSchema.parse(request.body);
       response.json(await codexRunner.setRunDefaults(body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/settings/workspace-roots", async (_request, response, next) => {
+    try {
+      response.json(await workspaceService.getWorkspaceRootSettings());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/settings/workspace-roots", async (request, response, next) => {
+    try {
+      const body = updateWorkspaceRootsSettingsRequestSchema.parse(request.body);
+      response.json(await workspaceService.updateWorkspaceRoots(body.roots));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/settings/workspace-root-browser", async (request, response, next) => {
+    try {
+      const query = workspaceDirectoriesRequestSchema.parse(request.query);
+      response.json(await workspaceService.listWorkspaceRootBrowserDirectories(query.root));
     } catch (error) {
       next(error);
     }
@@ -723,6 +750,8 @@ function workspaceErrorStatus(code: string): number {
   switch (code) {
     case WORKSPACE_ERROR.WORKSPACE_NOT_FOUND:
       return 404;
+    case WORKSPACE_ERROR.WORKSPACE_ROOT_INVALID:
+      return 400;
     case WORKSPACE_ERROR.WORKSPACE_ALREADY_EXISTS:
       return 409;
     case WORKSPACE_ERROR.WORKSPACE_OUTSIDE_ALLOWLIST:

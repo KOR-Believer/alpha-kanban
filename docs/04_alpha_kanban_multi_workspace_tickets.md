@@ -6,7 +6,7 @@
 - 기준 문서: `docs/03_alpha_kanban_multi_workspace_plan.md`
 - 목적: Alpha Kanban이 자기 repository docs에 고정되지 않고 사용자가 선택한 target workspace의 plan-ticketing 문서를 탐색, 수정, 실행하도록 확장한다.
 - 범위: `alpha-kanban`
-- 현재 진행률: `30 / 32 tickets`
+- 현재 진행률: `32 / 34 tickets`
 
 ## 티켓 상태
 
@@ -2415,8 +2415,8 @@ Depends on:
 
 ### AKW-31. Runtime workspaceRoots settings와 restartless allowlist 적용
 
-Status: READY
-Progress: 25%
+Status: IN_PROGRESS
+Progress: 75%
 Repository:
 
 - `apps/server`
@@ -2431,6 +2431,8 @@ Depends on:
 - `AKW-02`
 - `AKW-13`
 - `AKW-27`
+- `AKW-32`
+- `AKW-33`
 
 목표:
 
@@ -2461,16 +2463,16 @@ Depends on:
 
 완료 기준:
 
-- [ ] UI에서 현재 `workspaceRoots`를 볼 수 있다.
-- [ ] UI에서 root를 추가/제거하면 서버 재시작 없이 workspace 목록과 folder picker가 갱신된다.
-- [ ] 새 project 생성 Location은 변경된 roots를 즉시 사용한다.
-- [ ] 선택 중인 workspace가 새 roots 밖이면 안전하게 Start page로 돌아간다.
-- [ ] 재시작 후에도 user override가 유지된다.
+- [x] UI에서 현재 `workspaceRoots`를 볼 수 있다.
+- [x] UI에서 root를 추가/제거하면 서버 재시작 없이 workspace 목록과 folder picker가 갱신된다.
+- [x] 새 project 생성 Location은 변경된 roots를 즉시 사용한다.
+- [x] 선택 중인 workspace가 새 roots 밖이면 안전하게 Start page로 돌아간다.
+- [x] 재시작 후에도 user override가 유지된다.
 
 검증:
 
-- [ ] runtime settings API unit/integration test
-- [ ] workspace discovery/folder picker refetch test
+- [x] runtime settings API unit/integration test
+- [x] workspace discovery/folder picker refetch test
 - [ ] selected workspace invalidation route test
 - [ ] project creation root selection smoke
 
@@ -2478,7 +2480,167 @@ Depends on:
 
 - 2026-06-25: `workspaceRoots`가 UI로 명시 지정되지 않고 clone 위치의 부모가 지정되는 것처럼 보이므로, 사용자가 선택할 수 있는 설정 UX가 필요하다.
 - 2026-06-25: UI에서 선택을 넣는다면 서버 재시작 없이 반영되는 구조가 맞다.
+- 2026-06-25: AKW-31 구현진행.
+- 2026-06-26: root 선택 UI를 마저 구현한다.
+- 2026-06-26: 메인페이지가 세로 스택으로 너무 길고, recent와 프로젝트 browse가 아래로 밀려 UX가 나쁘다. recent를 더 위로 옮기고 전체 배치를 조정한다.
+- 2026-06-26: Start 설명 영역은 카드 하나를 차지할 가치가 없고, auto-open은 카드 밖 체크박스 정도로 충분하다.
+- 2026-06-26: 헤더의 Open last project 버튼도 Recent 최상단과 중복이므로 제거한다. 프로젝트 browse는 헤더의 작은 버튼 하나로 충분하고, Recent는 full-width로 둔다.
+- 2026-06-26: New project 설명이 부정확하다. workspace folder가 아니라 workspace root 아래 원하는 project folder를 만드는 기능이다. 이것도 카드보다 browse처럼 팝오버/다이얼로그 액션이 적절하다.
+- 2026-06-26: New project dialog padding을 맞추고 Location select는 shadcn Select로 써야 한다.
+- 2026-06-26: New project dialog body padding이 여전히 보이지 않는다. Header/Footer와 같은 좌우 padding으로 맞춘다.
+- 2026-06-26: Workspace roots의 Add root는 역할이 불명확하므로 제거한다. 사용자가 직접 타이핑할 기대는 없고, Browse root로 선택하면 즉시 저장되는 흐름이 맞다.
+- 2026-06-26: 상단 Alpha Kanban / Plan-ticketing workspace 브랜드 영역을 클릭하면 Start page(`/`)로 돌아올 수 있어야 한다.
+- 2026-06-26: Workspace Chat 버튼을 사이드바 내부가 아니라 우하단 floating button으로 배치한다.
 
 진행 메모:
 
 - 2026-06-25: 초안 작성. 현재 config 파일 직접 수정은 재시작이 필요하므로 runtime settings store/API를 별도 후속으로 분리한다.
+- 2026-06-25: runtime workspaceRoots settings API와 Start page roots 편집 UI를 구현했다. .alpha-kanban/state.json runtimeSettings.workspaceRoots override를 저장하고, workspace discovery/folder picker/project creation/select가 최신 runtime roots를 읽도록 변경했다. 현재 선택 workspace가 새 roots 밖으로 벗어나면 Start page로 돌아가게 했다. 검증 완료: pnpm --filter @alpha-kanban/server test -- api codexState, pnpm --filter @alpha-kanban/web typecheck, pnpm build, git diff --check. 남은 작업은 사용자 visual/project creation smoke다.
+- 2026-06-26: workspaceRoots 설정 전용 Browse modal/API를 추가했다. 새 GET /api/settings/workspace-root-browser endpoint는 기존 allowlist 밖 parent/child directory 탐색을 허용해 root 자체를 선택할 수 있고, Start page Workspace roots 패널의 Browse root 버튼에서 같은 directory table UI로 선택한 root를 local root 목록에 추가한 뒤 Save roots로 적용한다. 검증 완료: pnpm --filter @alpha-kanban/server test -- api, pnpm --filter @alpha-kanban/web typecheck, pnpm build, git diff --check, pnpm ticket-md check docs/04_alpha_kanban_multi_workspace_tickets.md. 남은 작업은 사용자 visual smoke다.
+- 2026-06-26: Start page를 2열 대시보드형으로 재배치했다. 상단은 Start/Recent projects, 중단은 Open project/New project, 하단은 Workspace roots/Guide로 나눠 프로젝트 browse와 recent가 첫 화면 위쪽에 보이게 했다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, pnpm --filter @alpha-kanban/server test -- api, pnpm build, git diff --check.
+- 2026-06-26: Start 카드 제거 후 페이지 헤더로 축소했다. auto-open은 카드 밖 inline checkbox로 낮추고, 첫 카드 줄은 Open project와 Recent projects가 차지하도록 조정했다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, git diff --check.
+- 2026-06-26: Start header의 Open last project 버튼과 Open project 카드를 제거했다. 헤더에는 Browse project 버튼만 남기고, Recent projects를 첫 번째 full-width 카드로 올렸다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, git diff --check.
+- 2026-06-26: New project 카드를 제거하고 Start header 액션 버튼으로 축소했다. 버튼 클릭 시 Dialog에서 configured root 아래 새 project folder 이름과 git init 여부를 입력한다. 설명은 'Create a new project folder under a configured root.'로 정리했다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, pnpm build, git diff --check.
+- 2026-06-26: New project Dialog form padding을 조정하고 native select를 local shadcn Select/SelectTrigger/SelectContent/SelectItem으로 교체했다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, pnpm build, git diff --check.
+- 2026-06-26: New project form body를 px-5/pb-5 wrapper로 감싸 DialogHeader/DialogFooter와 같은 좌우 padding rhythm을 쓰게 했다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, pnpm build, git diff --check.
+- 2026-06-26: Workspace roots 패널에서 수동 path 입력과 Add root/Save roots 단계를 제거했다. Browse root에서 폴더를 선택하면 즉시 settings 저장을 실행하고, root 제거와 Use defaults도 즉시 저장된다. 사이드바 브랜드 영역은 버튼화해 클릭 시 handleGoToStartPage로 `/` Start 상태에 복귀한다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, git diff --check.
+- 2026-06-26: 사이드바의 Workspace Chat 블록을 제거하고, selected workspace가 사용 가능한 경우에만 우하단 fixed floating button을 렌더링하도록 변경했다. 버튼은 기존 WorkspaceChatDialog를 그대로 열며 문서/티켓 탐색 사이드바와 분리된다. 검증 완료: pnpm --filter @alpha-kanban/web typecheck, git diff --check.
+
+### AKW-32. TanStack Router 기반 route state 정리
+
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-25T20:08:46+09:00
+Repository:
+
+- `apps/web`
+
+Priority: P0
+Type: UX / Routing / Refactor
+Depends on:
+
+- `AKW-27`
+
+목표:
+
+- 이미 app shell에 있는 TanStack Router를 실제 route state source로 사용하고, `App.tsx`의 manual History API 라우팅을 제거한다.
+- Start page, workspace route, selected document, ticket detail presentation을 router route/search/hash 계약으로 일관되게 복원한다.
+
+현재 문제:
+
+- `apps/web/src/main.tsx`는 `@tanstack/react-router`의 `RouterProvider`를 사용하지만 route tree는 root/index 수준에 머문다.
+- 실제 URL state는 `App.tsx`의 `readAppRouteState`, `buildAppRoute`, `replaceAppRoute`, `window.history.replaceState`, `hashchange`, `popstate`로 직접 관리된다.
+- route state가 Start page, auto-open, selected workspace, selected Markdown file, ticket detail modal/side, 향후 settings/chat state로 늘어나면서 React state와 URL state의 책임이 중복되고 있다.
+
+구현 범위:
+
+- `main.tsx` 또는 별도 router module에 `/`와 `/w/$workspaceId` route를 명시한다.
+- selected Markdown file은 TanStack Router search param으로 관리하고 schema/parse fallback을 둔다.
+- ticket detail open state와 `detail=side|modal`은 현재 hash 계약을 유지할지 search param으로 이전할지 결정하고 한 곳에서만 관리한다.
+- `App.tsx`의 `readAppRouteState`, `buildAppRoute`, `replaceAppRoute`, `hashchange`/`popstate` listener를 router state/navigate 기반으로 대체한다.
+- workspace select, open path, create project, Start page 이동, ticket open/close, detail mode 변경이 모두 router navigate를 사용하게 한다.
+- 기존 direct URL `/w/:workspaceId?file=...#ticket=...&detail=modal`이 깨지지 않게 migration fallback을 제공한다.
+
+제외 범위:
+
+- backend route 변경
+- server-side rendering
+- browser history stack을 모든 card click마다 세밀하게 push하는 UX
+- `workspaceRoots` settings API와 UI 구현
+- workspace chat modal deep link
+
+완료 기준:
+
+- [x] TanStack Router route tree가 `/`와 `/w/$workspaceId`를 명시적으로 가진다.
+- [x] selected workspace와 file이 router state에서 복원된다.
+- [x] ticket detail modal/side direct URL 계약이 route helper에서 보존된다.
+- [x] `App.tsx`에서 direct `window.history.replaceState`와 route event listener가 제거된다.
+- [x] Start page 이동과 auto-open last project가 router navigate 기반으로 동작한다.
+- [x] browser direct URL smoke에서 `/`, `/w/:id`, `?file=...`, `#ticket=...&detail=...` 복원이 확인된다.
+
+검증:
+
+- [x] `pnpm --filter @alpha-kanban/web typecheck`
+- [x] route helper/unit test 또는 component-level route parse test
+- [x] `pnpm --filter @alpha-kanban/web build`
+- [x] direct URL smoke: `/`, `/w/:id`, `/w/:id?file=...`, ticket detail URL
+- [x] Start page/auto-open smoke
+
+사용자 지시:
+
+- 2026-06-25: 앱이 애초에 TanStack Router 기반인데 manual History API로 충분하다고 본 판단이 잘못됐으므로, 라우팅 정리부터 진행한다.
+- 2026-06-25: AKW-32 스모크 완료.
+
+진행 메모:
+
+- 2026-06-25: 초안 작성. AKW-31 runtime settings는 route state가 더 늘어나기 전에 이 티켓 이후로 진행하는 선행 관계로 정리한다.
+- 2026-06-25: `apps/web/src/main.tsx` route tree에 `/w/$workspaceId`를 추가하고, route helper를 `apps/web/src/appRoute.ts`로 분리했다. `App.tsx`는 TanStack Router `useLocation`/`useNavigate`로 URL state를 읽고 쓰며, 기존 `window.history.replaceState`, `hashchange`, `popstate` 기반 동기화를 제거했다.
+- 2026-06-25: 검증 완료: `pnpm --filter @alpha-kanban/web typecheck`, `pnpm --filter @alpha-kanban/web test -- appRoute`, `pnpm --filter @alpha-kanban/web build`, `git diff --check`. `pnpm build`는 기존처럼 Vite chunk-size warning만 표시하고 성공했다. 브라우저 direct URL smoke는 아직 미실행이다.
+- 2026-06-25: 사용자 브라우저 스모크 완료 확인을 반영했다. 라우팅 구현 검증과 direct URL/Start page smoke evidence가 모두 충족되어 DONE 처리한다.
+
+### AKW-33. ticket-md Markdown safe patch CLI 구현
+
+Status: DONE
+Progress: 100%
+Completed at: 2026-06-25T19:22:35+09:00
+Repository:
+
+- `alpha-kanban`
+- `scripts`
+
+Priority: P0
+Type: Tooling / Safety / Test
+Depends on:
+
+- `AKW-32`
+
+목표:
+
+- plan-ticketing Markdown에서 특정 ticket body만 구조적으로 찾아 안전하게 상태, 진행률, 사용자 지시, 진행 메모를 수정하는 CLI를 제공한다.
+- Codex가 반복 텍스트를 잘못 매칭해 다른 ticket의 `Status`/`Progress`나 로그를 바꾸는 실수를 줄인다.
+
+현재 문제:
+
+- ticket 문서는 같은 `Status:`, `Progress:`, `사용자 지시:`, `진행 메모:` field가 반복되므로 본문 텍스트 기반 patch context가 잘못 잡히면 인접 ticket을 수정할 수 있다.
+- 사람이 line number를 눈으로 확인해도 실제 patch는 전체 문서 텍스트 매칭으로 적용될 수 있어, 패치 전후 대상 line range를 기계적으로 확인하는 절차가 없다.
+
+구현 범위:
+
+- root `pnpm ticket-md` CLI를 추가한다.
+- `show` 명령은 ticket heading 기준 line range와 주요 field line을 출력한다.
+- `status` 명령은 unique ticket id를 찾아 해당 ticket range 안의 `Status`, `Progress`, `Completed at`만 수정하고 top-level `현재 진행률`을 재계산한다.
+- `append-user`, `append-note` 명령은 해당 ticket의 `사용자 지시`, `진행 메모` section에만 append한다.
+- `check` 명령은 duplicate ticket id, top-level progress 불일치, status/progress 필드 문제를 검출한다.
+- 모든 write 명령은 patch 전후 line range와 field line을 출력한다.
+
+제외 범위:
+
+- 범용 Markdown AST editor
+- Codex `apply_patch` 자체 대체
+- UI에서 직접 이 CLI 호출
+- plan/inventory 문서 수정
+
+완료 기준:
+
+- [x] `pnpm ticket-md show`가 대상 ticket line range를 출력한다.
+- [x] `pnpm ticket-md status`가 지정 ticket range 안에서만 status/progress를 바꾼다.
+- [x] `pnpm ticket-md append-user`와 `append-note`가 지정 section에 append한다.
+- [x] `pnpm ticket-md check`가 현재 ticket 문서를 검증한다.
+- [x] 문서 갱신 작업에 CLI를 dogfood해 전후 line report를 확인한다.
+
+검증:
+
+- [x] `pnpm ticket-md check docs/04_alpha_kanban_multi_workspace_tickets.md`
+- [x] `pnpm ticket-md show docs/04_alpha_kanban_multi_workspace_tickets.md AKW-33`
+- [x] `pnpm ticket-md status ... AKW-33 --status DONE --progress 100`
+- [x] `git diff --check`
+
+사용자 지시:
+
+- 2026-06-25: 패치 위치를 잘못 잡는 문제를 줄이기 위해, 대상 ticket line number를 정확히 점검하고 patch 후 바뀐 line까지 다시 점검하는 전용 script/program을 만든다.
+
+진행 메모:
+
+- 2026-06-25: 초안 작성. 구현은 static line number 입력이 아니라 unique ticket heading으로 range를 계산하고, 그 range 안에서만 field line index를 수정하는 방식으로 진행한다.
+- 2026-06-25: pnpm ticket-md check/show로 대상 ticket line range와 field line 출력이 정상 동작함을 확인했다.
+- 2026-06-25: append-user dry-run도 전후 line range와 field line을 출력하며 파일을 쓰지 않는 것을 확인했다.

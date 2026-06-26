@@ -37,6 +37,7 @@ import {
   type MarkdownFileSummary,
   type WorkspaceSummary,
   workspaceDirectoriesResponseSchema,
+  workspaceRootsSettingsResponseSchema,
   workspacesResponseSchema,
 } from "@alpha-kanban/shared";
 
@@ -391,6 +392,94 @@ describe("API", () => {
       isWorkspaceCandidate: true,
       hasDocs: true,
     });
+  });
+
+  it("updates workspaceRoots at runtime for discovery, folder picker, and project creation", async () => {
+    const alternateRoot = path.join(workspaceRoot, "alternate-projects");
+    const alternateProjectRoot = path.join(alternateRoot, "alternate-project");
+    mkdirSync(path.join(alternateProjectRoot, "docs"), { recursive: true });
+    const realProjectsRoot = realpathSync.native(projectsRoot);
+    const realAlternateRoot = realpathSync.native(alternateRoot);
+    const realAlternateProjectRoot = realpathSync.native(alternateProjectRoot);
+
+    const rootBrowser = workspaceDirectoriesResponseSchema.parse(
+      await getJson(
+        `/api/settings/workspace-root-browser?root=${encodeURIComponent(workspaceRoot)}`,
+      ),
+    );
+    expect(rootBrowser.directory).toMatchObject({
+      path: realpathSync.native(workspaceRoot),
+    });
+    expect(
+      rootBrowser.directory?.children.some((child) => child.path === realOutsideProjectRoot),
+    ).toBe(true);
+
+    const initialSettings = workspaceRootsSettingsResponseSchema.parse(
+      await getJson("/api/settings/workspace-roots"),
+    );
+    expect(initialSettings).toEqual({
+      roots: [{ label: "projects", path: realProjectsRoot }],
+      defaultRoots: [{ label: "projects", path: realProjectsRoot }],
+      hasOverride: false,
+    });
+
+    const updatedSettings = workspaceRootsSettingsResponseSchema.parse(
+      await putJson("/api/settings/workspace-roots", { roots: [alternateRoot] }),
+    );
+    expect(updatedSettings).toEqual({
+      roots: [{ label: "alternate-projects", path: realAlternateRoot }],
+      defaultRoots: [{ label: "projects", path: realProjectsRoot }],
+      hasOverride: true,
+    });
+
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    expect(listed.workspaces.some((workspace) => workspace.root === realProjectOneRoot)).toBe(
+      false,
+    );
+    expect(
+      listed.workspaces.some((workspace) => workspace.root === realAlternateProjectRoot),
+    ).toBe(true);
+
+    const directories = workspaceDirectoriesResponseSchema.parse(
+      await getJson("/api/workspace-directories"),
+    );
+    expect(directories.roots).toEqual([
+      { label: "alternate-projects", path: realAlternateRoot },
+    ]);
+
+    const created = createWorkspaceResponseSchema.parse(
+      await postJson("/api/workspaces/create", {
+        parentRoot: alternateRoot,
+        projectName: "runtime-created",
+        gitInit: false,
+      }),
+    );
+    expect(created.createdPath).toBe(
+      realpathSync.native(path.join(alternateRoot, "runtime-created")),
+    );
+
+    const oldRootResponse = await fetch(`${baseUrl}/api/workspaces/select`, {
+      body: JSON.stringify({ root: projectOneRoot }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(oldRootResponse.status).toBe(403);
+
+    const state = JSON.parse(
+      readFileSync(path.join(workspaceRoot, ".alpha-kanban", "state.json"), "utf8"),
+    ) as {
+      runtimeSettings?: { workspaceRoots?: string[] };
+    };
+    expect(state.runtimeSettings?.workspaceRoots).toEqual([realAlternateRoot]);
+
+    const resetSettings = workspaceRootsSettingsResponseSchema.parse(
+      await putJson("/api/settings/workspace-roots", { roots: [projectsRoot] }),
+    );
+    expect(resetSettings.hasOverride).toBe(false);
+    const resetListed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    expect(resetListed.workspaces.some((workspace) => workspace.root === realProjectOneRoot)).toBe(
+      true,
+    );
   });
 
   it("rejects folder picker traversal and symlink escapes outside the allowlist", async () => {

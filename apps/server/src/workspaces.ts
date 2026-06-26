@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import { execFile } from "node:child_process";
+import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -10,6 +11,7 @@ import type {
   WorkspaceDirectory,
   WorkspaceDirectoryEntry,
   WorkspaceDirectoryRoot,
+  WorkspaceRootsSettingsResponse,
   WorkspaceSummary,
   WorkspacesResponse,
 } from "@alpha-kanban/shared";
@@ -20,6 +22,7 @@ import { CodexStateStore } from "./codexState";
 export const WORKSPACE_ERROR = {
   WORKSPACE_ALREADY_EXISTS: "WORKSPACE_ALREADY_EXISTS",
   WORKSPACE_CREATE_FAILED: "WORKSPACE_CREATE_FAILED",
+  WORKSPACE_ROOT_INVALID: "WORKSPACE_ROOT_INVALID",
   WORKSPACE_NOT_FOUND: "WORKSPACE_NOT_FOUND",
   WORKSPACE_OUTSIDE_ALLOWLIST: "WORKSPACE_OUTSIDE_ALLOWLIST",
   WORKSPACE_UNAVAILABLE: "WORKSPACE_UNAVAILABLE",
@@ -55,11 +58,12 @@ export class WorkspaceService {
   }
 
   async listWorkspaces(): Promise<WorkspacesResponse> {
-    const [allowlistRoots, recentWorkspaces, lastWorkspaceId] = await Promise.all([
-      this.allowlistRoots(),
+    const [configuredRoots, recentWorkspaces, lastWorkspaceId] = await Promise.all([
+      this.configuredWorkspaceRoots(),
       this.stateStore.getRecentWorkspaces(),
       this.stateStore.getLastWorkspaceId(),
     ]);
+    const allowlistRoots = await this.allowlistRootsFrom(configuredRoots);
     const discovered = new Map<string, WorkspaceSummary>();
 
     for (const allowlistRoot of allowlistRoots) {
@@ -79,7 +83,7 @@ export class WorkspaceService {
         continue;
       }
 
-      if (!isConfiguredPathInsideRoots(recent.root, this.config.workspaceRoots)) {
+      if (!isConfiguredPathInsideRoots(recent.root, configuredRoots)) {
         continue;
       }
 
@@ -110,6 +114,30 @@ export class WorkspaceService {
       workspaces: [...discovered.values()].sort(compareWorkspaces),
       lastWorkspaceId,
     };
+  }
+
+  async getWorkspaceRootSettings(): Promise<WorkspaceRootsSettingsResponse> {
+    const settings = await this.stateStore.getRuntimeSettings();
+    const currentRoots = await this.allowlistRootsFrom(
+      settings.workspaceRoots ?? this.config.workspaceRoots,
+    );
+
+    return {
+      roots: currentRoots.map(createDirectoryRoot).sort(compareDirectoryRoots),
+      defaultRoots: (await this.allowlistRootsFrom(this.config.workspaceRoots))
+        .map(createDirectoryRoot)
+        .sort(compareDirectoryRoots),
+      hasOverride: Boolean(settings.workspaceRoots),
+    };
+  }
+
+  async updateWorkspaceRoots(roots: string[]): Promise<WorkspaceRootsSettingsResponse> {
+    const normalizedRoots = await normalizeWorkspaceRootSettings(roots);
+    const defaultRoots = await this.allowlistRootsFrom(this.config.workspaceRoots);
+    await this.stateStore.setWorkspaceRootsOverride(
+      areSameRootSet(normalizedRoots, defaultRoots) ? undefined : normalizedRoots,
+    );
+    return this.getWorkspaceRootSettings();
   }
 
   async selectWorkspace(request: SelectWorkspaceRequest): Promise<WorkspaceSummary> {
@@ -211,6 +239,24 @@ export class WorkspaceService {
     };
   }
 
+  async listWorkspaceRootBrowserDirectories(root?: string): Promise<WorkspaceDirectoriesResponse> {
+    const currentRoots = await this.allowlistRoots();
+    const defaultRoots = await this.allowlistRootsFrom(this.config.workspaceRoots);
+    const shortcutRoots = unique([
+      ...currentRoots,
+      ...defaultRoots,
+      this.config.workspaceRoot,
+      homedir(),
+    ]);
+    const selectedRoot = root ?? currentRoots[0] ?? defaultRoots[0] ?? this.config.workspaceRoot;
+    const directory = await this.resolveExistingDirectory(selectedRoot);
+
+    return {
+      roots: shortcutRoots.map(createDirectoryRoot).sort(compareDirectoryRoots),
+      directory: await this.createRootBrowserDirectory(directory),
+    };
+  }
+
   async resolveWorkspaceRoot(root: string): Promise<WorkspaceSummary> {
     const realRoot = await realpathDirectory(root);
     if (!realRoot) {
@@ -265,9 +311,16 @@ export class WorkspaceService {
   }
 
   private async allowlistRoots(): Promise<string[]> {
-    const roots = await Promise.all(
-      this.config.workspaceRoots.map((root) => realpathDirectory(root)),
-    );
+    return this.allowlistRootsFrom(await this.configuredWorkspaceRoots());
+  }
+
+  private async configuredWorkspaceRoots(): Promise<string[]> {
+    const settings = await this.stateStore.getRuntimeSettings();
+    return settings.workspaceRoots ?? this.config.workspaceRoots;
+  }
+
+  private async allowlistRootsFrom(configuredRoots: string[]): Promise<string[]> {
+    const roots = await Promise.all(configuredRoots.map((root) => realpathDirectory(root)));
     return unique(roots.filter((root): root is string => Boolean(root)));
   }
 
@@ -323,6 +376,18 @@ export class WorkspaceService {
       throw new WorkspaceError(
         WORKSPACE_ERROR.WORKSPACE_OUTSIDE_ALLOWLIST,
         "Workspace directory is outside configured workspaceRoots.",
+      );
+    }
+
+    return realRoot;
+  }
+
+  private async resolveExistingDirectory(root: string): Promise<string> {
+    const realRoot = await realpathDirectory(root);
+    if (!realRoot) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_NOT_FOUND,
+        "Workspace directory was not found.",
       );
     }
 
@@ -394,6 +459,59 @@ export class WorkspaceService {
       .filter((entry): entry is WorkspaceDirectoryEntry => Boolean(entry))
       .sort(compareDirectoryEntries);
   }
+
+  private async createRootBrowserDirectory(root: string): Promise<WorkspaceDirectory> {
+    return {
+      path: root,
+      label: path.basename(root) || root,
+      parentPath: await this.resolveRootBrowserParentPath(root),
+      isWorkspaceCandidate: await isProjectCandidate(root),
+      hasDocs: await hasDocs(root),
+      children: await this.listRootBrowserChildDirectories(root),
+    };
+  }
+
+  private async resolveRootBrowserParentPath(root: string): Promise<string | undefined> {
+    const parentPath = path.dirname(root);
+    if (parentPath === root) {
+      return undefined;
+    }
+
+    const realParent = await realpathDirectory(parentPath);
+    return realParent && realParent !== root ? realParent : undefined;
+  }
+
+  private async listRootBrowserChildDirectories(root: string): Promise<WorkspaceDirectoryEntry[]> {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(root, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const children = await Promise.all(
+      entries
+        .filter((entry) => !shouldHideDirectory(entry.name))
+        .map(async (entry): Promise<WorkspaceDirectoryEntry | undefined> => {
+          const childPath = path.join(root, entry.name);
+          const realChild = await realpathDirectory(childPath);
+          if (!realChild) {
+            return undefined;
+          }
+
+          return {
+            name: entry.name,
+            path: realChild,
+            isWorkspaceCandidate: await isProjectCandidate(realChild),
+            hasDocs: await hasDocs(realChild),
+          };
+        }),
+    );
+
+    return children
+      .filter((entry): entry is WorkspaceDirectoryEntry => Boolean(entry))
+      .sort(compareDirectoryEntries);
+  }
 }
 
 async function isProjectCandidate(root: string): Promise<boolean> {
@@ -438,6 +556,24 @@ async function realpathDirectory(root: string): Promise<string | undefined> {
   }
 }
 
+async function normalizeWorkspaceRootSettings(roots: string[]): Promise<string[]> {
+  const normalizedRoots: string[] = [];
+
+  for (const root of roots) {
+    const realRoot = await realpathDirectory(root);
+    if (!realRoot) {
+      throw new WorkspaceError(
+        WORKSPACE_ERROR.WORKSPACE_ROOT_INVALID,
+        `Workspace root does not exist or is not a directory: ${root}`,
+      );
+    }
+
+    normalizedRoots.push(realRoot);
+  }
+
+  return unique(normalizedRoots);
+}
+
 async function exists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
@@ -479,6 +615,15 @@ function createDirectoryRoot(root: string): WorkspaceDirectoryRoot {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function areSameRootSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const rightSet = new Set(right);
+  return left.every((root) => rightSet.has(root));
 }
 
 function compareDirectoryRoots(
