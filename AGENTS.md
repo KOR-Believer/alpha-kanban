@@ -8,6 +8,16 @@
 - Keep Playwright snapshots short. Avoid dumping large accessibility snapshots when the page has long project or ticket lists.
 - For visual-only checks, use a screenshot or browser inspection summary instead of raw snapshot output.
 
+## Plan-Ticketing Markdown
+
+- Use the bundled `skills/plan-ticketing` skill as the operating protocol for creating or updating plan, ticket, and inventory documents.
+- Prefer the repo-local `pnpm ticket-md` helper when changing ticket status, progress, `Completed at`, `사용자 지시`, or `진행 메모`.
+- Use `pnpm ticket-md show <file> <ticket-id>` before editing an existing ticket so the exact ticket range is known.
+- Use `pnpm ticket-md status`, `pnpm ticket-md append-user`, and `pnpm ticket-md append-note` for canonical ticket mutations. These commands update only the located ticket body and top-level `현재 진행률`.
+- Run `pnpm ticket-md check <file>` after ticket document edits.
+- Manual `apply_patch` edits are acceptable for non-canonical prose or checkbox changes, but keep them inside the inspected ticket range and re-run `pnpm ticket-md check`.
+- Do not resurrect legacy Progress Board sections. Ticket body fields are the canonical source of truth.
+
 ## Product UI Design
 
 - `DESIGN-notion.md` was deprecated and removed from this project. Do not recreate it or use it as the design-system source.
