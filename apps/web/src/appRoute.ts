@@ -1,9 +1,11 @@
 export type TicketDetailMode = "side" | "modal";
+export type TicketDocumentViewMode = "board" | "markdown";
 
 export type AppRouteState = {
   detailMode?: TicketDetailMode;
   filePath?: string;
   ticketId?: string;
+  ticketViewMode?: TicketDocumentViewMode;
   workspaceId?: string;
 };
 
@@ -33,6 +35,11 @@ export function parseAppRouteState(location: AppRouteLocation): AppRouteState {
     route.filePath = filePath;
   }
 
+  const ticketViewMode = searchParams.get("view");
+  if (ticketViewMode === "board" || ticketViewMode === "markdown") {
+    route.ticketViewMode = ticketViewMode;
+  }
+
   const hashParams = new URLSearchParams((location.hash ?? "").replace(/^#/, ""));
   const ticketId = hashParams.get("ticket");
   if (ticketId) {
@@ -54,6 +61,9 @@ export function buildAppRoute(state: AppRouteState): string {
   const searchParams = new URLSearchParams();
   if (state.filePath) {
     searchParams.set("file", state.filePath);
+  }
+  if (state.ticketViewMode === "markdown") {
+    searchParams.set("view", state.ticketViewMode);
   }
 
   const hashParams = new URLSearchParams();

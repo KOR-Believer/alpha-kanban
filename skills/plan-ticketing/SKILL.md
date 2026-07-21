@@ -34,24 +34,35 @@ Answer the user's current question first, then update documents. Do not hide dec
 6. Keep implementation code changes out of the document commit unless the user asks to implement.
 7. If implementation follows, update ticket progress as work completes.
 
-## Alpha Kanban Repository Helper
+## Ticket Markdown Helper
 
-When this skill is used inside the Alpha Kanban repository, prefer the repo-local `pnpm ticket-md` helper for existing ticket documents:
+For existing ticket documents, prefer the deterministic `ticket-md` helper before manually editing canonical ticket fields. It is bundled with this skill at `scripts/ticket-md.mjs`.
+
+Use the first available command form:
+
+1. Inside a repository that exposes a package script:
+   - `pnpm ticket-md <command> ...`
+2. From an installed skill directory:
+   - `node ~/.codex/skills/plan-ticketing/scripts/ticket-md.mjs <command> ...`
+3. From a checked-out skill directory:
+   - `node <path-to-skill>/scripts/ticket-md.mjs <command> ...`
+
+Common commands:
 
 - Inspect a ticket before changing it:
-  - `pnpm ticket-md show <file> <ticket-id>`
+  - `ticket-md show <file> <ticket-id>`
 - Change canonical ticket state:
-  - `pnpm ticket-md status <file> <ticket-id> --status DONE --progress 100`
+  - `ticket-md status <file> <ticket-id> --status DONE --progress 100`
 - Append user instructions:
-  - `pnpm ticket-md append-user <file> <ticket-id> "<text>"`
+  - `ticket-md append-user <file> <ticket-id> "<text>"`
 - Append agent progress notes:
-  - `pnpm ticket-md append-note <file> <ticket-id> "<text>"`
+  - `ticket-md append-note <file> <ticket-id> "<text>"`
 - Validate after edits:
-  - `pnpm ticket-md check <file>`
+  - `ticket-md check <file>`
 
 Use `ticket-md` for status, progress, `Completed at`, `사용자 지시`, and `진행 메모` whenever possible. The helper locates a unique ticket heading, limits writes to that ticket body, and recalculates top-level `현재 진행률`.
 
-Manual Markdown edits are still acceptable for new document creation, non-canonical prose, and checkbox changes, but first inspect the ticket range with `pnpm ticket-md show`, keep the patch inside that range, and run `pnpm ticket-md check` afterward.
+Manual Markdown edits are still acceptable for new document creation, non-canonical prose, and checkbox changes, but first inspect the ticket range with `ticket-md show`, keep the patch inside that range, and run `ticket-md check` afterward.
 
 ## Plan Document Shape
 

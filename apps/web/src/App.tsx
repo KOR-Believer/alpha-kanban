@@ -96,6 +96,7 @@ import {
   Folder,
   FolderKanban,
   House,
+  LayoutGrid,
   ListChecks,
   Loader2,
   Maximize2,
@@ -137,6 +138,7 @@ import {
   parseAppRouteState,
   type AppRouteState,
   type TicketDetailMode,
+  type TicketDocumentViewMode,
 } from "./appRoute";
 import {
   DEFAULT_DOCUMENT_SET_SORT_PREFERENCE,
@@ -732,6 +734,9 @@ export function App() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | undefined>(
     initialRouteRef.current.ticketId,
   );
+  const [ticketViewMode, setTicketViewMode] = useState<TicketDocumentViewMode>(
+    () => initialRouteRef.current.ticketViewMode ?? "board",
+  );
   const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [ticketDetailMode, setTicketDetailMode] = useState<TicketDetailMode>(
@@ -831,7 +836,12 @@ export function App() {
     queryKey: ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
   });
   const markdownQuery = useQuery({
-    enabled: Boolean(canLoadWorkspace && resolvedSelectedFileId && selectedFile && !isTicketsDocument),
+    enabled: Boolean(
+      canLoadWorkspace &&
+        resolvedSelectedFileId &&
+        selectedFile &&
+        (!isTicketsDocument || ticketViewMode === "markdown"),
+    ),
     queryFn: () => fetchMarkdownDocument(selectedWorkspaceId ?? "", resolvedSelectedFileId ?? ""),
     queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
   });
@@ -871,9 +881,10 @@ export function App() {
 
     return summaries;
   }, [codexRunSummaryQuery.data?.runs]);
-  const selectedTicket = ticketQuery.data?.document.tickets.find(
-    (ticket) => ticket.id === selectedTicketId,
-  );
+  const selectedTicket =
+    ticketViewMode === "board"
+      ? ticketQuery.data?.document.tickets.find((ticket) => ticket.id === selectedTicketId)
+      : undefined;
   const selectedTicketRunSummary = selectedTicketId
     ? runSummaryByTicket.get(selectedTicketId)
     : undefined;
@@ -996,11 +1007,18 @@ export function App() {
   }, [selectedFile, selectedTicketId]);
 
   useEffect(() => {
+    if (ticketViewMode === "markdown" && selectedTicketId) {
+      setSelectedTicketId(undefined);
+    }
+  }, [selectedTicketId, ticketViewMode]);
+
+  useEffect(() => {
     const nextHref = buildAppRoute({
       workspaceId: selectedWorkspaceId,
       filePath: currentSelectedFilePath,
       ticketId: selectedTicketId,
       detailMode: selectedTicketId ? ticketDetailMode : undefined,
+      ticketViewMode,
     });
     if (nextHref !== routeLocation.href) {
       void navigate({ href: nextHref, replace: true, resetScroll: false });
@@ -1012,6 +1030,7 @@ export function App() {
     selectedTicketId,
     selectedWorkspaceId,
     ticketDetailMode,
+    ticketViewMode,
   ]);
 
   useEffect(() => {
@@ -1058,6 +1077,11 @@ export function App() {
         void queryClient.invalidateQueries({
           queryKey: ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
         });
+        if (ticketViewMode === "markdown") {
+          void queryClient.invalidateQueries({
+            queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
+          });
+        }
       } else {
         void queryClient.invalidateQueries({
           queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
@@ -1076,6 +1100,7 @@ export function App() {
     selectedTicketId,
     selectedWorkspaceId,
     ticketQuery.data?.file.hash,
+    ticketViewMode,
   ]);
 
   useEffect(() => {
@@ -1093,11 +1118,20 @@ export function App() {
         return;
       }
 
-      void queryClient.invalidateQueries({
-        queryKey: isTicketsDocument
-          ? ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId)
-          : markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
-      });
+      if (isTicketsDocument) {
+        void queryClient.invalidateQueries({
+          queryKey: ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
+        });
+        if (ticketViewMode === "markdown") {
+          void queryClient.invalidateQueries({
+            queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
+          });
+        }
+      } else {
+        void queryClient.invalidateQueries({
+          queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
+        });
+      }
     }
 
     window.addEventListener("focus", refetchVisibleDocument);
@@ -1112,6 +1146,7 @@ export function App() {
     queryClient,
     resolvedSelectedFileId,
     selectedWorkspaceId,
+    ticketViewMode,
   ]);
 
   useEffect(() => {
@@ -1119,10 +1154,17 @@ export function App() {
     setPreferredFilePath(routeState.filePath);
     setSelectedFileId(undefined);
     setSelectedTicketId(routeState.ticketId);
+    setTicketViewMode(routeState.ticketViewMode ?? "board");
     if (routeState.detailMode) {
       setTicketDetailMode(routeState.detailMode);
     }
-  }, [routeState.detailMode, routeState.filePath, routeState.ticketId, routeState.workspaceId]);
+  }, [
+    routeState.detailMode,
+    routeState.filePath,
+    routeState.ticketId,
+    routeState.ticketViewMode,
+    routeState.workspaceId,
+  ]);
 
   useEffect(() => {
     try {
@@ -1241,7 +1283,10 @@ export function App() {
     }
 
     if (isTicketsDocument) {
-      await ticketQuery.refetch();
+      await Promise.all([
+        ticketQuery.refetch(),
+        ...(ticketViewMode === "markdown" ? [markdownQuery.refetch()] : []),
+      ]);
     } else {
       await markdownQuery.refetch();
     }
@@ -1463,19 +1508,27 @@ export function App() {
                   </div>
                 ) : null}
               </div>
-              <DocumentSummary
-                file={ticketQuery.data?.file}
-                fallbackFile={selectedFile}
-                isLoading={
-                  selectedFile?.type === "tickets"
-                    ? ticketQuery.isLoading
-                    : markdownQuery.isLoading
-                }
-                markdownDocument={markdownQuery.data}
-                runSummary={codexRunSummaryQuery.data}
-                selectedDocumentSet={selectedDocumentSet}
-                ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
-              />
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
+                {selectedFile?.type === "tickets" ? (
+                  <TicketDocumentViewToggle
+                    mode={ticketViewMode}
+                    onChange={setTicketViewMode}
+                  />
+                ) : null}
+                <DocumentSummary
+                  file={ticketQuery.data?.file}
+                  fallbackFile={selectedFile}
+                  isLoading={
+                    selectedFile?.type === "tickets"
+                      ? ticketQuery.isLoading
+                      : markdownQuery.isLoading
+                  }
+                  markdownDocument={markdownQuery.data}
+                  runSummary={codexRunSummaryQuery.data}
+                  selectedDocumentSet={selectedDocumentSet}
+                  ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
+                />
+              </div>
             </header>
 
             <div className="ak-scroll-area min-h-0 overflow-auto p-5">
@@ -1505,6 +1558,7 @@ export function App() {
                 ticketError={ticketQuery.error}
                 ticketIsError={ticketQuery.isError}
                 ticketIsLoading={ticketQuery.isLoading}
+                ticketViewMode={ticketViewMode}
                 workspaceError={workspacesQuery.error}
                 workspacesError={workspacesQuery.isError}
                 workspacesIsLoading={workspacesQuery.isLoading}
@@ -2499,6 +2553,47 @@ function HealthPill({ status }: { status: "error" | "pending" | "success" }) {
   );
 }
 
+function TicketDocumentViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: TicketDocumentViewMode;
+  onChange: (mode: TicketDocumentViewMode) => void;
+}) {
+  return (
+    <div
+      aria-label="Ticket document view"
+      className="inline-flex items-center gap-0.5 rounded-[var(--ak-radius-lg)] border border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] p-0.5"
+      role="group"
+    >
+      <Button
+        aria-pressed={mode === "board"}
+        className="rounded-[var(--ak-radius-md)]"
+        onClick={() => onChange("board")}
+        size="xs"
+        title="Show ticket board"
+        type="button"
+        variant={mode === "board" ? "secondary" : "ghost"}
+      >
+        <LayoutGrid aria-hidden="true" className="size-3.5" />
+        Board
+      </Button>
+      <Button
+        aria-pressed={mode === "markdown"}
+        className="rounded-[var(--ak-radius-md)]"
+        onClick={() => onChange("markdown")}
+        size="xs"
+        title="Show raw Markdown document"
+        type="button"
+        variant={mode === "markdown" ? "secondary" : "ghost"}
+      >
+        <FileText aria-hidden="true" className="size-3.5" />
+        Markdown
+      </Button>
+    </div>
+  );
+}
+
 function DocumentSummary({
   fallbackFile,
   file,
@@ -2569,6 +2664,7 @@ function DocumentContent({
   ticketError,
   ticketIsError,
   ticketIsLoading,
+  ticketViewMode,
   ticketsByStatus,
   workspaceError,
   workspacesError,
@@ -2593,6 +2689,7 @@ function DocumentContent({
   ticketError: Error | null;
   ticketIsError: boolean;
   ticketIsLoading: boolean;
+  ticketViewMode: TicketDocumentViewMode;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
   workspaceError: Error | null;
   workspacesError: boolean;
@@ -2660,7 +2757,7 @@ function DocumentContent({
     return <BoardState title="Document unavailable" />;
   }
 
-  if (selectedFile.type !== "tickets") {
+  if (selectedFile.type !== "tickets" || ticketViewMode === "markdown") {
     return (
       <MarkdownDocumentReader
         document={markdownDocument}

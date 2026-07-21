@@ -67,6 +67,7 @@ The full skill directory is vendored in this repository:
 skills/plan-ticketing/
   SKILL.md
   agents/openai.yaml
+  scripts/ticket-md.mjs
   assets/
   references/
 ```
@@ -86,6 +87,20 @@ CODEX_HOME=/path/to/.codex pnpm install:skill
 
 After installation, restart Codex. Then prompts can reference `$plan-ticketing`
 to create or update plan, ticket, and inventory documents.
+
+The installed skill also includes the deterministic ticket Markdown helper, so
+it can be used outside Alpha Kanban WebUI:
+
+```bash
+node ~/.codex/skills/plan-ticketing/scripts/ticket-md.mjs show docs/example_tickets.md ABC-01
+node ~/.codex/skills/plan-ticketing/scripts/ticket-md.mjs check docs/example_tickets.md
+```
+
+Inside this repository the shorter wrapper is available:
+
+```bash
+pnpm ticket-md show docs/11_alpha_kanban_autonomous_runs_tickets.md NVD-03
+```
 
 ## Ticket Editing
 

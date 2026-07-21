@@ -2645,9 +2645,11 @@ Depends on:
 사용자 지시:
 
 - 2026-06-25: 패치 위치를 잘못 잡는 문제를 줄이기 위해, 대상 ticket line number를 정확히 점검하고 patch 후 바뀐 line까지 다시 점검하는 전용 script/program을 만든다.
+- 2026-07-01: 전역 plan-ticketing 스킬이 설치된 사람은 Alpha Kanban WebUI와 별개로 ticket-md helper를 사용할 수 있어야 한다.
 
 진행 메모:
 
 - 2026-06-25: 초안 작성. 구현은 static line number 입력이 아니라 unique ticket heading으로 range를 계산하고, 그 range 안에서만 field line index를 수정하는 방식으로 진행한다.
 - 2026-06-25: pnpm ticket-md check/show로 대상 ticket line range와 field line 출력이 정상 동작함을 확인했다.
 - 2026-06-25: append-user dry-run도 전후 line range와 field line을 출력하며 파일을 쓰지 않는 것을 확인했다.
+- 2026-07-01: ticket-md 본체를 skills/plan-ticketing/scripts/ticket-md.mjs로 번들링하고, root scripts/ticket-md.mjs는 해당 helper를 호출하는 wrapper로 축소했다. pnpm install:skill로 전역 ~/.codex/skills/plan-ticketing/scripts/ticket-md.mjs 설치와 직접 실행을 확인했다.
