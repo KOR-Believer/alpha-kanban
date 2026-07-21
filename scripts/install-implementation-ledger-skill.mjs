@@ -7,11 +7,13 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const sourceDir = path.join(repoRoot, "skills", "plan-ticketing");
+const skillName = "implementation-ledger";
+const sourceDir = path.join(repoRoot, "skills", skillName);
 const codexHome = process.env.CODEX_HOME
   ? path.resolve(process.env.CODEX_HOME)
   : path.join(os.homedir(), ".codex");
-const targetDir = path.join(codexHome, "skills", "plan-ticketing");
+const targetDir = path.join(codexHome, "skills", skillName);
+const legacyTargetDir = path.join(codexHome, "skills", "plan-ticketing");
 
 async function pathExists(targetPath) {
   try {
@@ -44,13 +46,16 @@ async function copyDirectory(source, target) {
 async function main() {
   const skillFile = path.join(sourceDir, "SKILL.md");
   if (!(await pathExists(skillFile))) {
-    throw new Error(`Could not find bundled plan-ticketing skill at ${skillFile}`);
+    throw new Error(`Could not find bundled ${skillName} skill at ${skillFile}`);
   }
 
   await fs.rm(targetDir, { force: true, recursive: true });
   await copyDirectory(sourceDir, targetDir);
 
-  console.log(`Installed plan-ticketing skill to ${targetDir}`);
+  console.log(`Installed ${skillName} skill to ${targetDir}`);
+  if (await pathExists(legacyTargetDir)) {
+    console.log(`Legacy skill remains unchanged at ${legacyTargetDir}.`);
+  }
   console.log("Restart Codex so the skill list refreshes.");
 }
 

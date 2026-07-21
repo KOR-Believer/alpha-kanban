@@ -1,0 +1,7 @@
+interface:
+  display_name: "Implementation Ledger"
+  short_description: "Create Alpha Kanban-compatible implementation ledgers"
+  default_prompt: "Use $implementation-ledger to preserve this implementation discussion as concise, Alpha Kanban-compatible plan, ticket, or inventory documents."
+
+policy:
+  allow_implicit_invocation: true

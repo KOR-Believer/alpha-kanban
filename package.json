@@ -8,7 +8,7 @@
     "dev": "concurrently -n server,web -c cyan,magenta \"pnpm --filter @alpha-kanban/server dev\" \"node scripts/wait-for-url.mjs http://127.0.0.1:5174/api/health && pnpm --filter @alpha-kanban/web dev\"",
     "build": "pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/server build && pnpm --filter @alpha-kanban/web build",
     "typecheck": "pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/server typecheck && pnpm --filter @alpha-kanban/web typecheck",
-    "install:skill": "node scripts/install-plan-ticketing-skill.mjs",
+    "install:skill": "node scripts/install-implementation-ledger-skill.mjs",
     "ticket-md": "node scripts/ticket-md.mjs",
     "test": "pnpm -r --if-present test"
   },

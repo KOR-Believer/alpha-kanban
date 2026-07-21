@@ -1,7 +1,0 @@
-interface:
-  display_name: "Plan Ticketing"
-  short_description: "Create plan, ticket, and inventory docs"
-  default_prompt: "Use $plan-ticketing to create or update implementation plan, ticket, and inventory documents."
-
-policy:
-  allow_implicit_invocation: true

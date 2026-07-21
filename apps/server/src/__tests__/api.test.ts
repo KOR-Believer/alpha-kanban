@@ -844,8 +844,8 @@ describe("API", () => {
     expect(planTicketingPreview.intent).toBe("plan_ticketing_handoff");
     expect(planTicketingPreview.mode).toBe("edit");
     expect(planTicketingPreview.scopeResolution.scope).toBe("workspace");
-    expect(planTicketingPreview.prompt).toContain("$plan-ticketing");
-    expect(planTicketingPreview.prompt).toContain("작업 모드: Plan-ticketing handoff");
+    expect(planTicketingPreview.prompt).toContain("$implementation-ledger");
+    expect(planTicketingPreview.prompt).toContain("작업 모드: Implementation-ledger handoff");
     expect(planTicketingPreview.prompt).toContain("Resolved scope:");
     expect(planTicketingPreview.prompt).toContain("raw `@w`/`@t:` mention");
 

@@ -1,6 +1,6 @@
 # Alpha Kanban
 
-Local kanban workspace for selecting a target project, browsing plan-ticketing Markdown sets, editing ticket state, discussing scope-aware work, and launching local Codex runs from the selected workspace context.
+Local kanban workspace for selecting a target project, browsing implementation-ledger Markdown sets, editing ticket state, discussing scope-aware work, and launching local Codex runs from the selected workspace context.
 
 ## What It Does
 
@@ -8,7 +8,7 @@ Local kanban workspace for selecting a target project, browsing plan-ticketing M
 - Groups selected workspace Markdown files into document sets for `*_plan.md`, `*_tickets.md`, `*_inventory.md`, and other `.md` files.
 - Renders selected ticket documents as a Notion-like flat kanban board and renders plan/inventory/markdown files in reader mode.
 - Opens a ticket detail drawer with canonical fields, status/progress controls, user instruction history, progress notes, scope-aware Codex run draft, prompt preview, and ticket chat history.
-- Provides a workspace chat surface for project-wide discussion, spec grilling, and plan-ticketing handoff prompts.
+- Provides a workspace chat surface for project-wide discussion, spec grilling, and implementation-ledger handoff prompts.
 - Writes ticket changes back to Markdown with stale-file protection and external Markdown change detection.
 - Runs `codex exec --json` locally, streams logs, supports cancel/read state, and stores workspace-scoped Codex session ids in `.alpha-kanban/state.json`.
 
@@ -19,8 +19,8 @@ pnpm install
 pnpm install:skill
 ```
 
-`pnpm install:skill` installs the bundled `plan-ticketing` Codex skill from
-`skills/plan-ticketing` into `${CODEX_HOME:-~/.codex}/skills/plan-ticketing`.
+`pnpm install:skill` installs the bundled `implementation-ledger` Codex skill from
+`skills/implementation-ledger` into `${CODEX_HOME:-~/.codex}/skills/implementation-ledger`.
 Restart Codex after installing so the skill list refreshes.
 
 ## Run
@@ -57,16 +57,17 @@ If the config file is missing, the server defaults to `defaultDocRoots: ["docs"]
 
 ## Required Codex Skill
 
-Alpha Kanban is designed around the bundled `plan-ticketing` Codex skill. The
+Alpha Kanban is designed around the bundled `implementation-ledger` Codex skill. The
 app can browse and edit Markdown without the skill, but Workspace Chat handoffs
 and `Run with Codex` prompts assume the skill is installed.
 
 The full skill directory is vendored in this repository:
 
 ```text
-skills/plan-ticketing/
+skills/implementation-ledger/
   SKILL.md
   agents/openai.yaml
+  scripts/check-ledger.mjs
   scripts/ticket-md.mjs
   assets/
   references/
@@ -78,22 +79,26 @@ Install or refresh it with:
 pnpm install:skill
 ```
 
-By default the installer writes to `~/.codex/skills/plan-ticketing`. Set
+By default the installer writes to `~/.codex/skills/implementation-ledger`. Set
 `CODEX_HOME` if your Codex home directory is elsewhere:
 
 ```bash
 CODEX_HOME=/path/to/.codex pnpm install:skill
 ```
 
-After installation, restart Codex. Then prompts can reference `$plan-ticketing`
+After installation, restart Codex. Then prompts can reference `$implementation-ledger`
 to create or update plan, ticket, and inventory documents.
+
+The installer does not delete an existing `~/.codex/skills/plan-ticketing`
+directory because it may contain user changes. Remove that legacy skill manually
+when both skills should not be discoverable.
 
 The installed skill also includes the deterministic ticket Markdown helper, so
 it can be used outside Alpha Kanban WebUI:
 
 ```bash
-node ~/.codex/skills/plan-ticketing/scripts/ticket-md.mjs show docs/example_tickets.md ABC-01
-node ~/.codex/skills/plan-ticketing/scripts/ticket-md.mjs check docs/example_tickets.md
+node ~/.codex/skills/implementation-ledger/scripts/ticket-md.mjs show examples/sample_tickets.md SMP-01
+node ~/.codex/skills/implementation-ledger/scripts/check-ledger.mjs examples/sample_tickets.md
 ```
 
 Inside this repository the shorter wrapper is available:

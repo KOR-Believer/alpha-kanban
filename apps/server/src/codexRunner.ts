@@ -1047,7 +1047,7 @@ export function buildCodexPrompt({
   ];
 
   return [
-    `${workspaceRoot} 프로젝트에서 plan-ticketing 문서 기반 작업을 이어가.`,
+    `${workspaceRoot} 프로젝트에서 $implementation-ledger 기반 작업을 이어가.`,
     "",
     `Ticket file: ${ticketFilePath}`,
     planPath ? `Plan file: ${planPath}` : "Plan file: not declared in ticket document",
@@ -1093,7 +1093,7 @@ export function buildWorkspaceCodexPrompt({
             `  - [${document.type}] ${document.workspaceRelativePath}`,
         ),
       ])
-    : ["- No plan-ticketing documents were discovered under the selected workspace docs roots."];
+    : ["- No implementation-ledger documents were discovered under the selected workspace docs roots."];
   const modeRules =
     intent === "spec_grilling"
       ? [
@@ -1109,16 +1109,16 @@ export function buildWorkspaceCodexPrompt({
           "  - Decisions so far",
           "  - Tentative scope",
           "  - Open questions",
-          "  - Plan-ticketing handoff readiness",
+          "  - Implementation-ledger handoff readiness",
           "- 충분히 정리되었다고 판단되면 어떤 plan/ticket handoff가 필요한지만 제안하고, 직접 파일을 수정하지 마.",
         ]
       : intent === "plan_ticketing_handoff"
         ? [
-            "작업 모드: Plan-ticketing handoff",
+            "작업 모드: Implementation-ledger handoff",
             "",
-            "plan-ticketing handoff 규칙:",
+            "implementation-ledger handoff 규칙:",
             "- 이 실행은 사용자가 workspace chat에서 명시적으로 선택한 plan/ticket 생성 또는 갱신 handoff다.",
-            "- $plan-ticketing 스킬을 사용해 새 plan/ticket/inventory 문서를 만들거나 기존 문서에 티켓을 추가해.",
+            "- $implementation-ledger 스킬을 사용해 새 plan/ticket/inventory 문서를 만들거나 기존 문서에 티켓을 추가해.",
             "- 문서 전체를 prompt 기억에 의존하지 말고, 필요할 때 rg/sed로 관련 plan/ticket/inventory 문서를 직접 읽어.",
             "- Alpha Kanban이 아래에 넣은 Resolved scope block을 신뢰하고, raw `@w`/`@t:` mention을 다시 독자적으로 해석하지 마.",
             "- 새 문서나 티켓을 만들었다면 최종 답변에 workspace-relative file path와 생성/갱신한 ticket id를 요약해.",
@@ -1138,7 +1138,7 @@ export function buildWorkspaceCodexPrompt({
           "",
           "edit-capable workspace prompt 규칙:",
           "- 이 프롬프트는 workspace-level chat에서 생성되었다. 특정 ticket drawer에서 시작된 실행이 아니다.",
-          "- 사용자가 plan/ticket/inventory 생성을 요청하면 $plan-ticketing 스킬 규칙을 따르고, 관련 문서는 필요할 때 rg/sed로 직접 읽어.",
+          "- 사용자가 plan/ticket/inventory 생성을 요청하면 $implementation-ledger 스킬 규칙을 따르고, 관련 문서는 필요할 때 rg/sed로 직접 읽어.",
           "- 새 문서 생성/수정은 workspace chat의 preview/confirm boundary를 통과한 명시 실행으로만 진행한다.",
           "- 파일을 수정한다면 관련 없는 사용자 변경은 되돌리지 마.",
         ];
@@ -1162,7 +1162,7 @@ export function buildWorkspaceCodexPrompt({
   ];
 
   return [
-    `${workspaceRoot} 프로젝트에서 workspace-level plan-ticketing 논의를 이어가.`,
+    `${workspaceRoot} 프로젝트에서 workspace-level implementation ledger 논의를 이어가.`,
     "",
     `Workspace root: ${workspaceRoot}`,
     `Workspace chat intent: ${intent}`,

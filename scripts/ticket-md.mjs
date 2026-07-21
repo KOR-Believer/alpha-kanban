@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const helperPath = path.resolve(
   scriptDir,
-  "../skills/plan-ticketing/scripts/ticket-md.mjs",
+  "../skills/implementation-ledger/scripts/ticket-md.mjs",
 );
 
 const result = spawnSync(process.execPath, [helperPath, ...process.argv.slice(2)], {
