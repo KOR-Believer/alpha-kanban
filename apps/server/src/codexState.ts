@@ -20,6 +20,7 @@ const EMPTY_STATE: AlphaKanbanState = {
   runResults: {},
   codexRunDefaults: {},
   runtimeSettings: {},
+  boardOrder: [],
 };
 
 export class CodexStateStore {
@@ -179,6 +180,17 @@ export class CodexStateStore {
     return state.runtimeSettings;
   }
 
+  async getBoardOrder(): Promise<string[]> {
+    return (await this.readState()).boardOrder;
+  }
+
+  async setBoardOrder(keys: string[]): Promise<string[]> {
+    const state = await this.readState();
+    state.boardOrder = [...new Set(keys)];
+    await this.writeState(state);
+    return state.boardOrder;
+  }
+
   private async readState(): Promise<AlphaKanbanState> {
     try {
       const parsed = JSON.parse(await fs.readFile(this.statePath, "utf8")) as AlphaKanbanState;
@@ -216,6 +228,7 @@ function emptyState(): AlphaKanbanState {
     runResults: {},
     codexRunDefaults: {},
     runtimeSettings: {},
+    boardOrder: [],
   };
 }
 
@@ -235,6 +248,9 @@ function normalizeState(value: unknown, workspaceId: string): AlphaKanbanState {
     runResults: normalizeRunResults(value.runResults),
     codexRunDefaults: normalizeCodexRunDefaults(value.codexRunDefaults),
     runtimeSettings: normalizeRuntimeSettings(value.runtimeSettings),
+    boardOrder: Array.isArray(value.boardOrder)
+      ? value.boardOrder.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : [],
   });
 }
 

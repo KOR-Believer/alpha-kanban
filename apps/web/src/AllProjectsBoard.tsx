@@ -1,4 +1,5 @@
 import {
+  boardOrderSchema,
   filesResponseSchema,
   type MarkdownFileSummary,
   type TicketChecklistItem,
@@ -59,9 +60,11 @@ type BoardTicket = TicketItem & {
   workspaceId: string;
 };
 
-type PendingDone = { open: TicketChecklistItem[]; ticket: BoardTicket };
+type PendingDone = { open: TicketChecklistItem[]; order?: string[]; ticket: BoardTicket };
+type DropTarget = { after: boolean; key: string };
 
 const allTicketsKey = ["all-tickets"] as const;
+const boardOrderKey = ["board-order"] as const;
 const REFRESH_INTERVAL_MS = 15_000; // file-change SSE is per workspace, so the merged view polls
 
 async function fetchAllTickets(): Promise<BoardTicket[]> {
@@ -103,7 +106,7 @@ async function fetchAllTickets(): Promise<BoardTicket[]> {
         ticketId: ticket.id,
         workspaceId: workspace.id,
       }),
-      key: `${response.file.id}#${ticket.id}`,
+      key: `${response.file.absolutePath}#${ticket.id}`, // stable across restarts; saved in board order
       project,
       workspaceId: workspace.id,
     }));
@@ -159,13 +162,24 @@ function fieldLines(items: (string | TicketChecklistItem | TicketLogEntry)[]) {
 export function AllProjectsBoard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [isDragging, setIsDragging] = useState(false);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const ticketsQuery = useQuery({
     queryFn: fetchAllTickets,
     queryKey: allTicketsKey,
-    refetchInterval: isDragging ? false : REFRESH_INTERVAL_MS,
+    refetchInterval: draggingKey ? false : REFRESH_INTERVAL_MS,
   });
-  const tickets = useMemo(() => ticketsQuery.data ?? [], [ticketsQuery.data]);
+  const boardOrderQuery = useQuery({
+    queryFn: () => requestJson("/api/board-order", boardOrderSchema),
+    queryKey: boardOrderKey,
+  });
+  // Saved order first; tickets not in it yet keep their file order after the saved ones.
+  const tickets = useMemo(() => {
+    const rank = new Map(boardOrderQuery.data?.keys.map((key, index) => [key, index]));
+    return [...(ticketsQuery.data ?? [])].sort(
+      (a, b) => (rank.get(a.key) ?? Infinity) - (rank.get(b.key) ?? Infinity),
+    );
+  }, [boardOrderQuery.data, ticketsQuery.data]);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [pickedGroups, setPickedGroups] = useState<Set<string>>(new Set());
   const [hideDone, setHideDone] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -198,9 +212,27 @@ export function AllProjectsBoard() {
     });
   }
 
-  function requestMove(key: string, status: TicketStatus) {
+  function handleDrop(key: string, status: TicketStatus, target: DropTarget | null) {
+    const order =
+      target && target.key !== key
+        ? (() => {
+            const keys = tickets.map((item) => item.key).filter((item) => item !== key);
+            keys.splice(keys.indexOf(target.key) + (target.after ? 1 : 0), 0, key);
+            return keys;
+          })()
+        : undefined;
+    requestMove(key, status, order);
+  }
+
+  function requestMove(key: string, status: TicketStatus, order?: string[]) {
     const ticket = tickets.find((item) => item.key === key);
-    if (!ticket || ticket.status === status) {
+    if (!ticket) {
+      return;
+    }
+    if (ticket.status === status) {
+      if (order) {
+        saveOrder(order);
+      }
       return;
     }
     if (status === "DONE") {
@@ -208,11 +240,31 @@ export function AllProjectsBoard() {
         (item) => item.checked === false,
       );
       if (open.length > 0) {
-        setPendingDone({ open, ticket });
+        setPendingDone({ open, order, ticket });
         return;
       }
     }
+    if (order) {
+      saveOrder(order);
+    }
     enqueueMove(key, status);
+  }
+
+  function saveOrder(keys: string[]) {
+    queryClient.setQueryData(boardOrderKey, { keys });
+    requestJson("/api/board-order", boardOrderSchema, {
+      body: JSON.stringify({ keys }),
+      method: "PUT",
+    }).catch((error: unknown) => {
+      setMoveError(`Saving card order failed: ${formatClientError(normalizeClientError(error))}`);
+      void queryClient.invalidateQueries({ queryKey: boardOrderKey });
+    });
+  }
+
+  function endDrag() {
+    setDraggingKey(null);
+    setOverStatus(null);
+    setDropTarget(null);
   }
 
   // One move at a time: each PATCH needs the file hash produced by the previous save (else STALE_FILE).
@@ -350,12 +402,14 @@ export function AllProjectsBoard() {
                   onDragOver={(event) => {
                     event.preventDefault();
                     setOverStatus(status);
+                    if (!(event.target as HTMLElement).closest("[data-ticket-key]")) {
+                      setDropTarget(null); // empty column area: status change only
+                    }
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
-                    setOverStatus(null);
-                    setIsDragging(false);
-                    requestMove(event.dataTransfer.getData("text/ticket-key"), status);
+                    endDrag();
+                    handleDrop(event.dataTransfer.getData("text/ticket-key"), status, dropTarget);
                   }}
                 >
                   <header className="flex items-center justify-between gap-2 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2">
@@ -373,12 +427,17 @@ export function AllProjectsBoard() {
                     ) : null}
                     {columnTickets.map((ticket) => (
                       <BoardCard
+                        dropPosition={
+                          dropTarget?.key === ticket.key && draggingKey !== ticket.key
+                            ? dropTarget.after
+                              ? "after"
+                              : "before"
+                            : null
+                        }
                         key={ticket.key}
-                        onDragEnd={() => {
-                          setIsDragging(false);
-                          setOverStatus(null);
-                        }}
-                        onDragStart={() => setIsDragging(true)}
+                        onDragEnd={endDrag}
+                        onDragOverCard={(after) => setDropTarget({ after, key: ticket.key })}
+                        onDragStart={() => setDraggingKey(ticket.key)}
                         onOpen={() => setOpenKey(ticket.key)}
                         ticket={ticket}
                       />
@@ -421,6 +480,9 @@ export function AllProjectsBoard() {
             <Button
               onClick={() => {
                 if (pendingDone) {
+                  if (pendingDone.order) {
+                    saveOrder(pendingDone.order);
+                  }
                   enqueueMove(pendingDone.ticket.key, "DONE");
                 }
                 setPendingDone(null);
@@ -455,19 +517,24 @@ function ProjectBadge({ ticket }: { ticket: BoardTicket }) {
 }
 
 function BoardCard({
+  dropPosition,
   onDragEnd,
+  onDragOverCard,
   onDragStart,
   onOpen,
   ticket,
 }: {
+  dropPosition: "after" | "before" | null;
   onDragEnd: () => void;
+  onDragOverCard: (after: boolean) => void;
   onDragStart: () => void;
   onOpen: () => void;
   ticket: BoardTicket;
 }) {
   return (
     <a
-      className="ak-card ak-focus-ring block cursor-grab select-none p-3 text-left transition-colors hover:bg-[var(--ak-surface-hover)] active:cursor-grabbing"
+      className="ak-card ak-focus-ring relative block cursor-grab select-none p-3 text-left transition-colors hover:bg-[var(--ak-surface-hover)] active:cursor-grabbing"
+      data-ticket-key={ticket.key}
       draggable
       href={ticket.href}
       onClick={(event) => {
@@ -478,12 +545,25 @@ function BoardCard({
         onOpen();
       }}
       onDragEnd={onDragEnd}
+      onDragOver={(event) => {
+        const box = event.currentTarget.getBoundingClientRect();
+        onDragOverCard(event.clientY > box.top + box.height / 2);
+      }}
       onDragStart={(event) => {
         event.dataTransfer.setData("text/ticket-key", ticket.key);
         event.dataTransfer.effectAllowed = "move";
         onDragStart();
       }}
     >
+      {dropPosition ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary",
+            dropPosition === "before" ? "-top-[5px]" : "-bottom-[5px]",
+          )}
+        />
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <ProjectBadge ticket={ticket} />

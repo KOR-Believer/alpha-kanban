@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import type {
+  BoardOrder,
   CreateWorkspaceRequest,
   SelectWorkspaceRequest,
   WorkspaceDirectoriesResponse,
@@ -138,6 +139,14 @@ export class WorkspaceService {
       areSameRootSet(normalizedRoots, defaultRoots) ? undefined : normalizedRoots,
     );
     return this.getWorkspaceRootSettings();
+  }
+
+  async getBoardOrder(): Promise<BoardOrder> {
+    return { keys: await this.stateStore.getBoardOrder() };
+  }
+
+  async updateBoardOrder(keys: string[]): Promise<BoardOrder> {
+    return { keys: await this.stateStore.setBoardOrder(keys) };
   }
 
   async selectWorkspace(request: SelectWorkspaceRequest): Promise<WorkspaceSummary> {

@@ -171,6 +171,8 @@ export const alphaKanbanStateSchema = z.object({
   runResults: z.record(z.string(), codexRunReadStateSchema).default({}),
   codexRunDefaults: codexRunDefaultsSchema.default({}),
   runtimeSettings: alphaKanbanRuntimeSettingsSchema.default({}),
+  // All-tickets board card order: "<absolute file path>#<ticket id>" keys, first = top.
+  boardOrder: z.array(z.string().min(1)).default([]),
 });
 
 export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;
@@ -908,6 +910,12 @@ export const apiErrorResponseSchema = z.object({
 });
 
 export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
+
+export const boardOrderSchema = z.object({
+  keys: z.array(z.string().min(1)).max(20_000),
+});
+
+export type BoardOrder = z.infer<typeof boardOrderSchema>;
 
 export const healthResponseSchema = z.object({
   app: z.literal(APP_NAME),

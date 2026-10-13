@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import {
   appendTicketLogRequestSchema,
   appendWorkspaceChatMessageRequestSchema,
+  boardOrderSchema,
   createWorkspaceRequestSchema,
   createHealthResponse,
   codexPromptPreviewRequestSchema,
@@ -93,6 +94,23 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     try {
       const body = updateWorkspaceRootsSettingsRequestSchema.parse(request.body);
       response.json(await workspaceService.updateWorkspaceRoots(body.roots));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/board-order", async (_request, response, next) => {
+    try {
+      response.json(await workspaceService.getBoardOrder());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/board-order", async (request, response, next) => {
+    try {
+      const body = boardOrderSchema.parse(request.body);
+      response.json(await workspaceService.updateBoardOrder(body.keys));
     } catch (error) {
       next(error);
     }

@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   apiErrorResponseSchema,
+  boardOrderSchema,
   codexDocumentRunSummaryResponseSchema,
   codexModelsResponseSchema,
   codexPromptPreviewResponseSchema,
@@ -227,6 +228,14 @@ describe("API", () => {
     expect(notedTicket?.progressNotes.at(-1)?.text).toBe(
       "API integration test progress note",
     );
+  });
+
+  it("stores the all-tickets board order and drops duplicate keys", async () => {
+    expect(boardOrderSchema.parse(await getJson("/api/board-order"))).toEqual({ keys: [] });
+    const keys = ["/repo/docs/a_tickets.md#A-2", "/repo/docs/a_tickets.md#A-1"];
+
+    expect(await putJson("/api/board-order", { keys: [...keys, keys[0]] })).toEqual({ keys });
+    expect(await getJson("/api/board-order")).toEqual({ keys });
   });
 
   it("rejects file ids outside docRoots", async () => {
