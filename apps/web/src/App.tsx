@@ -150,7 +150,7 @@ import {
   type DocumentSetSortPreference,
 } from "./documentSetSorting";
 
-const BOARD_STATUSES: TicketStatus[] = [
+export const BOARD_STATUSES: TicketStatus[] = [
   "TODO",
   "READY",
   "IN_PROGRESS",
@@ -190,7 +190,7 @@ type ParseableSchema<T> = {
   parse: (value: unknown) => T;
 };
 
-class ClientApiError extends Error {
+export class ClientApiError extends Error {
   readonly code: string;
   readonly status: number;
 
@@ -414,7 +414,7 @@ const workspaceRootsSettingsKey = ["workspace-roots-settings"] as const;
 const codexModelsKey = ["codex-models"] as const;
 const codexRunDefaultsKey = ["codex-run-defaults"] as const;
 
-async function requestJson<T>(
+export async function requestJson<T>(
   url: string,
   schema: ParseableSchema<T>,
   options?: RequestInit,
@@ -445,7 +445,7 @@ async function fetchHealth() {
   return requestJson("/api/health", healthResponseSchema);
 }
 
-async function fetchWorkspaces() {
+export async function fetchWorkspaces() {
   return requestJson("/api/workspaces", workspacesResponseSchema);
 }
 
@@ -525,7 +525,7 @@ async function fetchMarkdownDocument(workspaceId: string, fileId: string) {
   );
 }
 
-async function fetchTicketDocument(workspaceId: string, fileId: string) {
+export async function fetchTicketDocument(workspaceId: string, fileId: string) {
   return requestJson(
     `/api/workspaces/${workspaceId}/files/${fileId}/tickets`,
     ticketDocumentResponseSchema,
@@ -596,7 +596,7 @@ async function appendWorkspaceChatMessage(workspaceId: string, content: string) 
   );
 }
 
-async function patchTicket(
+export async function patchTicket(
   workspaceId: string,
   fileId: string,
   ticketId: string,
@@ -1422,6 +1422,10 @@ export function App() {
           />
 
           <div className="flex shrink-0 items-center justify-end gap-2">
+            <Button onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
+              <LayoutGrid aria-hidden="true" />
+              All tickets
+            </Button>
             <HealthPill status={healthQuery.status} />
           </div>
         </header>
@@ -2827,6 +2831,7 @@ function StartWorkspacePage({
   workspaceRootsSettings?: WorkspaceRootsSettingsResponse;
   workspaces: WorkspaceSummary[];
 }) {
+  const navigate = useNavigate();
   const availableWorkspaces = workspaces.filter((workspace) => workspace.isAvailable);
   const recentWorkspaces = availableWorkspaces
     .filter((workspace) => workspace.lastOpenedAt)
@@ -2852,6 +2857,10 @@ function StartWorkspacePage({
           </label>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
+          <Button onClick={() => navigate({ to: "/all" })} size="sm" type="button" variant="outline">
+            <LayoutGrid className="size-3" aria-hidden="true" />
+            All tickets
+          </Button>
           <ProjectBrowseButton onOpen={onWorkspaceOpenPath} />
           <NewProjectButton onCreate={onWorkspaceCreate} />
         </div>
@@ -7116,7 +7125,7 @@ function PropertyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatusDot({ status }: { status: TicketStatus }) {
+export function StatusDot({ status }: { status: TicketStatus }) {
   const className = {
     BLOCKED: "bg-red-500",
     DEFERRED: "bg-neutral-400",
@@ -7242,7 +7251,7 @@ function runSignalDotClassName(status: CodexRunSignalStatus): string {
   }[status];
 }
 
-function priorityVariant(priority: string) {
+export function priorityVariant(priority: string) {
   if (priority === "P0") {
     return "warning";
   }
@@ -7252,7 +7261,7 @@ function priorityVariant(priority: string) {
   return "muted";
 }
 
-function normalizeClientError(error: unknown): ClientApiError | Error {
+export function normalizeClientError(error: unknown): ClientApiError | Error {
   return error instanceof ClientApiError
     ? error
     : error instanceof Error
@@ -7260,7 +7269,7 @@ function normalizeClientError(error: unknown): ClientApiError | Error {
       : new Error(String(error));
 }
 
-function formatClientError(error: ClientApiError | Error): string {
+export function formatClientError(error: ClientApiError | Error): string {
   return error instanceof ClientApiError ? `${error.code}: ${error.message}` : error.message;
 }
 
