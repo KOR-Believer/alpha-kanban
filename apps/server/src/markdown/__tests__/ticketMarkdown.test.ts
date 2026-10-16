@@ -95,6 +95,29 @@ Depends on:
 `;
 
 describe("ticketMarkdown", () => {
+  it("keeps the ledger template's explicit no-questions section outside ticket bodies", () => {
+    const template = readFileSync(new URL("../../../../../skills/implementation-ledger/assets/tickets-template.md", import.meta.url), "utf8");
+    const questionsStart = template.indexOf("## 확인·결정이 필요한 사항");
+    const ticketsStart = template.indexOf("## Ticket List");
+    expect(questionsStart).toBeGreaterThan(template.indexOf("## Status"));
+    expect(ticketsStart).toBeGreaterThan(questionsStart);
+    const questionSection = "## 확인·결정이 필요한 사항\n\n- 없음\n\n";
+    const rendered = (template.slice(0, questionsStart) + questionSection + template.slice(ticketsStart))
+      .replace(/\{\{([^}]+)\}\}/g, (_, key: string) => key === "PREFIX" ? "TMP" : key === "YYYY-MM-DD" ? "2026-10-16" : "검증용 기록");
+    const firstTicket = rendered.slice(rendered.indexOf("### TMP-00."));
+    const source = rendered.replace("0 / 1 tickets", "0 / 2 tickets") + "\n" + firstTicket.replace("### TMP-00.", "### TMP-01.");
+    const before = parseTicketDocument(source);
+    expect(before.tickets.map((ticket) => ticket.id)).toEqual(["TMP-00", "TMP-01"]);
+    expect(before.missingSections).toEqual([]);
+    expect(before.tickets.every((ticket) => ticket.missingFields.length === 0)).toBe(true);
+    const updated = updateTicketStatusAndProgress(source, "TMP-01", { status: "READY", progress: 25 });
+    const after = parseTicketDocument(updated);
+    expect(updated).toContain(questionSection);
+    expect(after.tickets[0]).toEqual(before.tickets[0]);
+    expect(after.tickets[1]).toMatchObject({ id: "TMP-01", status: "READY", progress: 25, missingFields: [] });
+    expect(after.status).toMatchObject({ doneTickets: 0, totalTickets: 2 });
+  });
+
   it("parses the current project ticket document", () => {
     const document = parseTicketDocument(realTicketDocument);
     const akb02 = document.tickets.find((ticket) => ticket.id === "AKB-02");

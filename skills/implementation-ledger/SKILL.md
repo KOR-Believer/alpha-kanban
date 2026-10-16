@@ -1,74 +1,53 @@
 ---
 name: implementation-ledger
-description: Create and maintain concise, Alpha Kanban-compatible implementation plan, ticket, and inventory Markdown as durable project memory. Use when the user asks to plan implementation, split work into tickets, preserve investigation evidence, hand work to a future session, or update an existing ticket's durable state. Do not infer permission to write documents from a discussion-only request or migrate legacy documents without explicit approval.
+description: Write and maintain Alpha Kanban-compatible work records for user participation. Use for requested plans, tickets, investigation records, or progress updates to tracked work. Keep discussion-only requests read-only.
 ---
 
 # Implementation Ledger
 
-Treat plan, ticket, and inventory Markdown as durable project state, not conversation history.
+Help the user understand what will happen, what changed, how it was checked, and where their decision matters. Agent continuity is a secondary benefit.
 
-## Select a Mode
+## Follow the Request
 
-- **Discuss**: Answer, review, compare, or brainstorm without editing ledger documents.
-- **Create**: Create or restructure durable artifacts only when explicitly requested.
-- **Execute**: Implement selected work and update only state supported by actual work and verification.
+- **Discuss**: Read relevant records and answer; leave documents unchanged.
+- **Create**: A request to write or revise records authorizes that work without another confirmation. Implementation needs its own authorization.
+- **Execute**: Carry out authorized work and update its existing ledger as outcomes change.
 
-When intent is mixed, answer the immediate question first. Invocation alone does not authorize document changes.
+User instructions and existing authorization take precedence. Invocation alone does not expand scope. Preserve legacy documents unless restructuring is requested.
 
-## Establish Ground Truth
+## Confirm Intent Before Finalizing Scope
 
-1. Identify the workspace, repositories, packages, and document scope.
-2. Inspect relevant guidance and existing ledger files with targeted search and bounded reads.
-3. Separate code-observed facts from inference, policy, and unresolved questions.
+Separate observed facts, established user direction, agent assumptions, and missing user context before finalizing a plan or affected ticket. Read relevant evidence and prior direction first. Keep a document-level `확인·결정이 필요한 사항` section in plans, ticket documents, and inventories, including ticket-only workflows. Reuse an existing equivalent heading such as `Open Questions` rather than adding a duplicate. This section elicits knowledge or intent the user may hold so that tickets do not encode the wrong requirements; it is not a list of every unknown.
 
-Follow coherent local directory, numbering, and prose conventions. For new ledger documents, the Alpha Kanban contract takes precedence.
+- Ask when the answer could materially change the goal, scope, or acceptance criteria and cannot reasonably be established by in-scope investigation. Existing equipment, intended usage, and unstated preferences can qualify; a question need not require a choice.
+- State the actual question, current understanding or proposed assumption, and how the answer would affect the plan or tickets. Offer options and a recommendation only for genuine choices. Do not manufacture questions to fill the section.
+- Put settled requirements in scope and engineering research, benchmarks, and test preparation in planned work or verification. Do not present them as pending user decisions. When no qualifying questions remain after review, retain the heading and write `- 없음`; do not leave it blank, delete it, or use `없음` for questions not yet reviewed.
+- Keep answer-dependent scope explicitly provisional; continue independent authorized work. During authorized record updates, reconcile answers into the plan and affected ticket fields, preserve durable user direction once, and remove resolved items from the pending list. An answer alone does not authorize implementation.
 
-## Create Durable Artifacts
+## Keep the Record Small
 
-- Use a **plan** for goals, facts, decisions, rejected alternatives, risks, and validation strategy.
-- Use **tickets** for independently executable and reviewable delivery units.
-- Use an **inventory** for evidence-heavy facts, matrices, maps, and investigation state that should not be rediscovered.
+Default to one ticket document for tracked delivery. Add a plan for shared decisions or an inventory for substantial reusable evidence only when it needs a separate home. Tickets own progress; update supporting documents only when their decisions or evidence change.
 
-Before creating an artifact, read `references/ledger-format.md` and use the matching file under `assets/`. Remove placeholders and empty optional sections. Keep one slug across related documents; prefer adjacent numbers when local conventions allow.
+Make each ticket a change the user can understand and review. Split for independent outcomes or delivery boundaries; keep routine implementation steps inside the ticket. Read current fields and the latest relevant user directions for the selected ticket before relying on old completion notes; expand into other history or evidence only to answer a concrete question. Skip completed tickets outside the selected scope unless a dependency, regression, or newer relevant direction makes them relevant. Use targeted search and bounded reads.
 
-Prefer vertical-slice tickets. Split only when ownership, permissions, blockers, rollback, or reviewability require independent work.
+## Write for Participation
 
-## Maintain Existing Work
+Lead with observable behavior and its purpose, then the technical detail needed to assess scope or verification. Existing scope fields already record the plan; add a start note only when new information matters. Do not invent a prior plan after implementation.
 
-For a selected ticket, read its latest `사용자 지시` before relying on old completion notes. User-applied state changes and `[수동지시]` records can make earlier completion evidence insufficient; see [user direction records](references/ledger-format.md#user-direction-records). Their presence does not start or authorize a new task by itself.
+Keep scope and acceptance fields current. Preserve durable user direction in `사용자 지시`; put planned work, results, evidence, and remaining actions in `진행 메모`. Do not duplicate directions already recorded by Alpha Kanban. A useful note explains the outcome, what verification establishes, and any next action or decision. Distinguish implementation, testing, user review, and deployment where relevant.
 
-Read `references/ledger-format.md` before adding a ticket. Patch a compatible document at the exact ticket scope and re-read the changed range. Preserve an incompatible document and create a compatible one for new work; migrate or restructure legacy prose only with explicit approval.
+For user-applied status changes and `[수동지시]` records, follow [User Direction Records](references/ledger-format.md#user-direction-records). A user's DONE is not agent verification, and stored directions are not an automatic execution queue.
 
-- Record durable user changes to scope, priority, constraints, exclusions, or acceptance criteria in `사용자 지시`.
-- Record implementation evidence, verification, remaining risks, and blockers in `진행 메모`.
-- Keep questions, retries, run IDs, process events, and raw logs outside the ledger.
-- When a directive changes a canonical field, update both the field and its durable log.
+Normally update once when handing work back. Write earlier for changed user direction, a blocker, or an outcome the user needs during a long task. Omit tool-call diaries, retries, raw logs, and repeated summaries. Link detailed evidence once.
 
-For exact status and durable-log mutations, prefer the bundled `scripts/ticket-md.mjs` helper when it is available:
+## Preserve Alpha Kanban Compatibility
 
-```sh
-pnpm ticket-md show <ticket-file> <ticket-id>
-pnpm ticket-md status <ticket-file> <ticket-id> --status DONE --progress 100
-pnpm ticket-md append-user <ticket-file> <ticket-id> "<durable direction>"
-pnpm ticket-md append-note <ticket-file> <ticket-id> "<implementation evidence>"
-```
+Before the first ticket write, read [the format reference](references/ledger-format.md). For new files, use only the matching template under `assets/`. Replace placeholders and omit empty optional sections; retain ticket fields and the required question section. Exact suffixes are `_tickets.md`, `_plan.md`, and `_inventory.md`; follow local directory/numbering conventions and share a slug across related files.
 
-Outside this repository, run the same helper as `node <skill-directory>/scripts/ticket-md.mjs`. It narrows writes to one ticket and recalculates the top-level completion count. Use manual edits for prose and checkboxes only after locating the ticket range, then re-read that range.
-
-## Gate State on Evidence
-
-Follow the status, progress, and completion rules in `references/ledger-format.md`. Use `READY` at `25%` only when scope, decisions, and edit points make execution possible; do not claim implementation progress from familiarity alone. Mark `DONE` only after all acceptance and verification checks pass, a meaningful progress note exists, and `Completed at` records the local RFC 3339 offset. Keep the top-level completed count consistent.
-
-Validate every ticket document created with this skill:
+Patch the inspected ticket range, re-read the change, and validate after the related edits:
 
 ```sh
 node <skill-directory>/scripts/check-ledger.mjs <ticket-file>
 ```
 
-Use `--legacy` only for Alpha Kanban-compatible documents whose established progress semantics differ; it does not make arbitrary Markdown compatible.
-
-## Boundaries
-
-- Do not edit implementation code in Discuss or Create mode unless separately requested.
-- Name the repository or workspace-relative package path in durable documents; never use `.` as repository identity.
-- Keep each ticket concise enough for a future session to load independently.
+Use `--legacy` only as described in the reference. Choose implementation checks proportional to the change. Format validation establishes structure, not implementation success or visual rendering.

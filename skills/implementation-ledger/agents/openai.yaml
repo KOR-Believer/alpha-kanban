@@ -1,7 +1,7 @@
 interface:
   display_name: "Implementation Ledger"
-  short_description: "Create Alpha Kanban-compatible implementation ledgers"
-  default_prompt: "Use $implementation-ledger to preserve this implementation discussion as concise, Alpha Kanban-compatible plan, ticket, or inventory documents."
+  short_description: "Readable plans and progress records for Alpha Kanban"
+  default_prompt: "Use $implementation-ledger to record planned changes, results, and any user context or decisions still needed in concise Alpha Kanban-compatible documents."
 
 policy:
   allow_implicit_invocation: true
