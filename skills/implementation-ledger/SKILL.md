@@ -35,6 +35,8 @@ Prefer vertical-slice tickets. Split only when ownership, permissions, blockers,
 
 ## Maintain Existing Work
 
+For a selected ticket, read its latest `사용자 지시` before relying on old completion notes. User-applied state changes and `[수동지시]` records can make earlier completion evidence insufficient; see [user direction records](references/ledger-format.md#user-direction-records). Their presence does not start or authorize a new task by itself.
+
 Read `references/ledger-format.md` before adding a ticket. Patch a compatible document at the exact ticket scope and re-read the changed range. Preserve an incompatible document and create a compatible one for new work; migrate or restructure legacy prose only with explicit approval.
 
 - Record durable user changes to scope, priority, constraints, exclusions, or acceptance criteria in `사용자 지시`.

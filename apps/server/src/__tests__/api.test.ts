@@ -238,6 +238,157 @@ describe("API", () => {
     expect(await getJson("/api/board-order")).toEqual({ keys });
   });
 
+  it("returns registered-root project metadata for nested workspaces and updates it without restart", async () => {
+    const nested = path.join(projectOneRoot, "apps", "admin");
+    mkdirSync(path.join(nested, "docs"), { recursive: true });
+    const selected = selectWorkspaceResponseSchema.parse(await postJson("/api/workspaces/select", { root: nested }));
+    expect(selected.workspace.project).toMatchObject({ label: "project-one", root: realProjectOneRoot, workspaceRoot: realpathSync.native(projectsRoot) });
+    await putJson("/api/settings/workspace-roots", { roots: [workspaceRoot, projectsRoot, path.join(projectOneRoot, "apps")] });
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    expect(listed.workspaces.find((item) => item.id === selected.workspace.id)?.project).toMatchObject({
+      label: "admin", root: realpathSync.native(nested), workspaceRoot: realpathSync.native(path.join(projectOneRoot, "apps")),
+    });
+    expect(listed.workspaces.find((item) => item.root === realProjectTwoRoot)?.project?.label).toBe("project-two");
+  });
+
+  it("rejects one of two concurrent writes using the same file revision", async () => {
+    const { route, before } = await editableDocument("workspace");
+    const responses = await Promise.all(["AKB-03", "AKB-07"].map((ticketId) => fetch(`${baseUrl}${route}/${ticketId}`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ expectedHash: before.file.hash, status: "TODO", progress: 0, reason: "" }),
+    })));
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const after = ticketDocumentResponseSchema.parse(await getJson(route));
+    expect(after.document.tickets.filter((ticket) => ticket.status === "TODO")).toHaveLength(1);
+    expect(after.document.status.doneTickets).toBe(7);
+  });
+
+  it.each(["legacy", "workspace"] as const)(
+    "%s status save includes its reason and rejects a stale retry without starting Codex",
+    async (scope) => {
+      const { route, before } = await editableDocument(scope);
+      const previous = before.document.tickets.find((ticket) => ticket.id === "AKB-07")!;
+      const request = {
+        expectedHash: before.file.hash,
+        expectedMtimeMs: before.file.mtimeMs,
+        status: "READY",
+        progress: 25,
+        reason: "다시 열면 값이 사라지는 버그 발견",
+      };
+      const updated = ticketDocumentResponseSchema.parse(
+        await patchJson(`${route}/AKB-07`, request),
+      );
+      const ticket = updated.document.tickets.find((item) => item.id === "AKB-07")!;
+
+      expect(ticket).toMatchObject({ status: "READY", progress: 25 });
+      expect(ticket.completedAt).toBeUndefined();
+      expect(ticket.userInstructions).toHaveLength(previous.userInstructions.length + 1);
+      expect(ticket.userInstructions.at(-1)?.text).toBe(
+        "DONE -> READY 사용자 사유: 다시 열면 값이 사라지는 버그 발견",
+      );
+      expect(ticket.completionCriteria).toEqual(previous.completionCriteria);
+      expect(ticket.validation).toEqual(previous.validation);
+      expect(updated.document.status.doneTickets).toBe(7);
+
+      const savedMarkdown = readFileSync(before.file.absolutePath, "utf8");
+      const stale = await fetch(`${baseUrl}${route}/AKB-07`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      expect(stale.status).toBe(409);
+      expect(readFileSync(before.file.absolutePath, "utf8")).toBe(savedMarkdown);
+      expect(existsSync(path.join(workspaceRoot, ".alpha-kanban", "runs"))).toBe(false);
+
+      for (const untouchedRoot of [projectTwoRoot, scope === "workspace" ? workspaceRoot : projectOneRoot]) {
+        expect(readFileSync(path.join(untouchedRoot, "docs", "02_alpha_kanban_tickets.md"), "utf8"))
+          .toBe(realTicketDocument);
+      }
+    },
+  );
+
+  it.each(["legacy", "workspace"] as const)(
+    "%s instruction append records typed directions only, without reopening or running Codex",
+    async (scope) => {
+      const { route, before } = await editableDocument(scope);
+      let latest = before;
+      for (const [kind, label] of [
+        ["instruction", "사용자 지시"],
+        ["bug", "버그 제보"],
+        ["decision", "결정"],
+      ] as const) {
+        latest = ticketDocumentResponseSchema.parse(
+          await postJson(`${route}/AKB-03/instructions`, {
+            expectedHash: latest.file.hash,
+            expectedMtimeMs: latest.file.mtimeMs,
+            date: "2026-10-13",
+            kind,
+            text: "첫 줄\n두 번째 줄",
+          }),
+        );
+        const ticket = latest.document.tickets.find((item) => item.id === "AKB-03")!;
+        expect(ticket.userInstructions.at(-1)?.text).toBe(
+          `[${label}] 티켓: AKB-03; 내용: 첫 줄 두 번째 줄`,
+        );
+        expect(ticket.status).toBe("DONE");
+        expect(ticket.progressNotes.map((entry) => entry.raw)).toEqual(
+          before.document.tickets.find((item) => item.id === "AKB-03")!.progressNotes.map((entry) => entry.raw),
+        );
+      }
+      expect(existsSync(path.join(workspaceRoot, ".alpha-kanban", "runs"))).toBe(false);
+
+      const savedMarkdown = readFileSync(before.file.absolutePath, "utf8");
+      const stale = await fetch(`${baseUrl}${route}/AKB-03/instructions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "bug", text: "중복 방지", expectedHash: before.file.hash }),
+      });
+      expect(stale.status).toBe(409);
+      expect(readFileSync(before.file.absolutePath, "utf8")).toBe(savedMarkdown);
+    },
+  );
+
+  it.each(["legacy", "workspace"] as const)(
+    "%s rejects blank directions, unknown record kinds, and overlong reasons without editing Markdown",
+    async (scope) => {
+      const { route, before } = await editableDocument(scope);
+      const original = readFileSync(before.file.absolutePath, "utf8");
+      for (const body of [{ text: " \n " }, { text: "확인", kind: "unknown" }]) {
+        const response = await fetch(`${baseUrl}${route}/AKB-03/instructions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        expect(response.status).toBe(400);
+      }
+      const response = await fetch(`${baseUrl}${route}/AKB-03`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "READY", progress: 25, reason: "x".repeat(4001) }),
+      });
+      expect(response.status).toBe(400);
+      expect(readFileSync(before.file.absolutePath, "utf8")).toBe(original);
+    },
+  );
+
+  it.each(["legacy", "workspace"] as const)("%s saves default reasons and manual directions without starting Codex", async (scope) => {
+    const { route, before } = await editableDocument(scope);
+    const updated = ticketDocumentResponseSchema.parse(await patchJson(`${route}/AKB-03`, {
+      expectedHash: before.file.hash, status: "TODO", progress: 0, reason: " \n ",
+    }));
+    const after = ticketDocumentResponseSchema.parse(await postJson(`${route}/AKB-03/instructions`, {
+      expectedHash: updated.file.hash, kind: "manual", text: "수동 저장만 지원해 주세요.",
+    }));
+    const ticket = after.document.tickets.find((item) => item.id === "AKB-03")!;
+    expect(ticket.userInstructions.slice(-2).map((entry) => entry.text)).toEqual([
+      "DONE -> TODO 사용자가 명시적으로 할 일로 변경했습니다.",
+      "[수동지시] 수동 저장만 지원해 주세요.",
+    ]);
+    expect(ticket).toMatchObject({ status: "TODO", progress: 0 });
+    expect(ticket.completedAt).toBeUndefined();
+    expect(existsSync(path.join(workspaceRoot, ".alpha-kanban", "runs"))).toBe(false);
+  });
+
   it("rejects file ids outside docRoots", async () => {
     const outsideId = Buffer.from("outside.md", "utf8").toString("base64url");
     const response = await fetch(`${baseUrl}/api/files/${outsideId}/tickets`);
@@ -1509,6 +1660,21 @@ describe("API", () => {
       false,
     );
   });
+
+  async function editableDocument(scope: "legacy" | "workspace") {
+    let prefix = "/api";
+    if (scope === "workspace") {
+      const selected = selectWorkspaceResponseSchema.parse(
+        await postJson("/api/workspaces/select", { root: projectOneRoot }),
+      );
+      prefix = `/api/workspaces/${selected.workspace.id}`;
+    }
+    const files = filesResponseSchema.parse(await getJson(`${prefix}/files`));
+    const file = files.files.find((item) => item.filename === "02_alpha_kanban_tickets.md")!;
+    const route = `${prefix}/files/${file.id}/tickets`;
+    const before = ticketDocumentResponseSchema.parse(await getJson(route));
+    return { route, before };
+  }
 
   async function getJson(route: string): Promise<unknown> {
     const response = await fetch(`${baseUrl}${route}`);

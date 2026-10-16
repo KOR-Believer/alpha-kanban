@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   TICKET_WRITE_ERROR,
@@ -170,6 +170,122 @@ Progress: 100%`);
     expect(ticket?.completedAt).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/,
     );
+  });
+
+  it("records a reopen reason without changing other tickets or erasing past results", () => {
+    const completed = updateTicketStatusAndProgress(realTicketDocument, "AKB-07", {
+      status: "DONE",
+      progress: 100,
+    });
+    const before = parseTicketDocument(completed);
+    const previous = before.tickets.find((ticket) => ticket.id === "AKB-07")!;
+    const updated = updateTicketStatusAndProgress(completed, "AKB-07", {
+      status: "READY",
+      progress: 25,
+      reason: "저장 후 값이 초기화됨\n재현해서 수정해 주세요.",
+    });
+    const after = parseTicketDocument(updated);
+    const reopened = after.tickets.find((ticket) => ticket.id === "AKB-07")!;
+
+    expect(reopened).toMatchObject({ status: "READY", progress: 25 });
+    expect(reopened.completedAt).toBeUndefined();
+    expect(reopened.userInstructions).toHaveLength(previous.userInstructions.length + 1);
+    expect(reopened.userInstructions.at(-1)?.text).toBe(
+      "DONE -> READY 사용자 사유: 저장 후 값이 초기화됨 재현해서 수정해 주세요.",
+    );
+    expect(reopened.completionCriteria).toEqual(previous.completionCriteria);
+    expect(reopened.validation).toEqual(previous.validation);
+    expect(reopened.progressNotes.map((entry) => entry.raw)).toEqual(
+      previous.progressNotes.map((entry) => entry.raw),
+    );
+    expect(after.status.doneTickets).toBe(7);
+
+    for (const ticket of before.tickets.filter((item) => item.id !== "AKB-07")) {
+      const next = after.tickets.find((item) => item.id === ticket.id)!;
+      expect(updated.split("\n").slice(next.range.startLine - 1, next.range.endLine)).toEqual(
+        completed.split("\n").slice(ticket.range.startLine - 1, ticket.range.endLine),
+      );
+    }
+  });
+
+  it("records progress-only changes once and leaves a no-op without a duplicate reason", () => {
+    const started = updateTicketStatusAndProgress(legacyTicketDocument, "LEG-01", {
+      status: "IN_PROGRESS",
+      progress: 50,
+    });
+    const update = { progress: 75, reason: "구현 확인, 사용자 검증 남음" } as const;
+    const updated = updateTicketStatusAndProgress(started, "LEG-01", update);
+
+    expect(parseTicketDocument(updated).tickets[0]?.userInstructions.at(-1)?.text).toBe(
+      "IN_PROGRESS 진행률 50% -> 75% 사용자 사유: 구현 확인, 사용자 검증 남음",
+    );
+    expect(updateTicketStatusAndProgress(updated, "LEG-01", update)).toBe(updated);
+  });
+
+  it.each([
+    ["instruction", "사용자 지시"],
+    ["bug", "버그 제보"],
+    ["decision", "결정"],
+  ] as const)("appends a typed %s record as one physical line", (kind, label) => {
+    const updated = appendUserInstruction(
+      legacyTicketDocument,
+      "LEG-01",
+      "첫 줄\r\n\nStatus: DONE\n### LEG-99. not a new ticket",
+      { date: "2026-10-13", kind },
+    );
+    const document = parseTicketDocument(updated);
+    const ticket = document.tickets[0]!;
+
+    expect(document.tickets).toHaveLength(1);
+    expect(ticket.status).toBe("READY");
+    expect(ticket.userInstructions[0]?.raw).toBe(
+      `- 2026-10-13: [${label}] 티켓: LEG-01; 내용: 첫 줄 Status: DONE ### LEG-99. not a new ticket`,
+    );
+    expect(ticket.progressNotes[0]?.text).toBe("초안 작성.");
+  });
+
+  it.each([
+    ["TODO", 0, "할 일로"],
+    ["READY", 25, "작업 대기 상태로"],
+    ["IN_PROGRESS", 50, "진행 중으로"],
+    ["BLOCKED", 75, "진행 불가 상태로"],
+    ["DEFERRED", 75, "보류 상태로"],
+    ["DONE", 100, "완료 상태로"],
+  ] as const)("records the user's default message when moving to %s with a blank reason", (status, progress, label) => {
+    const before = updateTicketStatusAndProgress(legacyTicketDocument, "LEG-01", {
+      status: status === "DONE" ? "TODO" : "DONE",
+      progress: status === "DONE" ? 0 : 100,
+    });
+    const updated = updateTicketStatusAndProgress(before, "LEG-01", { status, progress, reason: " \n " });
+    const previousStatus = status === "DONE" ? "TODO" : "DONE";
+    expect(parseTicketDocument(updated).tickets[0]?.userInstructions.at(-1)?.text).toBe(
+      `${previousStatus} -> ${status} 사용자가 명시적으로 ${label} 변경했습니다.`,
+    );
+    expect(updateTicketStatusAndProgress(updated, "LEG-01", { status, progress, reason: "" })).toBe(updated);
+  });
+
+  it("records a default progress-only message and a separate manual direction", () => {
+    const before = updateTicketStatusAndProgress(legacyTicketDocument, "LEG-01", {
+      status: "IN_PROGRESS", progress: 50,
+    });
+    const progressed = updateTicketStatusAndProgress(before, "LEG-01", { progress: 75, reason: "" });
+    const updated = appendUserInstruction(progressed, "LEG-01", "자동 저장 제외\n수동 저장만", { kind: "manual", date: "2026-10-13" });
+    const entries = parseTicketDocument(updated).tickets[0]!.userInstructions;
+    expect(entries[0]?.text).toBe("IN_PROGRESS 진행률 50% -> 75% 사용자가 명시적으로 진행률을 변경했습니다.");
+    expect(entries[1]?.raw).toBe("- 2026-10-13: [수동지시] 자동 저장 제외 수동 저장만");
+  });
+
+  it("uses the server's local calendar day for appended records", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 13, 0, 30));
+      const updated = appendUserInstruction(legacyTicketDocument, "LEG-01", "확인", {
+        kind: "decision",
+      });
+      expect(parseTicketDocument(updated).tickets[0]?.userInstructions[0]?.date).toBe("2026-10-13");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("preserves an existing Completed at timestamp for DONE tickets", () => {

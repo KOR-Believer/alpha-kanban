@@ -7,6 +7,12 @@ describe("app route helpers", () => {
     expect(parseAppRouteState({ pathname: "/" })).toEqual({});
   });
 
+  it("round-trips full ticket view while preserving the ticket route", () => {
+    const route = { workspaceId: "w_test", ticketId: "TEST-01", detailMode: "full" as const };
+    const url = new URL(buildAppRoute(route), "http://localhost");
+    expect(parseAppRouteState({ pathname: url.pathname, hash: url.hash })).toEqual(route);
+  });
+
   it("parses workspace, file, ticket, and detail state", () => {
     expect(
       parseAppRouteState({

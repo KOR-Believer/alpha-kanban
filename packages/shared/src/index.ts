@@ -23,6 +23,53 @@ export const ticketProgressSchema = z.union([
 
 export type TicketProgress = z.infer<typeof ticketProgressSchema>;
 
+export const TICKET_PROGRESS_BY_STATUS: Record<TicketStatus, readonly TicketProgress[]> = {
+  TODO: [0],
+  READY: [25],
+  IN_PROGRESS: [50, 75],
+  BLOCKED: [0, 25, 50, 75],
+  DEFERRED: [0, 25, 50, 75],
+  DONE: [100],
+};
+
+export const TICKET_STATUS_USER_MESSAGES: Record<TicketStatus, string> = {
+  TODO: "사용자가 명시적으로 할 일로 변경했습니다.",
+  READY: "사용자가 명시적으로 작업 대기 상태로 변경했습니다.",
+  IN_PROGRESS: "사용자가 명시적으로 진행 중으로 변경했습니다.",
+  BLOCKED: "사용자가 명시적으로 진행 불가 상태로 변경했습니다.",
+  DEFERRED: "사용자가 명시적으로 보류 상태로 변경했습니다.",
+  DONE: "사용자가 명시적으로 완료 상태로 변경했습니다.",
+};
+
+export function ticketChangeDefaultReason(from: TicketStatus, to: TicketStatus): string {
+  return from === to
+    ? "사용자가 명시적으로 진행률을 변경했습니다."
+    : TICKET_STATUS_USER_MESSAGES[to];
+}
+
+export function ticketProgressForStatus(status: TicketStatus, progress: TicketProgress): TicketProgress {
+  const allowed = TICKET_PROGRESS_BY_STATUS[status];
+  if (allowed.includes(progress)) return progress;
+  if ((status === "BLOCKED" || status === "DEFERRED") && progress === 100) return 75;
+  return allowed[0]!;
+}
+
+export function formatUserTicketChange(
+  from: TicketStatus,
+  to: TicketStatus,
+  fromProgress: TicketProgress,
+  toProgress: TicketProgress,
+  reason: string,
+): string {
+  const transition = from === to
+    ? `${from} 진행률 ${fromProgress}% -> ${toProgress}%`
+    : `${from} -> ${to}`;
+  const message = reason.trim()
+    ? `사용자 사유: ${reason.trim()}`
+    : ticketChangeDefaultReason(from, to);
+  return `${transition} ${message}`;
+}
+
 export const ticketLogEntrySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   text: z.string(),
@@ -177,6 +224,14 @@ export const alphaKanbanStateSchema = z.object({
 
 export type AlphaKanbanState = z.infer<typeof alphaKanbanStateSchema>;
 
+export const workspaceProjectSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  root: z.string().min(1),
+  workspaceRoot: z.string().min(1),
+});
+export type WorkspaceProject = z.infer<typeof workspaceProjectSchema>;
+
 export const workspaceSummarySchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -184,6 +239,7 @@ export const workspaceSummarySchema = z.object({
   isAvailable: z.boolean(),
   hasDocs: z.boolean(),
   lastOpenedAt: z.string().datetime().optional(),
+  project: workspaceProjectSchema.optional(),
 });
 
 export type WorkspaceSummary = z.infer<typeof workspaceSummarySchema>;
@@ -390,6 +446,7 @@ export type TicketDocumentResponse = z.infer<typeof ticketDocumentResponseSchema
 export const patchTicketRequestSchema = z.object({
   status: ticketStatusSchema.optional(),
   progress: ticketProgressSchema.optional(),
+  reason: z.string().trim().max(4_000).optional(),
   expectedHash: z.string().min(1).optional(),
   expectedMtimeMs: z.number().nonnegative().optional(),
 });
@@ -397,7 +454,7 @@ export const patchTicketRequestSchema = z.object({
 export type PatchTicketRequest = z.infer<typeof patchTicketRequestSchema>;
 
 export const appendTicketLogRequestSchema = z.object({
-  text: z.string().min(1),
+  text: z.string().trim().min(1),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -407,6 +464,19 @@ export const appendTicketLogRequestSchema = z.object({
 });
 
 export type AppendTicketLogRequest = z.infer<typeof appendTicketLogRequestSchema>;
+
+export const ticketInstructionKindSchema = z.enum(["manual", "instruction", "bug", "decision"]);
+export type TicketInstructionKind = z.infer<typeof ticketInstructionKindSchema>;
+export const TICKET_INSTRUCTION_LABELS: Record<TicketInstructionKind, string> = {
+  manual: "수동지시",
+  instruction: "사용자 지시",
+  bug: "버그 제보",
+  decision: "결정",
+};
+
+export const appendTicketInstructionRequestSchema = appendTicketLogRequestSchema.extend({
+  kind: ticketInstructionKindSchema.optional(),
+});
 
 export const codexRunStatusSchema = z.enum([
   "queued",

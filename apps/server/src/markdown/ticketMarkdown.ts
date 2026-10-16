@@ -1,10 +1,13 @@
 import {
+  TICKET_INSTRUCTION_LABELS,
+  formatUserTicketChange,
   ticketProgressSchema,
   ticketStatusSchema,
   type TicketChecklistItem,
   type TicketDocument,
   type TicketDocumentStatus,
   type TicketItem,
+  type TicketInstructionKind,
   type TicketLogEntry,
   type TicketProgress,
   type TicketStatus,
@@ -61,6 +64,7 @@ type InternalDocument = Omit<TicketDocument, "tickets"> & {
 type StatusProgressUpdate = {
   status?: TicketStatus;
   progress?: TicketProgress;
+  reason?: string;
 };
 
 type AppendLogOptions = {
@@ -154,21 +158,35 @@ export function updateTicketStatusAndProgress(
     parsed.tickets.length,
   );
 
-  return joinMarkdown({ lines, trailingNewline: parsed.trailingNewline });
+  const updated = joinMarkdown({ lines, trailingNewline: parsed.trailingNewline });
+  // An explicit (possibly empty) reason identifies a user action; legacy callers omit it.
+  if (update.reason !== undefined && (nextStatus !== ticket.status || nextProgress !== ticket.progress)) {
+    return appendUserInstruction(
+      updated,
+      ticketId,
+      formatUserTicketChange(ticket.status, nextStatus, ticket.progress, nextProgress, update.reason),
+    );
+  }
+  return updated;
 }
 
 export function appendUserInstruction(
   markdown: string,
   ticketId: string,
   instruction: string,
-  options: AppendLogOptions = {},
+  options: AppendLogOptions & { kind?: TicketInstructionKind } = {},
 ): string {
   const parsed = parseTicketDocumentInternal(markdown);
   const ticket = findWritableTicket(parsed, ticketId);
   assertTicketHasCanonicalFields(ticket);
 
   const lines = [...parsed.lines];
-  const entry = formatLogEntry(options.date, instruction);
+  const text = options.kind === "manual"
+    ? `[수동지시] ${instruction}`
+    : options.kind
+      ? `[${TICKET_INSTRUCTION_LABELS[options.kind]}] 티켓: ${ticketId}; 내용: ${instruction}`
+      : instruction;
+  const entry = formatLogEntry(options.date, text);
   const userInstructionField = ticket.fields.get("사용자 지시");
 
   if (userInstructionField) {
@@ -657,8 +675,8 @@ function replaceTopLevelProgress(line: string, doneTickets: number, totalTickets
 }
 
 function formatLogEntry(date: string | undefined, text: string): string {
-  const entryDate = date ?? new Date().toISOString().slice(0, 10);
-  return `- ${entryDate}: ${text.trim()}`;
+  const entryDate = date ?? formatLocalIsoDateTime().slice(0, 10);
+  return `- ${entryDate}: ${text.trim().replace(/\s+/g, " ")}`;
 }
 
 function insertLogEntry(lines: string[], field: FieldPosition, entry: string): void {

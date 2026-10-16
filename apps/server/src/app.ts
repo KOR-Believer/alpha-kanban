@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler, type Express } from "express";
 import { ZodError } from "zod";
 
 import {
+  appendTicketInstructionRequestSchema,
   appendTicketLogRequestSchema,
   appendWorkspaceChatMessageRequestSchema,
   boardOrderSchema,
@@ -236,6 +237,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
             {
               status: body.status,
               progress: body.progress,
+              reason: body.reason,
               expectedHash: body.expectedHash,
               expectedMtimeMs: body.expectedMtimeMs,
             },
@@ -251,7 +253,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     "/api/workspaces/:workspaceId/files/:fileId/tickets/:ticketId/instructions",
     async (request, response, next) => {
       try {
-        const body = appendTicketLogRequestSchema.parse(request.body);
+        const body = appendTicketInstructionRequestSchema.parse(request.body);
         const scopedFileStore = await createScopedFileStore(request.params.workspaceId ?? "");
         response.json(
           await scopedFileStore.appendInstruction(
@@ -260,6 +262,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
             {
               text: body.text,
               date: body.date,
+              kind: body.kind,
               expectedHash: body.expectedHash,
               expectedMtimeMs: body.expectedMtimeMs,
             },
@@ -461,6 +464,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
           await fileStore.patchTicket(request.params.fileId ?? "", request.params.ticketId ?? "", {
             status: body.status,
             progress: body.progress,
+            reason: body.reason,
             expectedHash: body.expectedHash,
             expectedMtimeMs: body.expectedMtimeMs,
           }),
@@ -475,7 +479,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
     "/api/files/:fileId/tickets/:ticketId/instructions",
     async (request, response, next) => {
       try {
-        const body = appendTicketLogRequestSchema.parse(request.body);
+        const body = appendTicketInstructionRequestSchema.parse(request.body);
         response.json(
           await fileStore.appendInstruction(
             request.params.fileId ?? "",
@@ -483,6 +487,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): ServerApp
             {
               text: body.text,
               date: body.date,
+              kind: body.kind,
               expectedHash: body.expectedHash,
               expectedMtimeMs: body.expectedMtimeMs,
             },

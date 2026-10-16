@@ -153,6 +153,19 @@ Allowed status and progress relationships:
 
 The top-level numerator is the number of `DONE` tickets. The denominator is every ticket in the document, including `DEFERRED`, unless the project explicitly defines and documents another convention.
 
+## User Direction Records
+
+Alpha Kanban can append these ordinary dated entries to `사용자 지시` without running an AI. Untagged legacy entries remain valid. Read the ticket's current fields and newest relevant direction together; do not replay all historical entries as fresh commands.
+
+```md
+- 2026-10-13: DONE -> TODO 사용자가 명시적으로 할 일로 변경했습니다.
+- 2026-10-13: DONE -> TODO 사용자 사유: 저장 후 값이 사라지는 버그 발견.
+- 2026-10-13: IN_PROGRESS 진행률 50% -> 75% 사용자가 명시적으로 진행률을 변경했습니다.
+- 2026-10-13: [수동지시] 자동 저장은 이번 범위에서 제외한다.
+```
+
+Status transitions and default phrases describe a user's explicit action, not agent implementation or verification. In particular, a user-applied DONE does not prove checks passed, and a transition away from DONE makes prior completion subject to reassessment. Old checked items and notes are retained as history; reassess affected items during authorized work. `[수동지시]` is user-authored free text and does not itself change status. Older `[재오픈]`, `[상태 변경]`, and typed records remain valid history; do not migrate them merely to match the new form. Investigate within the current request, reconcile confirmed changes into current fields, and append outcomes to `진행 메모` without duplicating the user's record. These entries are not an automatic execution queue.
+
 ## Completion Evidence
 
 Mark a ticket `DONE` only when:

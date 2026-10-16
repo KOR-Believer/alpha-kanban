@@ -104,4 +104,33 @@ describe("CodexStateStore", () => {
     };
     expect(state.runtimeSettings?.workspaceRoots).toEqual([firstRoot, secondRoot]);
   });
+
+  it("serializes all read-modify-writes across instances sharing a state file", async () => {
+    const config = loadServerConfig({ workspaceRoot });
+    const first = new CodexStateStore(config, { workspaceId: "w_first" });
+    const second = new CodexStateStore(config, { workspaceId: "w_second" });
+    await Promise.all([
+      first.setBoardOrder(["a", "b", "a"]),
+      second.setDocumentSession("docs/tickets.md", "session"),
+      first.recordRecentWorkspace({ id: "w_first", root: workspaceRoot, label: "first" }),
+      second.markRunRead("run"),
+      first.setCodexRunDefaults({ model: "test-model" }),
+      second.setWorkspaceRootsOverride([workspaceRoot]),
+      first.setCodexRunDefaults({ reasoningEffort: "high" }),
+      second.setBoardOrder(["b", "a"]),
+    ]);
+    expect(await first.getBoardOrder()).toEqual(["b", "a"]);
+    expect((await second.getDocumentState("docs/tickets.md"))?.codexSessionId).toBe("session");
+    expect(await second.getLastWorkspaceId()).toBe("w_first");
+    expect(await first.getRunReadAt("run")).toBeDefined();
+    expect(await second.getCodexRunDefaults()).toMatchObject({ model: "test-model", reasoningEffort: "high" });
+    expect(await first.getRuntimeSettings()).toEqual({ workspaceRoots: [workspaceRoot] });
+  });
+
+  it("continues the write queue after a rejected mutation", async () => {
+    const store = new CodexStateStore(loadServerConfig({ workspaceRoot }));
+    await expect(store.setBoardOrder([""])).rejects.toThrow();
+    await store.setBoardOrder(["valid"]);
+    expect(await store.getBoardOrder()).toEqual(["valid"]);
+  });
 });
