@@ -109,6 +109,7 @@ export const korean: Record<string, string> = {
   "Side peek": "사이드 패널", "Center peek": "중앙 창", "Full view": "전체 화면", "Ticket view": "티켓 보기 방식",
   "Ticket view options": "티켓 보기 옵션", "Reset size": "기본 크기로 복원", "Restore ticket peek": "이전 티켓 보기로 복원",
   "Expand ticket detail": "티켓 전체 화면으로 보기", "Restore peek": "이전 보기로 복원", "Close ticket detail": "티켓 상세 닫기", Close: "닫기",
+  "Go to project": "프로젝트로 이동", "Go to {{project}} project": "{{project}} 프로젝트로 이동", "Discard and open project": "버리고 프로젝트로 이동",
   "Resize ticket {{edge}}": "티켓 {{edge}} 크기 조절", left: "왼쪽", right: "오른쪽", top: "위쪽", bottom: "아래쪽", "bottom-right": "오른쪽 아래",
   Status: "상태", "{{progress}}% (current)": "{{progress}}% (현재)",
   "{{count}} completion or validation items are unchecked. Changing status will not change these checkboxes.": "완료 기준과 검증 항목 중 {{count}}개가 미체크 상태입니다. 상태를 변경해도 체크 항목은 유지됩니다.",

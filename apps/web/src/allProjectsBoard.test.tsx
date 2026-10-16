@@ -11,6 +11,7 @@ import { setLanguage, t } from "./i18n";
 
 const api = vi.hoisted(() => ({
   workspaces: vi.fn(), document: vi.fn(), request: vi.fn(), patch: vi.fn(), append: vi.fn(),
+  navigate: vi.fn(),
 }));
 vi.mock("./App", async (original) => ({
   ...await original<typeof import("./App")>(),
@@ -18,7 +19,7 @@ vi.mock("./App", async (original) => ({
   requestJson: api.request, patchTicket: api.patch, appendTicketInstruction: api.append,
 }));
 vi.mock("@tanstack/react-router", async (original) => ({
-  ...await original<typeof import("@tanstack/react-router")>(), useNavigate: () => vi.fn(),
+  ...await original<typeof import("@tanstack/react-router")>(), useNavigate: () => api.navigate,
 }));
 
 describe("all-projects document workflow", () => {
@@ -68,10 +69,18 @@ describe("all-projects document workflow", () => {
   function card(id = first.id) {
     return [...document.querySelectorAll<HTMLElement>("[data-ticket-key]")].find((element) => element.textContent?.includes(`Fixture ${id}`))!;
   }
+  function ticketLink(id = first.id) { return card(id).querySelector("h3")!.closest("a")!; }
+  function projectLink(id = first.id) { return card(id).querySelector<HTMLAnchorElement>('a[aria-label]')!; }
   function column(status: string) { return document.querySelector<HTMLElement>(`section[aria-label="${t("{{status}} tickets", { status: t(status) })}"]`)!; }
   function button(label: string) {
     const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.textContent?.trim() === label || element.getAttribute("aria-label") === label);
     expect(found, label).toBeDefined(); return found!;
+  }
+  function instructionInput() {
+    const label = [...document.querySelectorAll("label")].find((element) => element.textContent?.trim() === t("수동 지시"));
+    const input = label?.querySelector("textarea");
+    expect(input).toBeTruthy();
+    return input!;
   }
   async function drag(status: string, id = first.id) {
     const source = card(id);
@@ -152,15 +161,115 @@ describe("all-projects document workflow", () => {
   it("uses the existing detail editor and persists manual directions with the correct guard", async () => {
     api.append.mockResolvedValue(documents[first.id]);
     await mount();
-    await act(async () => card().querySelector<HTMLAnchorElement>("a")!.click());
+    await act(async () => ticketLink().click());
     expect(document.body.textContent).toContain("속성");
     expect(document.body.textContent).not.toContain("Run with Codex");
-    const text = document.querySelector<HTMLTextAreaElement>('textarea[id$="-instruction-text"]') ?? document.querySelector("textarea")!;
+    const text = instructionInput();
     await enter(text, "확인해 주세요");
     await act(async () => button("문서에 추가").click());
     expect(api.append).toHaveBeenCalledExactlyOnceWith(first.id, first.id, "TEST-01", {
       kind: "manual", text: "확인해 주세요", expectedHash: "hash-w_first", expectedMtimeMs: 1,
     });
+  });
+  it.each([
+    ["ko", "side"], ["ko", "modal"], ["ko", "full"],
+    ["en", "side"], ["en", "modal"], ["en", "full"],
+  ] as const)("opens the source project with the selected ticket from its folder name (%s, %s)", async (language, mode) => {
+    await setLanguage(language);
+    window.localStorage.setItem("alpha-kanban.ticketDetailMode", mode);
+    documents[first.id]!.file.relativePath = "docs/nested/한글 티켓_tickets.md";
+    await mount();
+    for (const workspace of [first, second]) {
+      const link = projectLink(workspace.id);
+      expect(link.getAttribute("aria-label")).toBe(t("Go to {{project}} project", { project: "project" }));
+      expect(link.getAttribute("draggable")).toBe("false");
+      await act(async () => link.click());
+      const href = api.navigate.mock.lastCall![0].href;
+      expect(href).toBe(link.getAttribute("href"));
+      const target = new URL(href, "http://localhost");
+      expect(target.pathname).toBe(`/w/${workspace.id}`);
+      expect(target.searchParams.get("file")).toBe(documents[workspace.id]!.file.relativePath);
+      const hash = new URLSearchParams(target.hash.slice(1));
+      expect(hash.get("ticket")).toBe("TEST-01");
+      expect(hash.get("detail")).toBe(mode);
+      expect(ticketLink(workspace.id).getAttribute("href")).toBe(href);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+    }
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(api.append).not.toHaveBeenCalled();
+  });
+  it.each(["metaKey", "ctrlKey", "shiftKey", "altKey"])("preserves native modified folder-link clicks (%s)", async (modifier) => {
+    await mount();
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, [modifier]: true });
+    await act(async () => { projectLink().dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(false);
+    const target = new URL(projectLink().getAttribute("href")!, "http://localhost");
+    expect(new URLSearchParams(target.hash.slice(1)).get("ticket")).toBe("TEST-01");
+    expect(api.navigate).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("shows the project navigation label in English as well", async () => {
+    await setLanguage("en");
+    await mount();
+    await act(async () => ticketLink().click());
+    expect(button("Go to project").textContent?.trim()).toBe("Go to project");
+  });
+  it.each(["side", "modal", "full"])("opens the exact source workspace, file and ticket from the %s view", async (mode) => {
+    window.localStorage.setItem("alpha-kanban.ticketDetailMode", mode);
+    documents[first.id]!.file.relativePath = "docs/nested/한글 티켓_tickets.md";
+    await mount();
+    for (const workspace of [first, second]) {
+      await act(async () => ticketLink(workspace.id).click());
+      expect(button("프로젝트로 이동").textContent?.trim()).toBe("프로젝트로 이동");
+      await act(async () => button("프로젝트로 이동").click());
+      const target = new URL(api.navigate.mock.lastCall![0].href, "http://localhost");
+      expect(target.pathname).toBe(`/w/${workspace.id}`);
+      expect(target.searchParams.get("file")).toBe(documents[workspace.id]!.file.relativePath);
+      const hash = new URLSearchParams(target.hash.slice(1));
+      expect(hash.get("ticket")).toBe("TEST-01");
+      expect(hash.get("detail")).toBe(mode);
+      await act(async () => button("티켓 상세 닫기").click());
+    }
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(api.append).not.toHaveBeenCalled();
+  });
+  it("keeps a draft when navigation is cancelled and navigates only after discard confirmation", async () => {
+    await mount();
+    await act(async () => ticketLink().click());
+    const text = instructionInput();
+    await enter(text, "보존할 지시");
+    await act(async () => button("프로젝트로 이동").click());
+    expect(api.navigate).not.toHaveBeenCalled();
+    await act(async () => button("계속 작성").click());
+    expect(text.value).toBe("보존할 지시");
+    await act(async () => button("프로젝트로 이동").click());
+    await act(async () => button("버리고 프로젝트로 이동").click());
+    expect(api.navigate).toHaveBeenCalledTimes(1);
+    expect(api.append).not.toHaveBeenCalled();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+  it("still confirms unsaved edits before closing instead of navigating", async () => {
+    await mount();
+    await act(async () => ticketLink().click());
+    await enter(instructionInput(), "임시 입력");
+    await act(async () => button("티켓 상세 닫기").click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => button("버리고 닫기").click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(api.navigate).not.toHaveBeenCalled();
+  });
+  it("disables project navigation until an in-flight instruction save finishes", async () => {
+    let finish!: (value: TicketDocumentResponse) => void;
+    api.append.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    await mount();
+    await act(async () => ticketLink().click());
+    await enter(instructionInput(), "저장 중");
+    await act(async () => button("문서에 추가").click());
+    expect(button("프로젝트로 이동").disabled).toBe(true);
+    await act(async () => button("프로젝트로 이동").click());
+    expect(api.navigate).not.toHaveBeenCalled();
+    await act(async () => { finish(documents[first.id]!); });
+    expect(button("프로젝트로 이동").disabled).toBe(false);
   });
   it("blocks a pending move if its document changed during polling", async () => {
     await mount(); await drag("TODO");

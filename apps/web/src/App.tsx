@@ -4252,6 +4252,7 @@ export function TicketDetailDrawer({
   onRunDocumentChange = onReload,
   onRunRead = onReload,
   onRunStatusChange = onReload,
+  onOpenInWorkspace,
   ticket,
   ticketRunSummary,
   workspaceId,
@@ -4290,6 +4291,7 @@ export function TicketDetailDrawer({
   onRunDocumentChange?: () => Promise<unknown>;
   onRunRead?: () => Promise<unknown>;
   onRunStatusChange?: () => Promise<unknown>;
+  onOpenInWorkspace?: () => void;
   ticket: TicketItem;
   ticketRunSummary?: CodexRunSummary;
   workspaceId?: string;
@@ -4620,6 +4622,7 @@ export function TicketDetailDrawer({
 
   return (
     <TicketDetailFrame ticketId={ticket.id} presentation={presentation} onClose={onClose}
+      onOpenInWorkspace={onOpenInWorkspace}
       isBusy={isSaving || isAppendingInstruction}
       hasDraft={canSaveStatus || Boolean(changeReason.trim() || instructionText.trim() || runDraft.trim())}>
         <header className="ak-drawer-header">

@@ -1,5 +1,6 @@
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { buildAppRoute, type TicketDetailMode } from "./appRoute";
 import {
   boardOrderSchema, filesResponseSchema,
   type MarkdownFileChangeEvent, type TicketDocumentResponse, type TicketInstructionKind,
@@ -258,7 +259,7 @@ export function AllProjectsBoard() {
                     <div className="ak-all-board-cards">
                       {!columnTickets.length ? <p className="py-8 text-center text-xs text-muted-foreground">{t("Empty")}</p> : null}
                       {columnTickets.map((ticket, index) => (
-                        <BoardCard key={ticket.key} ticket={ticket} disabled={!canDrag}
+                        <BoardCard key={ticket.key} ticket={ticket} disabled={!canDrag} detailMode={presentation.mode}
                           dropPosition={draggingKey !== ticket.key && dropTarget?.key === ticket.key ? (dropTarget.after ? "after" : "before") : null}
                           onDragEnd={endDrag} onDragStart={() => setDraggingKey(ticket.key)} onDragOverCard={(after) => setDropTarget({ after, key: ticket.key })}
                           onOpen={() => { const document = documentFor(ticket); if (document) setDetail({ document, ticketId: ticket.id }); }}
@@ -284,6 +285,10 @@ export function AllProjectsBoard() {
           documentHash={detail.document.response.file.hash} documentMtimeMs={detail.document.response.file.mtimeMs}
           workspaceId={detail.document.workspace.id} fileId={detail.document.response.file.id}
           presentation={presentation}
+          onOpenInWorkspace={() => { void navigate({ href: buildAppRoute({
+            workspaceId: detail.document.workspace.id, filePath: detail.document.response.file.relativePath,
+            ticketId: detail.ticketId, detailMode: presentation.mode,
+          }) }); }}
           onClose={() => setDetail(null)} onReload={reloadDetail} onExternalFileReload={reloadDetail} externalFileChange={externalChange}
           onPatchTicket={(id, status, progress, reason) => saveStatus(detail.document, id, status, progress, reason)}
           onAppendInstruction={appendInstruction} />
@@ -298,12 +303,16 @@ export function AllProjectsBoard() {
   );
 }
 
-function BoardCard({ ticket, disabled, dropPosition, onDragStart, onDragEnd, onDragOverCard, onOpen, onReorder, canMoveUp, canMoveDown }: {
-  ticket: BoardTicket; disabled: boolean; dropPosition: "after" | "before" | null;
+function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, onDragEnd, onDragOverCard, onOpen, onReorder, canMoveUp, canMoveDown }: {
+  ticket: BoardTicket; disabled: boolean; detailMode: TicketDetailMode; dropPosition: "after" | "before" | null;
   onDragStart: () => void; onDragEnd: () => void; onDragOverCard: (after: boolean) => void;
   onOpen: () => void; onReorder: (delta: number) => void; canMoveUp: boolean; canMoveDown: boolean;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const projectHref = buildAppRoute({
+    workspaceId: ticket.workspaceId, filePath: ticket.file.relativePath, ticketId: ticket.id, detailMode,
+  });
   return (
     <article className="ak-card group relative p-3" data-ticket-key={ticket.key} draggable={!disabled}
       onDragStart={(event) => { event.dataTransfer.setData("text/ticket-key", ticket.key); event.dataTransfer.effectAllowed = "move"; onDragStart(); }}
@@ -313,10 +322,21 @@ function BoardCard({ ticket, disabled, dropPosition, onDragStart, onDragEnd, onD
       }}>
       {dropPosition ? <span aria-hidden="true" className={cn("pointer-events-none absolute inset-x-1 h-0.5 bg-primary", dropPosition === "before" ? "-top-1" : "-bottom-1")} /> : null}
       <div className="flex items-start justify-between gap-2">
-        <Badge variant="outline" className="min-w-0 max-w-full gap-1.5" title={ticket.projectRoot}><Folder aria-hidden="true" className="size-3 shrink-0" /><span className="truncate">{ticket.projectLabel}</span></Badge>
+        <a href={projectHref} draggable={false} className="ak-focus-ring group/project inline-flex min-w-0 rounded-full"
+          aria-label={t("Go to {{project}} project", { project: ticket.projectLabel })}
+          title={t("Go to {{project}} project", { project: ticket.projectRoot })}
+          onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            void navigate({ href: projectHref });
+          }}>
+          <Badge variant="outline" className="min-w-0 max-w-full gap-1.5 group-hover/project:bg-muted group-focus-visible/project:bg-muted">
+            <Folder aria-hidden="true" className="size-3 shrink-0" /><span className="truncate group-hover/project:underline">{ticket.projectLabel}</span>
+          </Badge>
+        </a>
         {ticket.priority ? <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge> : null}
       </div>
-      <a href={ticket.href} draggable={false} className="ak-focus-ring mt-2 block rounded-sm"
+      <a href={projectHref} draggable={false} className="ak-focus-ring mt-2 block rounded-sm"
         onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(); } }}>
         <span className="text-xs text-muted-foreground">{ticket.id}</span>
         <h3 className="mt-1 line-clamp-3 break-words text-sm font-medium leading-5">{ticket.title}</h3>

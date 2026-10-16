@@ -1,6 +1,6 @@
 import { useTranslation } from "@/i18n";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronDown, FileText, Maximize2, Minimize2, MoveDiagonal2, PanelRight, RectangleHorizontal, RotateCcw, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, FileText, Maximize2, Minimize2, MoveDiagonal2, PanelRight, RectangleHorizontal, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,17 +13,18 @@ const views = [
   { mode: "full", label: "Full view", icon: Maximize2 },
 ] as const;
 
-export function TicketDetailFrame({ ticketId, presentation, onClose, hasDraft, isBusy, children }: {
+export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWorkspace, hasDraft, isBusy, children }: {
   ticketId: string;
   presentation: TicketDetailPresentation;
   onClose: () => void;
+  onOpenInWorkspace?: () => void;
   hasDraft: boolean;
   isBusy: boolean;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
+  const [pendingExit, setPendingExit] = useState<"close" | "workspace" | null>(null);
   const returnFocus = useRef(typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null);
   const currentView = views.find((view) => view.mode === presentation.mode)!;
   const ViewIcon = currentView.icon;
@@ -33,11 +34,16 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, hasDraft, i
   } as CSSProperties;
 
   useEffect(() => presentation.stopResize, [presentation.stopResize]);
-  function requestClose() {
+  function finishExit(target: "close" | "workspace") {
+    presentation.stopResize();
+    if (target === "workspace") onOpenInWorkspace?.();
+    else onClose();
+  }
+  function requestExit(target: "close" | "workspace") {
     if (isBusy) return;
     setViewMenuOpen(false);
-    if (hasDraft) setConfirmClose(true);
-    else { presentation.stopResize(); onClose(); }
+    if (hasDraft) setPendingExit(target);
+    else finishExit(target);
   }
   function changeView(mode: TicketDetailMode) {
     presentation.setMode(mode);
@@ -45,7 +51,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, hasDraft, i
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) requestClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open) requestExit("close"); }}>
       <DialogContent layout="custom" showCloseButton={false} aria-describedby={undefined}
         className="ak-ticket-detail-shell" data-mode={presentation.mode} data-resizing={presentation.isResizing || undefined} style={style}
         onCloseAutoFocus={(event) => {
@@ -62,6 +68,11 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, hasDraft, i
               <FileText className="size-4 shrink-0" aria-hidden="true" /><span className="truncate">{ticketId}</span>
             </span>
             <div className="ak-drawer-actions">
+              {onOpenInWorkspace ? (
+                <Button size="sm" variant="outline" disabled={isBusy} onClick={() => requestExit("workspace")}>
+                  <ExternalLink aria-hidden="true" />{t("Go to project")}
+                </Button>
+              ) : null}
               <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
                 <PopoverTrigger asChild>
                   <Button size="sm" variant="ghost" aria-label={t("Ticket view")} title={t(currentView.label)}>
@@ -89,7 +100,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, hasDraft, i
                 onClick={() => presentation.mode === "full" ? presentation.restorePeek() : presentation.setMode("full")}>
                 {presentation.mode === "full" ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
               </Button>
-              <Button size="iconSm" variant="ghost" disabled={isBusy} aria-label={t("Close ticket detail")} title={t("Close")} onClick={requestClose}><X aria-hidden="true" /></Button>
+              <Button size="iconSm" variant="ghost" disabled={isBusy} aria-label={t("Close ticket detail")} title={t("Close")} onClick={() => requestExit("close")}><X aria-hidden="true" /></Button>
             </div>
           </div>
           <div className="ak-scroll-area ak-ticket-detail-scroll">
@@ -101,15 +112,19 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, hasDraft, i
             <ResizeHandle key={edge} edge={edge} presentation={presentation} />
           ))
         ) : null}
-        <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <Dialog open={pendingExit !== null} onOpenChange={(open) => { if (!open) setPendingExit(null); }}>
           <DialogContent className="w-[min(440px,calc(100vw-2rem))]">
             <DialogHeader className="pr-12">
               <DialogTitle>{t("작성 중인 내용을 버릴까요?")}</DialogTitle>
               <DialogDescription>{t("아직 저장하지 않은 상태 변경 사유와 수동 지시가 사라집니다.")}</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmClose(false)}>{t("계속 작성")}</Button>
-              <Button variant="destructive" onClick={() => { setConfirmClose(false); presentation.stopResize(); onClose(); }}>{t("버리고 닫기")}</Button>
+              <Button variant="outline" onClick={() => setPendingExit(null)}>{t("계속 작성")}</Button>
+              <Button variant="destructive" disabled={isBusy} onClick={() => {
+                if (!pendingExit || isBusy) return;
+                finishExit(pendingExit);
+                setPendingExit(null);
+              }}>{pendingExit === "workspace" ? t("Discard and open project") : t("버리고 닫기")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
