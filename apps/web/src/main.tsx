@@ -4,27 +4,25 @@ import {
   createRootRoute,
   createRouter,
   RouterProvider,
-  useLocation,
 } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { AllProjectsBoard } from "./AllProjectsBoard";
-import { App } from "./App";
+import { AppRoot } from "./AppRoot";
 import "./styles.css";
+import { IS_BROWSER_LOCAL } from "./storageMode";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient(IS_BROWSER_LOCAL ? {
+  defaultOptions: {
+    queries: { networkMode: "always", retry: false, refetchOnWindowFocus: false },
+    mutations: { networkMode: "always", retry: false },
+  },
+} : undefined);
 
 const ALL_TICKETS_PATH = "/all";
 
-// App stays mounted across "/" and "/w/$workspaceId"; only the all-tickets board swaps it out.
-function Root() {
-  const pathname = useLocation({ select: (location) => location.pathname });
-  return pathname === ALL_TICKETS_PATH ? <AllProjectsBoard /> : <App />;
-}
-
 const rootRoute = createRootRoute({
-  component: Root,
+  component: AppRoot,
 });
 
 const indexRoute = createRoute({
@@ -42,8 +40,10 @@ const allTicketsRoute = createRoute({
   path: ALL_TICKETS_PATH,
 });
 
+const introRoute = createRoute({ getParentRoute: () => rootRoute, path: "/intro" });
+
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, workspaceRoute, allTicketsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, workspaceRoute, allTicketsRoute, introRoute]),
 });
 
 declare module "@tanstack/react-router" {

@@ -1,8 +1,10 @@
 import type { MarkdownFileSummary, TicketDocumentResponse, TicketItem, WorkspaceSummary } from "@alpha-kanban/shared";
-import { buildAppRoute } from "./appRoute";
+import { buildAppRoute, documentIdentity, documentRouteId } from "./appRoute";
 
 export type BoardDocument = { response: TicketDocumentResponse; workspace: WorkspaceSummary };
 export type BoardData = { documents: BoardDocument[]; issues: string[] };
+export type BoardLoadProgress = { data: BoardData; completedProjects: number; totalProjects: number };
+export type BoardLoadOptions = { signal?: AbortSignal; onProgress?: (progress: BoardLoadProgress) => void };
 export type BoardTicket = TicketItem & {
   file: MarkdownFileSummary;
   projectId: string;
@@ -29,34 +31,77 @@ async function collect<T, R>(items: T[], read: (item: T) => Promise<R>) {
   return results;
 }
 
+function limitConcurrency(limit: number) {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  return async <T>(read: () => Promise<T>): Promise<T> => {
+    await new Promise<void>((resolve) => {
+      if (active < limit) { active++; resolve(); }
+      else waiting.push(resolve);
+    });
+    try { return await read(); }
+    finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active--;
+    }
+  };
+}
+
 export async function loadBoard(api: {
   workspaces: () => Promise<{ workspaces: WorkspaceSummary[] }>;
   files: (workspaceId: string) => Promise<{ files: MarkdownFileSummary[] }>;
   document: (workspaceId: string, fileId: string) => Promise<TicketDocumentResponse>;
-}): Promise<BoardData> {
+}, options: BoardLoadOptions = {}): Promise<BoardData> {
   const available = (await api.workspaces()).workspaces.filter((workspace) => workspace.isAvailable)
     .sort((a, b) => b.root.length - a.root.length || a.root.localeCompare(b.root));
-  const listed = await collect(available, async (workspace) => ({ workspace, files: (await api.files(workspace.id)).files }));
+  options.signal?.throwIfAborted();
   const issues: string[] = [];
-  const jobs = new Map<string, { file: MarkdownFileSummary; workspace: WorkspaceSummary }>();
-  listed.forEach((result, index) => {
-    if (result.status === "rejected") {
-      issues.push(`${available[index]!.root}: ${errorMessage(result.reason)}`);
-      return;
-    }
-    // Prefer the most specific workspace for duplicate physical documents, regardless of recency.
-    for (const file of result.value.files) {
-      if (file.type === "tickets" && !jobs.has(file.absolutePath)) jobs.set(file.absolutePath, { file, workspace: result.value.workspace });
-    }
+  const owners = new Map<string, number>();
+  const documents = new Map<string, BoardDocument>();
+  const rank = new Map(available.map((workspace, index) => [workspace.id, index]));
+  const readDocument = limitConcurrency(6);
+  let completedProjects = 0;
+  const snapshot = (): BoardData => ({
+    documents: [...documents.values()].sort((a, b) => rank.get(a.workspace.id)! - rank.get(b.workspace.id)! ||
+      a.response.file.relativePath.localeCompare(b.response.file.relativePath)),
+    issues: [...issues],
   });
-  const entries = [...jobs.values()];
-  const loaded = await collect(entries, async ({ file, workspace }) => ({ response: await api.document(workspace.id, file.id), workspace }));
-  const documents: BoardDocument[] = [];
-  loaded.forEach((result, index) => {
-    if (result.status === "fulfilled") documents.push(result.value);
-    else issues.push(`${entries[index]!.file.absolutePath}: ${errorMessage(result.reason)}`);
+  const publish = () => {
+    if (!options.signal?.aborted) options.onProgress?.({ data: snapshot(), completedProjects, totalProjects: available.length });
+  };
+  publish();
+  await collect(available, async (workspace) => {
+    try {
+      options.signal?.throwIfAborted();
+      const { files } = await api.files(workspace.id);
+      options.signal?.throwIfAborted();
+      await Promise.all(files.filter((file) => file.type === "tickets").map(async (file) => {
+        const key = documentIdentity(file);
+        const priority = rank.get(workspace.id)!;
+        // Listings may finish out of order; the most specific owner still wins.
+        if ((owners.get(key) ?? Infinity) <= priority) return;
+        owners.set(key, priority);
+        documents.delete(key);
+        try {
+          const response = await readDocument(async () => {
+            options.signal?.throwIfAborted();
+            return api.document(workspace.id, file.id);
+          });
+          if (owners.get(key) === priority) documents.set(key, { response, workspace });
+        } catch (error) {
+          if (!options.signal?.aborted && owners.get(key) === priority) issues.push(`${file.workspaceRelativePath}: ${errorMessage(error)}`);
+        }
+        publish();
+      }));
+    } catch (error) {
+      if (!options.signal?.aborted) issues.push(`${workspace.root}: ${errorMessage(error)}`);
+    }
+    completedProjects++;
+    publish();
   });
-  return { documents, issues };
+  options.signal?.throwIfAborted();
+  return snapshot();
 }
 
 export function boardTickets(data?: BoardData): BoardTicket[] {
@@ -67,8 +112,8 @@ export function boardTickets(data?: BoardData): BoardTicket[] {
     projectLabel: workspace.project?.label ?? workspace.label,
     projectRoot: workspace.project?.root ?? workspace.root,
     workspaceId: workspace.id,
-    key: `${response.file.absolutePath}#${ticket.id}`,
-    href: buildAppRoute({ workspaceId: workspace.id, filePath: response.file.relativePath, ticketId: ticket.id }),
+    key: `${documentIdentity(response.file)}#${ticket.id}`,
+    href: buildAppRoute({ workspaceId: workspace.id, filePath: documentRouteId(response.file), ticketId: ticket.id }),
   })));
 }
 

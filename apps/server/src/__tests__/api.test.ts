@@ -791,6 +791,21 @@ describe("API", () => {
     );
   });
 
+  it("reports whole-set completion without changing the first-file progress badge", async () => {
+    const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
+    const project = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);
+    const before = documentSetsResponseSchema.parse(await getJson(`/api/workspaces/${project.id}/document-sets`));
+    const progress = before.sets.find((set) => set.slug === "feature")!.ticketProgress!;
+    writeFileSync(path.join(projectOneRoot, "docs", "20_feature_tickets.md"), realTicketDocument);
+    const after = documentSetsResponseSchema.parse(await getJson(`/api/workspaces/${project.id}/document-sets`));
+    const feature = after.sets.find((set) => set.slug === "feature")!;
+    expect(feature.ticketProgress).toEqual(progress);
+    expect(feature.allTicketsDone).toBe(progress.totalTickets! > 0 && progress.doneTickets === progress.totalTickets);
+    writeFileSync(path.join(projectOneRoot, "docs", "20_feature_tickets.md"), "# Pending\n\n## Status\n\n- 현재 진행률: `0 / 1 tickets`\n");
+    const pending = documentSetsResponseSchema.parse(await getJson(`/api/workspaces/${project.id}/document-sets`));
+    expect(pending.sets.find((set) => set.slug === "feature")!.allTicketsDone).toBe(false);
+  });
+
   it("reads generic markdown documents with outline metadata", async () => {
     const listed = workspacesResponseSchema.parse(await getJson("/api/workspaces"));
     const projectOne = requireWorkspaceByRoot(listed.workspaces, realProjectOneRoot);

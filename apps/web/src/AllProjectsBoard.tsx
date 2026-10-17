@@ -1,3 +1,7 @@
+import { IS_BROWSER_LOCAL } from "./storageMode";
+import { browserRepository } from "./browser/repository";
+import { BrowserFilesMenu } from "./browser/BrowserConnections";
+import { documentIdentity, documentRouteId } from "./appRoute";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { buildAppRoute, type TicketDetailMode } from "./appRoute";
@@ -17,7 +21,7 @@ import {
 } from "./App";
 import {
   BOARD_FILTERS_KEY, boardTickets, filterBoardTickets, loadBoard, readBoardFilters, reorderedKeys,
-  type BoardData, type BoardDocument, type BoardTicket,
+  type BoardData, type BoardDocument, type BoardTicket, type BoardLoadOptions, type BoardLoadProgress,
 } from "./allProjectsData";
 import { TicketMoveDialog, prepareTicketMove, type TicketMove } from "./components/tickets/TicketMoveDialog";
 import type { TicketWriteGuard } from "./components/tickets/TicketStatusFields";
@@ -34,11 +38,11 @@ type DropTarget = { after: boolean; key: string };
 type PendingMove = { move: TicketMove; document: BoardDocument; order?: string[] };
 type Detail = { document: BoardDocument; ticketId: string };
 
-const fetchAllTickets = () => loadBoard({
+const fetchAllTickets = (options: BoardLoadOptions) => loadBoard({
   workspaces: fetchWorkspaces,
-  files: (id) => requestJson(`/api/workspaces/${id}/files`, filesResponseSchema),
-  document: fetchTicketDocument,
-});
+  files: async (id) => IS_BROWSER_LOCAL ? { files: await browserRepository.ticketFiles(id) } : requestJson(`/api/workspaces/${id}/files`, filesResponseSchema),
+  document: (workspaceId, fileId) => IS_BROWSER_LOCAL ? browserRepository.tickets(workspaceId, fileId, false) : fetchTicketDocument(workspaceId, fileId),
+}, options);
 const errorText = (error: unknown) => formatClientError(normalizeClientError(error));
 
 export function AllProjectsBoard() {
@@ -51,21 +55,24 @@ export function AllProjectsBoard() {
   const [filters, setFilters] = useState(readBoardFilters);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
-  const [moveError, setMoveError] = useState<{ message: string; error: unknown } | null>(null);
+  const [moveError, setMoveError] = useState<{ message: string; error: unknown; retryOrder?: string[] } | null>(null);
   const [isWriting, setIsWriting] = useState(false);
+  const [loadProgress, setLoadProgress] = useState<BoardLoadProgress>();
+  const [manualRefresh, setManualRefresh] = useState(false);
   const writingRef = useRef(false);
   const presentation = useTicketDetailPresentation();
   const ticketsQuery = useQuery({
-    queryFn: fetchAllTickets, queryKey: allTicketsKey,
+    queryFn: ({ signal }) => fetchAllTickets({ signal, onProgress: setLoadProgress }), queryKey: allTicketsKey,
     refetchInterval: draggingKey || isWriting ? false : 15_000,
   });
   const boardOrderQuery = useQuery({
-    queryFn: () => requestJson("/api/board-order", boardOrderSchema), queryKey: boardOrderKey,
+    queryFn: () => IS_BROWSER_LOCAL ? browserRepository.boardOrder() : requestJson("/api/board-order", boardOrderSchema), queryKey: boardOrderKey,
   });
+  const boardData = ticketsQuery.data ?? loadProgress?.data;
   const tickets = useMemo(() => {
     const rank = new Map(boardOrderQuery.data?.keys.map((key, index) => [key, index]));
-    return boardTickets(ticketsQuery.data).sort((a, b) => (rank.get(a.key) ?? Infinity) - (rank.get(b.key) ?? Infinity));
-  }, [boardOrderQuery.data, ticketsQuery.data]);
+    return boardTickets(boardData).sort((a, b) => (rank.get(a.key) ?? Infinity) - (rank.get(b.key) ?? Infinity));
+  }, [boardOrderQuery.data, boardData]);
   const groups = useMemo(() => {
     const counts = new Map<string, { count: number; label: string; root: string }>();
     for (const ticket of tickets) {
@@ -84,31 +91,32 @@ export function AllProjectsBoard() {
     eventType: currentDetail ? "changed" : "removed", workspaceId: detail.document.workspace.id,
     fileId: detail.document.response.file.id, relativePath: detail.document.response.file.relativePath,
     workspaceRelativePath: detail.document.response.file.workspaceRelativePath, absolutePath: detail.document.response.file.absolutePath,
-    observedAt: new Date(ticketsQuery.dataUpdatedAt).toISOString(), file: currentDetail?.response.file,
+    observedAt: new Date(ticketsQuery.dataUpdatedAt || Date.now()).toISOString(), file: currentDetail?.response.file,
   } : undefined;
-  const canDrag = !isWriting && !pendingMove && !detail && Boolean(boardOrderQuery.data);
+  const canDrag = !ticketsQuery.isLoading && !isWriting && !pendingMove && !detail && Boolean(boardOrderQuery.data);
 
   useEffect(() => {
     try { window.localStorage.setItem(BOARD_FILTERS_KEY, JSON.stringify(filters)); } catch { /* Session-only filters. */ }
   }, [filters]);
 
   function currentDocument(document: BoardDocument) {
-    return ticketsQuery.data?.documents.find((item) => item.response.file.absolutePath === document.response.file.absolutePath &&
+    return boardData?.documents.find((item) => documentIdentity(item.response.file) === documentIdentity(document.response.file) &&
       item.workspace.id === document.workspace.id);
   }
   function documentFor(ticket: BoardTicket) {
-    return ticketsQuery.data?.documents.find((item) => item.response.file.absolutePath === ticket.file.absolutePath && item.workspace.id === ticket.workspaceId);
+    return boardData?.documents.find((item) => documentIdentity(item.response.file) === documentIdentity(ticket.file) && item.workspace.id === ticket.workspaceId);
   }
   function replaceDocument(document: BoardDocument, response: TicketDocumentResponse) {
     const next = { ...document, response };
     queryClient.setQueryData(["ticket-document", document.workspace.id, response.file.id], response);
     void queryClient.invalidateQueries({ queryKey: ["document-sets", document.workspace.id] });
     queryClient.setQueryData<BoardData>(allTicketsKey, (data) => {
+      data ??= boardData;
       if (!data) return { documents: [next], issues: [] };
-      const remaining = data.documents.filter((item) => item.response.file.absolutePath !== response.file.absolutePath);
+      const remaining = data.documents.filter((item) => documentIdentity(item.response.file) !== documentIdentity(response.file));
       return { ...data, documents: [...remaining, next] };
     });
-    setDetail((value) => value?.document.response.file.absolutePath === response.file.absolutePath ? { ...value, document: next } : value);
+    setDetail((value) => value && documentIdentity(value.document.response.file) === documentIdentity(response.file) ? { ...value, document: next } : value);
     return next;
   }
   async function reloadDetail() {
@@ -130,10 +138,10 @@ export function AllProjectsBoard() {
     }
   }
   async function persistOrder(keys: string[]) {
-    const previous = queryClient.getQueryData(boardOrderKey);
+    const previous = queryClient.getQueryData<{ keys: string[] }>(boardOrderKey) ?? { keys: [] };
     queryClient.setQueryData(boardOrderKey, { keys });
     try {
-      const saved = await requestJson("/api/board-order", boardOrderSchema, { body: JSON.stringify({ keys }), method: "PUT" });
+      const saved = IS_BROWSER_LOCAL ? await browserRepository.saveBoardOrder({ keys }, previous) : await requestJson("/api/board-order", boardOrderSchema, { body: JSON.stringify({ keys }), method: "PUT" });
       queryClient.setQueryData(boardOrderKey, saved);
     } catch (error) {
       queryClient.setQueryData(boardOrderKey, previous);
@@ -144,7 +152,7 @@ export function AllProjectsBoard() {
   async function saveOrder(keys: string[]) {
     setMoveError(null);
     try { await withWrite(() => persistOrder(keys)); }
-    catch (error) { setMoveError({ message: "Could not save card order: {{error}}", error }); }
+    catch (error) { setMoveError({ message: "Could not save card order: {{error}}", error, retryOrder: keys }); }
   }
   async function saveStatus(document: BoardDocument, ticketId: string, status: TicketStatus, progress: TicketProgress, reason: string, guard?: TicketWriteGuard, order?: string[]) {
     setMoveError(null);
@@ -156,7 +164,7 @@ export function AllProjectsBoard() {
       replaceDocument(document, response);
       if (order) {
         try { await persistOrder(order); }
-        catch (error) { setMoveError({ message: "Status and reason were saved, but card order was not: {{error}}", error }); }
+        catch (error) { setMoveError({ message: "Status and reason were saved, but card order was not: {{error}}", error, retryOrder: order }); }
       }
     });
   }
@@ -169,6 +177,12 @@ export function AllProjectsBoard() {
       });
       replaceDocument(document, response);
     });
+  }
+  async function refreshBoard() {
+    setManualRefresh(true);
+    if (IS_BROWSER_LOCAL) browserRepository.invalidateListings();
+    try { await Promise.all([ticketsQuery.refetch(), boardOrderQuery.refetch()]); }
+    finally { setManualRefresh(false); }
   }
   function endDrag() { setDraggingKey(null); setOverStatus(null); setDropTarget(null); }
   function handleDrop(key: string, status: TicketStatus, target: DropTarget | null) {
@@ -190,9 +204,15 @@ export function AllProjectsBoard() {
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{t("{{count}} tickets", { count: visible.length })}</span>
           <LanguageSelector />
+          {IS_BROWSER_LOCAL ? <BrowserFilesMenu /> : null}
           {isWriting ? <Loader2 aria-label={t("Saving")} className="size-4 animate-spin" /> : null}
-          <Button aria-label={t("Refresh")} disabled={ticketsQuery.isFetching || isWriting} onClick={() => { void ticketsQuery.refetch(); void boardOrderQuery.refetch(); }} size="iconSm" variant="ghost">
-            <RefreshCcw aria-hidden="true" className={cn(ticketsQuery.isFetching && "animate-spin")} />
+          {ticketsQuery.isFetching ? <span role="status" className="text-xs tabular-nums text-muted-foreground">
+            {ticketsQuery.isLoading && loadProgress
+              ? t("Reading projects {{completed}} / {{total}}", { completed: loadProgress.completedProjects, total: loadProgress.totalProjects })
+              : t(manualRefresh ? "Refreshing tickets" : "Checking for changes")}
+          </span> : null}
+          <Button aria-label={t("Refresh")} title={t("Refresh")} disabled={ticketsQuery.isFetching || isWriting} onClick={() => void refreshBoard()} size="iconSm" variant="ghost">
+            <RefreshCcw aria-hidden="true" className={cn(ticketsQuery.isFetching && (ticketsQuery.isLoading || manualRefresh) && "animate-spin")} />
           </Button>
         </div>
       </header>
@@ -222,24 +242,25 @@ export function AllProjectsBoard() {
           <div className="ak-all-board-notice text-destructive" role="alert">
             <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 break-words">{moveError ? t(moveError.message, { error: errorText(moveError.error) }) : errorText(boardOrderQuery.error ?? ticketsQuery.error)}</span>
+            {moveError?.retryOrder ? <Button size="sm" variant="outline" disabled={isWriting} onClick={() => void saveOrder(moveError.retryOrder!)}>{t("Retry card order only")}</Button> : null}
             {moveError ? <Button aria-label={t("Dismiss error")} onClick={() => setMoveError(null)} size="iconSm" variant="ghost"><X aria-hidden="true" /></Button> : null}
           </div>
         ) : null}
-        {ticketsQuery.data?.issues.length ? (
+        {boardData?.issues.length ? (
           <details className="ak-all-board-notice block text-sm text-muted-foreground">
-            <summary className="cursor-pointer">{t("{{count}} documents or projects could not be read. Other tickets are still shown.", { count: ticketsQuery.data.issues.length })}</summary>
-            <ul className="ak-scroll-area max-h-28 overflow-auto">{ticketsQuery.data.issues.map((issue) => <li className="break-all" key={issue}>{issue}</li>)}</ul>
+            <summary className="cursor-pointer">{t("{{count}} documents or projects could not be read. Other tickets are still shown.", { count: boardData.issues.length })}</summary>
+            <ul className="ak-scroll-area max-h-28 overflow-auto">{boardData.issues.map((issue) => <li className="break-all" key={issue}>{issue}</li>)}</ul>
           </details>
         ) : null}
       </div>
       <main className="ak-all-board-columns ak-scroll-area">
-        {ticketsQuery.isLoading ? <div className="grid h-full place-items-center"><Loader2 aria-label={t("Loading tickets")} className="size-6 animate-spin" /></div> : (
-          <div className="grid h-full min-h-0 gap-3" style={{ gridTemplateColumns: `repeat(${statuses.length}, minmax(240px, 1fr))` }}>
+        {ticketsQuery.isLoading && !boardData?.documents.length ? <div className="grid h-full place-items-center"><Loader2 aria-label={t("Loading tickets")} className="size-6 animate-spin" /></div> : (
+          <div className="ak-kanban-grid grid gap-3" style={{ gridTemplateColumns: `repeat(${statuses.length}, minmax(240px, 1fr))` }}>
             {statuses.map((status) => {
               const columnTickets = visible.filter((ticket) => ticket.status === status);
               return (
             <section key={status} aria-label={t("{{status}} tickets", { status: t(status) })}
-                  className={cn("ak-panel-muted grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden", overStatus === status && "ring-2 ring-ring")}
+                  className={cn("ak-kanban-column ak-panel-muted", overStatus === status && "ring-2 ring-ring")}
                   onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOverStatus(null); }}
                   onDragOver={(event) => {
                     if (!draggingKey || !canDrag) return;
@@ -251,12 +272,11 @@ export function AllProjectsBoard() {
                     handleDrop(event.dataTransfer.getData("text/ticket-key"), status, dropTarget);
                     endDrag();
                   }}>
-                  <header className="flex items-center justify-between gap-2 border-b border-border bg-background px-3 py-2">
+                  <header className="ak-kanban-header flex items-center justify-between gap-2 border-b border-border bg-background px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2"><StatusDot status={status} /><h2 className="ak-muted-label truncate">{t(status)}</h2></div>
                     <Badge variant="muted">{columnTickets.length}</Badge>
                   </header>
-                  <div className="ak-scroll-area min-h-0 overflow-y-auto">
-                    <div className="ak-all-board-cards">
+                  <div className="ak-all-board-cards">
                       {!columnTickets.length ? <p className="py-8 text-center text-xs text-muted-foreground">{t("Empty")}</p> : null}
                       {columnTickets.map((ticket, index) => (
                         <BoardCard key={ticket.key} ticket={ticket} disabled={!canDrag} detailMode={presentation.mode}
@@ -271,7 +291,6 @@ export function AllProjectsBoard() {
                             if (keys) void saveOrder(keys);
                           }} />
                       ))}
-                    </div>
                   </div>
                 </section>
               );
@@ -280,13 +299,13 @@ export function AllProjectsBoard() {
         )}
       </main>
       {detail && detailTicket ? (
-        <TicketDetailDrawer key={`${detail.document.response.file.absolutePath}#${detail.ticketId}`}
+        <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`}
           availableTickets={detail.document.response.document.tickets} ticket={detailTicket}
           documentHash={detail.document.response.file.hash} documentMtimeMs={detail.document.response.file.mtimeMs}
           workspaceId={detail.document.workspace.id} fileId={detail.document.response.file.id}
           presentation={presentation}
           onOpenInWorkspace={() => { void navigate({ href: buildAppRoute({
-            workspaceId: detail.document.workspace.id, filePath: detail.document.response.file.relativePath,
+            workspaceId: detail.document.workspace.id, filePath: documentRouteId(detail.document.response.file),
             ticketId: detail.ticketId, detailMode: presentation.mode,
           }) }); }}
           onClose={() => setDetail(null)} onReload={reloadDetail} onExternalFileReload={reloadDetail} externalFileChange={externalChange}
@@ -294,7 +313,7 @@ export function AllProjectsBoard() {
           onAppendInstruction={appendInstruction} />
       ) : null}
       {pendingMove ? (
-        <TicketMoveDialog key={`${pendingMove.document.response.file.absolutePath}#${pendingMove.move.ticket.id}`}
+        <TicketMoveDialog key={`${documentIdentity(pendingMove.document.response.file)}#${pendingMove.move.ticket.id}`}
           move={pendingMove.move} currentHash={currentMove?.response.file.hash ?? ""} currentMtimeMs={currentMove?.response.file.mtimeMs ?? 0}
           onClose={() => setPendingMove(null)}
           onSave={(id, status, progress, reason, guard) => saveStatus(pendingMove.document, id, status, progress, reason, guard, pendingMove.order)} />
@@ -311,7 +330,7 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
   const { t } = useTranslation();
   const navigate = useNavigate();
   const projectHref = buildAppRoute({
-    workspaceId: ticket.workspaceId, filePath: ticket.file.relativePath, ticketId: ticket.id, detailMode,
+    workspaceId: ticket.workspaceId, filePath: documentRouteId(ticket.file), ticketId: ticket.id, detailMode,
   });
   return (
     <article className="ak-card group relative p-3" data-ticket-key={ticket.key} draggable={!disabled}

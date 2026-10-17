@@ -24,6 +24,14 @@ Separate observed facts, established user direction, agent assumptions, and miss
 - Put settled requirements in scope and engineering research, benchmarks, and test preparation in planned work or verification. Do not present them as pending user decisions. When no qualifying questions remain after review, retain the heading and write `- 없음`; do not leave it blank, delete it, or use `없음` for questions not yet reviewed.
 - Keep answer-dependent scope explicitly provisional; continue independent authorized work. During authorized record updates, reconcile answers into the plan and affected ticket fields, preserve durable user direction once, and remove resolved items from the pending list. An answer alone does not authorize implementation.
 
+## Check Relevant Questions Before Implementation
+
+When implementation is requested, review the selected ticket's current directions and unresolved questions in its ticket document and linked plan, if present. Do not create a plan or scan unrelated ledgers just for this check.
+
+- Ask before the affected implementation when an unresolved user decision could materially change this work's goal, scope, user-visible behavior, or acceptance criteria and cannot be settled by in-scope investigation. Explain what depends on the answer; a general request to implement does not silently settle it.
+- Reuse prior answers and explicit delegation instead of asking again. If the user accepts an assumption or delegates the choice, record that basis and proceed. Reflect the decision in the plan and affected ticket fields before dependent implementation, not only by deleting the question.
+- Continue independent authorized work and leave unrelated or future questions open. Do not require every question to be resolved, or turn ordinary engineering investigation into a user approval gate. Keep the question section and use `- 없음` only when review finds no remaining qualifying questions.
+
 ## Keep the Record Small
 
 Default to one ticket document for tracked delivery. Add a plan for shared decisions or an inventory for substantial reusable evidence only when it needs a separate home. Tickets own progress; update supporting documents only when their decisions or evidence change.

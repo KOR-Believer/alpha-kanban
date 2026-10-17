@@ -1,3 +1,4 @@
+import { nativeFilePath } from "./files";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -155,7 +156,7 @@ export class CodexRunner {
       mode,
       planPath,
       scopeResolution,
-      ticketFilePath: file.absolutePath,
+      ticketFilePath: nativeFilePath(file),
       ticketId: ticket.id,
       ticketRange: ticket.range,
       workspaceRoot,
@@ -311,7 +312,7 @@ export class CodexRunner {
       workspaceId: this.fileStore.workspaceId,
       workspaceRoot: this.fileStore.workspaceRoot,
       fileRelativePath: file.relativePath,
-      ticketFilePath: file.absolutePath,
+      ticketFilePath: nativeFilePath(file),
       planPath: document.status.planPath
         ? path.resolve(this.fileStore.workspaceRoot, document.status.planPath)
         : undefined,

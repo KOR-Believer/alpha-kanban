@@ -13,7 +13,8 @@
     "noEmit": true,
     "tsBuildInfoFile": "node_modules/.tmp/tsconfig.tsbuildinfo",
     "types": [
-      "vite/client"
+      "vite/client",
+      "wicg-file-system-access"
     ],
     "paths": {
       "@/*": [

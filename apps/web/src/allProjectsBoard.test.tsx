@@ -100,6 +100,64 @@ describe("all-projects document workflow", () => {
     });
   }
 
+  it("uses shared sticky column headers without per-column scroll containers", async () => {
+    await mount();
+    expect(container.querySelectorAll(".ak-kanban-column")).toHaveLength(6);
+    expect(container.querySelectorAll(".ak-kanban-header")).toHaveLength(6);
+    expect(container.querySelectorAll(".ak-kanban-column .ak-scroll-area")).toHaveLength(0);
+    expect(container.querySelector("main.ak-all-board-columns.ak-scroll-area .ak-kanban-grid")).not.toBeNull();
+  });
+
+  it("shows ready cards and loading progress before all projects finish", async () => {
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    const original = api.request.getMockImplementation()!;
+    api.request.mockImplementation(async (url, schema, init) => {
+      if (url === `/api/workspaces/${second.id}/files`) await slow;
+      return original(url, schema, init);
+    });
+    await act(async () => root.render(<QueryClientProvider client={client}><AllProjectsBoard /></QueryClientProvider>));
+    for (let attempt = 0; attempt < 30 && !document.querySelector("[data-ticket-key]"); attempt++) {
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    }
+    expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(1);
+    expect(container.textContent).toContain("프로젝트 읽는 중 1 / 2");
+    expect(card().getAttribute("draggable")).toBe("false");
+    await act(async () => { await setLanguage("en"); });
+    expect(container.textContent).toContain("Reading projects 1 / 2");
+    await act(async () => { release(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(2);
+    expect(container.textContent).not.toContain("Reading projects");
+    expect(card().getAttribute("draggable")).toBe("true");
+  });
+
+  it("keeps existing cards and distinguishes a background check from a manual refresh", async () => {
+    await mount();
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    api.document.mockImplementation(async (id) => { await slow; return documents[id]; });
+    let checking!: Promise<unknown>;
+    await act(async () => { checking = client.invalidateQueries({ queryKey: allTicketsKey }); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(2);
+    expect(container.textContent).toContain("변경 확인 중");
+    expect(button("새로고침").querySelector(".animate-spin")).toBeNull();
+    await act(async () => { await setLanguage("en"); });
+    expect(container.textContent).toContain("Checking for changes");
+    await act(async () => { release(); await checking; });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(container.textContent).not.toContain("Checking for changes");
+
+    let finish!: () => void;
+    const manual = new Promise<void>((resolve) => { finish = resolve; });
+    api.document.mockImplementation(async (id) => { await manual; return documents[id]; });
+    await act(async () => button("Refresh").click());
+    expect(container.textContent).toContain("Refreshing tickets");
+    expect(button("Refresh").querySelector(".animate-spin")).not.toBeNull();
+    await act(async () => { finish(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(container.textContent).not.toContain("Refreshing tickets");
+  });
+
   it("opens the shared reason dialog and cancel does not patch or reorder", async () => {
     await mount(); await drag("TODO");
     expect(document.querySelector("textarea")?.placeholder).toBe("사용자가 명시적으로 할 일로 변경했습니다.");

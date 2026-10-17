@@ -1,5 +1,15 @@
+import { IS_BROWSER_LOCAL } from "./storageMode";
+import { BrowserMarkdownImage, BrowserMarkdownLink } from "./browser/MarkdownResources";
+import { browserRepository, BrowserFileError } from "./browser/repository";
+import { subscribeFileEvents } from "./browser/fileEvents";
+import { BrowserStartPage, BrowserProjectSwitcher, BrowserFilesMenu, BrowserReconnect } from "./browser/BrowserConnections";
+import { documentRouteId } from "./appRoute";
 import { t, locale, useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { StartPageHeader, WorkspaceButton, WorkspaceStatusBadge, WorkspaceSwitcherTrigger } from "@/components/WorkspaceNavigation";
+import { ProjectLists, StartPageNavigation } from "@/components/ProjectLauncher";
+import { SkillGuide } from "@/components/SkillGuide";
+import { ProjectGuide } from "@/components/ProjectGuide";
 import { errorSummary, errorDetails } from "@/i18n/errors";
 import {
   useCallback,
@@ -99,6 +109,7 @@ import {
   Check,
   CircleDot,
   FileText,
+  Filter,
   Folder,
   FolderKanban,
   House,
@@ -121,6 +132,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -153,6 +165,7 @@ import {
   sortDocumentSets,
   type DocumentSetSortPreference,
 } from "./documentSetSorting";
+import { DEFAULT_DOCUMENT_FILTERS, filterDocumentSets, type DocumentFilters, type VisibleDocumentSet } from "./documentSetFiltering";
 import { IN_APP_CHAT_ENABLED } from "./features";
 import { TicketStatusFields, type SaveTicketStatus, type TicketWriteGuard } from "@/components/tickets/TicketStatusFields";
 import { TicketMoveDialog, prepareTicketMove, type TicketMove } from "@/components/tickets/TicketMoveDialog";
@@ -172,6 +185,7 @@ export const BOARD_STATUSES: TicketStatus[] = [
 const MARKDOWN_HEADING_HIGHLIGHT_CLASS = "ak-markdown-heading-highlight";
 const SIDEBAR_WIDTH_STORAGE_KEY = "alpha-kanban.sidebarWidth";
 const DOCUMENT_SET_SORT_STORAGE_KEY = "alpha-kanban.documentSetSort";
+const DOCUMENT_FILTERS_STORAGE_KEY = "alpha-kanban.documentFilters";
 const AUTO_OPEN_LAST_WORKSPACE_STORAGE_KEY = "alpha-kanban.autoOpenLastWorkspace";
 const DEFAULT_SIDEBAR_WIDTH = 340;
 const MIN_SIDEBAR_WIDTH = 280;
@@ -353,6 +367,18 @@ function readStoredAutoOpenLastWorkspace(): boolean {
   return window.localStorage.getItem(AUTO_OPEN_LAST_WORKSPACE_STORAGE_KEY) === "true";
 }
 
+function readStoredDocumentFilters(): DocumentFilters {
+  try {
+    const raw = window.localStorage.getItem(DOCUMENT_FILTERS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_DOCUMENT_FILTERS, hidePlainMarkdown: window.localStorage.getItem("alpha-kanban.hidePlainMarkdown") === "true" };
+    const value: unknown = JSON.parse(raw);
+    if (isRecord(value)) return { hidePlainMarkdown: value.hidePlainMarkdown === true, hideCompletedSets: value.hideCompletedSets === true };
+  } catch {
+    // Invalid or unavailable storage falls back to showing all documents.
+  }
+  return DEFAULT_DOCUMENT_FILTERS;
+}
+
 function normalizeDocumentSetSortPreference(
   value: unknown,
 ): DocumentSetSortPreference | undefined {
@@ -389,6 +415,7 @@ export async function requestJson<T>(
   schema: ParseableSchema<T>,
   options?: RequestInit,
 ): Promise<T> {
+  if (IS_BROWSER_LOCAL) throw new Error("Server APIs are disabled in browser-local mode.");
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -411,11 +438,22 @@ export async function requestJson<T>(
   return schema.parse(json);
 }
 
+async function browserWrite<T>(action: () => Promise<T>): Promise<T> {
+  try { return await action(); }
+  catch (error) {
+    if (error instanceof BrowserFileError || (error instanceof Error && "code" in error)) {
+      throw new ClientApiError(error instanceof BrowserFileError && error.code === "STALE_FILE" ? 409 : 400, { error: { code: String(error.code), message: error.message } });
+    }
+    throw error;
+  }
+}
+
 async function fetchHealth() {
   return requestJson("/api/health", healthResponseSchema);
 }
 
 export async function fetchWorkspaces() {
+  if (IS_BROWSER_LOCAL) return browserRepository.workspaces();
   return requestJson("/api/workspaces", workspacesResponseSchema);
 }
 
@@ -444,6 +482,7 @@ async function fetchWorkspaceRootBrowserDirectories(root?: string) {
 }
 
 async function fetchWorkspaceRootsSettings() {
+  if (IS_BROWSER_LOCAL) return { roots: [], defaultRoots: [], hasOverride: false };
   return requestJson("/api/settings/workspace-roots", workspaceRootsSettingsResponseSchema);
 }
 
@@ -457,6 +496,7 @@ async function updateWorkspaceRootsSettings(
 }
 
 async function selectWorkspaceById(workspaceId: string) {
+  if (IS_BROWSER_LOCAL) return browserRepository.select(workspaceId);
   return requestJson("/api/workspaces/select", selectWorkspaceResponseSchema, {
     body: JSON.stringify({ workspaceId }),
     method: "POST",
@@ -482,6 +522,7 @@ async function createWorkspaceProject(body: {
 }
 
 async function fetchDocumentSets(workspaceId: string) {
+  if (IS_BROWSER_LOCAL) return browserRepository.documentSets(workspaceId);
   return requestJson(
     `/api/workspaces/${workspaceId}/document-sets`,
     documentSetsResponseSchema,
@@ -489,6 +530,7 @@ async function fetchDocumentSets(workspaceId: string) {
 }
 
 async function fetchMarkdownDocument(workspaceId: string, fileId: string) {
+  if (IS_BROWSER_LOCAL) return browserRepository.markdown(workspaceId, fileId);
   return requestJson(
     `/api/workspaces/${workspaceId}/files/${fileId}/markdown`,
     markdownDocumentResponseSchema,
@@ -496,6 +538,7 @@ async function fetchMarkdownDocument(workspaceId: string, fileId: string) {
 }
 
 export async function fetchTicketDocument(workspaceId: string, fileId: string) {
+  if (IS_BROWSER_LOCAL) return browserRepository.tickets(workspaceId, fileId);
   return requestJson(
     `/api/workspaces/${workspaceId}/files/${fileId}/tickets`,
     ticketDocumentResponseSchema,
@@ -578,6 +621,7 @@ export async function patchTicket(
     reason?: string;
   },
 ) {
+  if (IS_BROWSER_LOCAL) return browserWrite(() => browserRepository.patch(workspaceId, fileId, ticketId, body));
   return requestJson(
     `/api/workspaces/${workspaceId}/files/${fileId}/tickets/${ticketId}`,
     ticketDocumentResponseSchema,
@@ -599,6 +643,7 @@ export async function appendTicketInstruction(
     expectedMtimeMs: number;
   },
 ) {
+  if (IS_BROWSER_LOCAL) return browserWrite(() => browserRepository.append(workspaceId, fileId, ticketId, body));
   return requestJson(
     `/api/workspaces/${workspaceId}/files/${fileId}/tickets/${ticketId}/instructions`,
     ticketDocumentResponseSchema,
@@ -695,7 +740,7 @@ async function markCodexRunRead(runId: string) {
   });
 }
 
-export function App() {
+export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const appShellRef = useRef<HTMLDivElement>(null);
@@ -718,6 +763,7 @@ export function App() {
     initialRouteRef.current.workspaceId,
   );
   const [selectedFileId, setSelectedFileId] = useState<string | undefined>();
+  const [isProjectGuideOpen, setIsProjectGuideOpen] = useState(initialRouteRef.current.showGuide === true);
   const [preferredFilePath, setPreferredFilePath] = useState<string | undefined>(
     initialRouteRef.current.filePath,
   );
@@ -737,14 +783,17 @@ export function App() {
   const [documentSetSortPreferences, setDocumentSetSortPreferences] = useState(
     readStoredDocumentSetSortPreferences,
   );
+  const [documentSearch, setDocumentSearch] = useState("");
+  const [documentFilters, setDocumentFilters] = useState(readStoredDocumentFilters);
   const [initialAutoOpenLastWorkspace] = useState(readStoredAutoOpenLastWorkspace);
   const shouldAutoOpenLastWorkspaceOnLoadRef = useRef(
-    !initialRouteRef.current.workspaceId && initialAutoOpenLastWorkspace,
+    allowStartupAutoOpen && !initialRouteRef.current.workspaceId && initialAutoOpenLastWorkspace,
   );
   const [autoOpenLastWorkspace, setAutoOpenLastWorkspace] = useState(
     initialAutoOpenLastWorkspace,
   );
   const healthQuery = useQuery({
+    enabled: !IS_BROWSER_LOCAL,
     queryKey: ["health"],
     queryFn: fetchHealth,
     refetchInterval: 30_000,
@@ -789,6 +838,7 @@ export function App() {
     enabled: canLoadWorkspace,
     queryKey: documentSetsKey(selectedWorkspaceId),
     queryFn: () => fetchDocumentSets(selectedWorkspaceId ?? ""),
+    refetchInterval: IS_BROWSER_LOCAL ? 15_000 : false,
   });
   const documentSets = documentSetsQuery.data?.sets ?? [];
   const storedDocumentSetSortPreference = selectedWorkspaceId
@@ -800,21 +850,34 @@ export function App() {
     () => sortDocumentSets(documentSets, documentSetSortPreference),
     [documentSetSortPreference, documentSets],
   );
+  const visibleDocumentSets = useMemo(
+    () => filterDocumentSets(sortedDocumentSets, documentSearch, documentFilters),
+    [sortedDocumentSets, documentSearch, documentFilters],
+  );
   const allFiles = useMemo(
     () => sortedDocumentSets.flatMap((documentSet) => documentSet.documents),
     [sortedDocumentSets],
   );
+  const firstPlanningFile = allFiles.find((file) => file.type !== "markdown");
   const selectedFileById = allFiles.find((file) => file.id === selectedFileId);
   const preferredFile = preferredFilePath
     ? allFiles.find(
         (file) =>
-          file.workspaceRelativePath === preferredFilePath ||
-          file.relativePath === preferredFilePath,
+          (IS_BROWSER_LOCAL ? file.id === preferredFilePath : file.workspaceRelativePath === preferredFilePath) ||
+          (!IS_BROWSER_LOCAL && file.relativePath === preferredFilePath),
       )
     : undefined;
-  const selectedFile = selectedFileById ?? preferredFile;
-  const resolvedSelectedFileId = selectedFile?.id ?? selectedFileId;
-  const currentSelectedFilePath = selectedFile?.workspaceRelativePath ?? preferredFilePath;
+  const listedSelectedFile = selectedFileById ?? preferredFile;
+  const resolvedSelectedFileId = listedSelectedFile?.id ?? selectedFileId ?? (IS_BROWSER_LOCAL ? preferredFilePath : undefined);
+  const isProjectGuideVisible = IS_BROWSER_LOCAL && (isProjectGuideOpen ||
+    (canLoadWorkspace && documentSetsQuery.isSuccess && !resolvedSelectedFileId && !firstPlanningFile));
+  const selectedFileQuery = useQuery({
+    enabled: Boolean(IS_BROWSER_LOCAL && canLoadWorkspace && resolvedSelectedFileId && !listedSelectedFile),
+    queryKey: ["browser-file", selectedWorkspaceId, resolvedSelectedFileId],
+    queryFn: () => browserRepository.file(selectedWorkspaceId ?? "", resolvedSelectedFileId ?? ""),
+  });
+  const selectedFile = listedSelectedFile ?? selectedFileQuery.data;
+  const currentSelectedFilePath = (selectedFile ? documentRouteId(selectedFile) : preferredFilePath);
   const selectedDocumentSet = sortedDocumentSets.find((documentSet) =>
     documentSet.documents.some((file) => file.id === resolvedSelectedFileId),
   );
@@ -934,7 +997,7 @@ export function App() {
     const currentWorkspace = workspacesQuery.data.workspaces.find(
       (workspace) => workspace.id === selectedWorkspaceId,
     );
-    if (currentWorkspace?.isAvailable) {
+    if (IS_BROWSER_LOCAL || currentWorkspace?.isAvailable) {
       return;
     }
 
@@ -946,7 +1009,7 @@ export function App() {
   }, [selectedWorkspaceId, workspacesQuery.data]);
 
   useEffect(() => {
-    if (!selectedWorkspaceId || sortedDocumentSets.length === 0) {
+    if (isProjectGuideOpen || !selectedWorkspaceId || sortedDocumentSets.length === 0) {
       return;
     }
 
@@ -955,12 +1018,16 @@ export function App() {
       return;
     }
 
-    const nextFile = preferredFile ?? sortedDocumentSets[0]?.primaryFile;
+    if (IS_BROWSER_LOCAL && preferredFilePath && !preferredFile) return;
+    const nextFile = preferredFile ?? (IS_BROWSER_LOCAL ? firstPlanningFile : sortedDocumentSets[0]?.primaryFile);
     if (nextFile?.id && nextFile.id !== selectedFileId) {
       setSelectedFileId(nextFile.id);
     }
   }, [
+    firstPlanningFile,
+    isProjectGuideOpen,
     preferredFile,
+    preferredFilePath,
     selectedFileById,
     selectedFileId,
     selectedWorkspaceId,
@@ -969,7 +1036,7 @@ export function App() {
 
   useEffect(() => {
     const previousSelection = previousFileSelectionRef.current;
-    const currentFilePath = selectedFile?.workspaceRelativePath ?? preferredFilePath;
+    const currentFilePath = (selectedFile ? documentRouteId(selectedFile) : preferredFilePath);
     if (
       previousSelection.id &&
       previousSelection.id !== selectedFileId &&
@@ -1005,6 +1072,7 @@ export function App() {
   useEffect(() => {
     const nextHref = buildAppRoute({
       workspaceId: selectedWorkspaceId,
+      showGuide: isProjectGuideOpen,
       filePath: currentSelectedFilePath,
       ticketId: selectedTicketId,
       detailMode: selectedTicketId ? ticketDetailMode : undefined,
@@ -1015,6 +1083,7 @@ export function App() {
     }
   }, [
     currentSelectedFilePath,
+    isProjectGuideOpen,
     navigate,
     routeLocation.href,
     selectedTicketId,
@@ -1032,11 +1101,8 @@ export function App() {
       return;
     }
 
-    const source = new EventSource(`/api/workspaces/${selectedWorkspaceId}/files/events`);
-    source.addEventListener("markdown-file", (message) => {
-      const parsed = markdownFileChangeEventSchema.safeParse(
-        JSON.parse((message as MessageEvent).data as string),
-      );
+    return subscribeFileEvents(selectedWorkspaceId, (incoming) => {
+      const parsed = markdownFileChangeEventSchema.safeParse(incoming);
       if (!parsed.success) {
         return;
       }
@@ -1053,6 +1119,15 @@ export function App() {
 
       const currentHash = ticketQuery.data?.file.hash ?? markdownQuery.data?.file.hash;
       if (event.file?.hash && event.file.hash === currentHash) {
+        const file = event.file;
+        queryClient.setQueryData<TicketDocumentResponse>(
+          ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
+          (current) => current?.file.hash === file.hash ? { ...current, file } : current,
+        );
+        queryClient.setQueryData<MarkdownDocumentResponse>(
+          markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
+          (current) => current?.file.hash === file.hash ? { ...current, file } : current,
+        );
         setExternalFileChange(null);
         return;
       }
@@ -1077,9 +1152,7 @@ export function App() {
           queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
         });
       }
-    });
-
-    return () => source.close();
+    }, () => { void queryClient.invalidateQueries({ queryKey: ["workspaces"] }); }, ticketQuery.data?.file ?? markdownQuery.data?.file);
   }, [
     canLoadWorkspace,
     currentSelectedFilePath,
@@ -1094,7 +1167,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!canLoadWorkspace || !selectedWorkspaceId) {
+    if (IS_BROWSER_LOCAL || !canLoadWorkspace || !selectedWorkspaceId) {
       return;
     }
 
@@ -1141,6 +1214,7 @@ export function App() {
 
   useEffect(() => {
     setSelectedWorkspaceId(routeState.workspaceId);
+    setIsProjectGuideOpen(routeState.showGuide === true);
     setPreferredFilePath(routeState.filePath);
     setSelectedFileId(undefined);
     setSelectedTicketId(routeState.ticketId);
@@ -1151,6 +1225,7 @@ export function App() {
   }, [
     routeState.detailMode,
     routeState.filePath,
+    routeState.showGuide,
     routeState.ticketId,
     routeState.ticketViewMode,
     routeState.workspaceId,
@@ -1163,6 +1238,18 @@ export function App() {
       // Ignore storage failures; the resize affordance still works for this session.
     }
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    setDocumentSearch("");
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(DOCUMENT_FILTERS_STORAGE_KEY, JSON.stringify(documentFilters));
+    } catch {
+      // Filtering still works when browser preferences cannot be saved.
+    }
+  }, [documentFilters]);
 
   useEffect(() => {
     try {
@@ -1208,6 +1295,8 @@ export function App() {
   }, [isSidebarResizing, resizeSidebarFromClientX]);
 
   async function replaceDocument(data: TicketDocumentResponse): Promise<void> {
+    await queryClient.cancelQueries({ queryKey: ticketDocumentKey(data.file.workspaceId, data.file.id) });
+    await queryClient.cancelQueries({ queryKey: markdownDocumentKey(data.file.workspaceId, data.file.id) });
     queryClient.setQueryData(ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId), data);
     await queryClient.invalidateQueries({ queryKey: documentSetsKey(selectedWorkspaceId) });
   }
@@ -1238,6 +1327,7 @@ export function App() {
 
   async function handleWorkspaceSelect(workspaceId: string): Promise<void> {
     const response = await selectWorkspaceById(workspaceId);
+    setIsProjectGuideOpen(false);
     setSelectedFileId(undefined);
     setPreferredFilePath(undefined);
     setSelectedTicketId(undefined);
@@ -1247,6 +1337,7 @@ export function App() {
 
   async function handleWorkspaceOpenPath(root: string): Promise<void> {
     const response = await selectWorkspaceByRoot(root);
+    setIsProjectGuideOpen(false);
     setSelectedFileId(undefined);
     setPreferredFilePath(undefined);
     setSelectedTicketId(undefined);
@@ -1260,6 +1351,7 @@ export function App() {
     projectName: string;
   }): Promise<void> {
     const response = await createWorkspaceProject(input);
+    setIsProjectGuideOpen(false);
     setSelectedFileId(undefined);
     setPreferredFilePath(undefined);
     setSelectedTicketId(undefined);
@@ -1292,10 +1384,26 @@ export function App() {
 
   function handleGoToStartPage(): void {
     shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
+    setIsProjectGuideOpen(false);
     setSelectedFileId(undefined);
     setPreferredFilePath(undefined);
     setSelectedTicketId(undefined);
     setSelectedWorkspaceId(undefined);
+  }
+
+  function handleShowProjectGuide(): void {
+    setIsProjectGuideOpen(true);
+    setSelectedFileId(undefined);
+    setPreferredFilePath(undefined);
+    setSelectedTicketId(undefined);
+    setTicketViewMode("board");
+  }
+
+  function handleDocumentSelect(file: MarkdownFileSummary): void {
+    setIsProjectGuideOpen(false);
+    setSelectedFileId(file.id);
+    setPreferredFilePath(documentRouteId(file));
+    if (file.type !== "tickets") setSelectedTicketId(undefined);
   }
 
   async function handlePatchTicket(
@@ -1340,8 +1448,8 @@ export function App() {
 
   if (!selectedWorkspaceId) {
     return (
-      <main className="min-h-dvh overflow-auto bg-[var(--ak-canvas-soft)] px-5 py-5 text-[var(--ak-ink-secondary)]">
-        <StartWorkspacePage
+      <main className="min-h-dvh overflow-auto bg-background text-foreground">
+        {IS_BROWSER_LOCAL ? <BrowserStartPage autoOpen={autoOpenLastWorkspace} onAutoOpen={setAutoOpenLastWorkspace} onSelect={handleWorkspaceSelect} workspaces={workspacesQuery.data?.workspaces ?? []} error={workspacesQuery.error} isLoading={workspacesQuery.isPending} /> : <StartWorkspacePage
           autoOpenLastWorkspace={autoOpenLastWorkspace}
           onAutoOpenLastWorkspaceChange={setAutoOpenLastWorkspace}
           onWorkspaceCreate={handleWorkspaceCreate}
@@ -1352,7 +1460,7 @@ export function App() {
           workspaceRootsIsLoading={workspaceRootsSettingsQuery.isLoading}
           workspaceRootsSettings={workspaceRootsSettingsQuery.data}
           workspaces={workspacesQuery.data?.workspaces ?? []}
-        />
+        />}
       </main>
     );
   }
@@ -1372,7 +1480,7 @@ export function App() {
             <span className="ak-title truncate text-sm">{APP_NAME}</span>
           </button>
 
-          <ProjectSwitcher
+          {IS_BROWSER_LOCAL ? <BrowserProjectSwitcher workspaces={workspacesQuery.data?.workspaces ?? []} selectedWorkspaceId={selectedWorkspaceId} onSelect={handleWorkspaceSelect} /> : <ProjectSwitcher
             autoOpenLastWorkspace={autoOpenLastWorkspace}
             isLoading={workspacesQuery.isLoading}
             onAutoOpenLastWorkspaceChange={setAutoOpenLastWorkspace}
@@ -1382,7 +1490,7 @@ export function App() {
             selectedWorkspace={selectedWorkspace}
             selectedWorkspaceId={selectedWorkspaceId}
             workspaces={workspacesQuery.data?.workspaces ?? []}
-          />
+          />}
 
           <div className="flex shrink-0 items-center justify-end gap-2">
             <LanguageSelector />
@@ -1390,7 +1498,7 @@ export function App() {
               <LayoutGrid aria-hidden="true" />
               {t("All tickets")}
             </Button>
-            <HealthPill status={healthQuery.status} />
+            {IS_BROWSER_LOCAL ? <BrowserFilesMenu /> : <HealthPill status={healthQuery.status} />}
           </div>
         </header>
 
@@ -1406,6 +1514,10 @@ export function App() {
             <div className="border-b border-[var(--ak-hairline)] p-3">
               <DocumentListHeader
                 disabled={!canLoadWorkspace}
+                search={documentSearch}
+                onSearchChange={setDocumentSearch}
+                filters={documentFilters}
+                onFiltersChange={setDocumentFilters}
                 onPreferenceChange={updateDocumentSetSortPreference}
                 preference={documentSetSortPreference}
               />
@@ -1416,6 +1528,8 @@ export function App() {
                 {selectedWorkspace && !selectedWorkspace.isAvailable ? (
                   <SidebarState label={t("Project unavailable")} tone="error" />
                 ) : null}
+                {IS_BROWSER_LOCAL && !canLoadWorkspace ? <BrowserReconnect workspaceId={selectedWorkspaceId} /> : null}
+                {IS_BROWSER_LOCAL && preferredFilePath && !preferredFile && documentSetsQuery.isSuccess ? <SidebarState label={t("The original document is unavailable. Select it again from the document list.")} tone="error" /> : null}
                 {documentSetsQuery.isLoading ? <SidebarState label={t("Loading documents")} /> : null}
                 {documentSetsQuery.isError ? (
                   <SidebarState label={t("Could not load documents")} tone="error" />
@@ -1423,19 +1537,36 @@ export function App() {
                 {documentSetsQuery.isSuccess && sortedDocumentSets.length === 0 ? (
                   <SidebarState label={t("No documents")} />
                 ) : null}
+                {sortedDocumentSets.length > 0 && visibleDocumentSets.length === 0 ? (
+                  <div className="grid justify-items-start gap-2 px-3 py-2 text-sm text-muted-foreground" role="status">
+                    <p>{t("No matching documents")}</p>
+                    <Button size="sm" variant="link" onClick={() => { setDocumentSearch(""); setDocumentFilters(DEFAULT_DOCUMENT_FILTERS); }}>
+                      {t("Clear filters")}
+                    </Button>
+                  </div>
+                ) : null}
                 <DocumentSetNavigator
-                  documentSets={sortedDocumentSets}
-                  onSelectFile={(file) => {
-                    setSelectedFileId(file.id);
-                    setPreferredFilePath(file.workspaceRelativePath);
-                    if (file.type !== "tickets") {
-                      setSelectedTicketId(undefined);
-                    }
-                  }}
+                  documentSets={visibleDocumentSets}
+                  onSelectFile={handleDocumentSelect}
                   selectedFileId={resolvedSelectedFileId}
                 />
               </div>
             </div>
+            {IS_BROWSER_LOCAL ? (
+              <div className="shrink-0 border-t border-border p-3">
+                <Button
+                  aria-current={isProjectGuideVisible ? "page" : undefined}
+                  className="w-full justify-start"
+                  onClick={handleShowProjectGuide}
+                  size="sm"
+                  type="button"
+                  variant={isProjectGuideVisible ? "secondary" : "ghost"}
+                >
+                  <BookOpen aria-hidden="true" />
+                  {t("Usage guide")}
+                </Button>
+              </div>
+            ) : null}
           </aside>
 
           <SidebarResizeHandle
@@ -1460,7 +1591,7 @@ export function App() {
                   {selectedWorkspace?.root ?? t("Project unavailable")}
                 </p>
                 <h2 id="workspace-title" className="ak-title mt-1 truncate text-lg">
-                  {selectedWorkspace
+                  {isProjectGuideVisible ? t("Usage guide") : selectedWorkspace
                     ? ticketQuery.data?.document.title ??
                       markdownQuery.data?.outline[0]?.title ??
                       selectedFile?.workspaceRelativePath ??
@@ -1476,7 +1607,7 @@ export function App() {
                   </div>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
+              {!isProjectGuideVisible ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
                 {selectedFile?.type === "tickets" ? (
                   <TicketDocumentViewToggle
                     mode={ticketViewMode}
@@ -1496,10 +1627,10 @@ export function App() {
                   selectedDocumentSet={selectedDocumentSet}
                   ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
                 />
-              </div>
+              </div> : null}
             </header>
 
-            <div className="ak-scroll-area min-h-0 overflow-auto p-5">
+            <div className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" ? "ak-project-board-scroll" : "p-5"}`}>
               <DocumentContent
                 documentSetsError={documentSetsQuery.error}
                 documentSetsIsError={documentSetsQuery.isError}
@@ -1509,19 +1640,16 @@ export function App() {
                 markdownIsError={markdownQuery.isError}
                 markdownIsLoading={markdownQuery.isLoading}
                 hasDocumentSets={sortedDocumentSets.length > 0}
-                onFileSelect={(file) => {
-                  setSelectedFileId(file.id);
-                  setPreferredFilePath(file.workspaceRelativePath);
-                  if (file.type !== "tickets") {
-                    setSelectedTicketId(undefined);
-                  }
-                }}
+                showProjectGuide={isProjectGuideVisible}
+                onFileSelect={handleDocumentSelect}
                 onTicketSelect={setSelectedTicketId}
                 onTicketStatusChange={handlePatchTicket}
                 ticketDocument={ticketQuery.data}
                 runSummaryByTicket={runSummaryByTicket}
                 selectedDocumentSet={selectedDocumentSet}
                 selectedFile={selectedFile}
+                selectedFileError={selectedFileQuery.error}
+                selectedFileIsLoading={selectedFileQuery.isLoading}
                 selectedFileId={resolvedSelectedFileId}
                 selectedWorkspace={selectedWorkspace}
                 ticketError={ticketQuery.error}
@@ -1689,22 +1817,66 @@ function SidebarResizeHandle({
 
 function DocumentListHeader({
   disabled,
+  search,
+  onSearchChange,
+  filters,
+  onFiltersChange,
   onPreferenceChange,
   preference,
 }: {
   disabled: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
+  filters: DocumentFilters;
+  onFiltersChange: (value: DocumentFilters) => void;
   onPreferenceChange: (preference: DocumentSetSortPreference) => void;
   preference: DocumentSetSortPreference;
 }) {
   const { t } = useTranslation();
   const directionLabel = t(preference.direction === "asc" ? "Ascending" : "Descending");
   const DirectionIcon = preference.direction === "asc" ? ArrowUp : ArrowDown;
+  const activeFilters = Number(filters.hidePlainMarkdown) + Number(filters.hideCompletedSets);
 
   return (
     <div className="grid gap-2">
-      <div className="ak-control flex h-9 items-center gap-2 px-3 text-sm text-[var(--ak-ink-muted)]">
-        <Search className="size-4" aria-hidden="true" />
-        <span>{t("Documents")}</span>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input
+          role="searchbox"
+          aria-label={t("Search documents")}
+          placeholder={t("Search documents")}
+          disabled={disabled}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          className="pl-9 pr-16"
+        />
+        <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
+          {search ? <Button size="iconSm" variant="ghost" aria-label={t("Clear search")} title={t("Clear search")} onClick={() => onSearchChange("")}>
+            <X className="size-3.5" aria-hidden="true" />
+          </Button> : null}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="iconSm" variant={activeFilters ? "primary" : "ghost"} disabled={disabled}
+                aria-label={t("Document filters")} title={t("Document filters ({{count}} active)", { count: activeFilters })}>
+                <Filter className="size-3.5" aria-hidden="true" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-3" aria-label={t("Document filters")}>
+              <div className="flex items-center justify-between gap-2 pb-2">
+                <h3 className="text-sm font-medium">{t("Document filters")}</h3>
+                <Button size="xs" variant="ghost" disabled={!activeFilters} onClick={() => onFiltersChange(DEFAULT_DOCUMENT_FILTERS)}>{t("Reset")}</Button>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
+                <Checkbox checked={filters.hideCompletedSets} onCheckedChange={(checked) => onFiltersChange({ ...filters, hideCompletedSets: checked === true })} />
+                {t("Hide completed sets (100%)")}
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
+                <Checkbox checked={filters.hidePlainMarkdown} onCheckedChange={(checked) => onFiltersChange({ ...filters, hidePlainMarkdown: checked === true })} />
+                {t("Hide plain Markdown")}
+              </label>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <Select
@@ -1762,16 +1934,17 @@ function DocumentSetNavigator({
   onSelectFile,
   selectedFileId,
 }: {
-  documentSets: DocumentSetSummary[];
+  documentSets: VisibleDocumentSet[];
   onSelectFile: (file: MarkdownFileSummary) => void;
   selectedFileId?: string;
 }) {
   const { t } = useTranslation();
   return (
     <nav className="grid gap-1" aria-label={t("Documents")}>
-      {documentSets.map((documentSet) => (
+      {documentSets.map(({ documentSet, documents }) => (
         <DocumentSetRow
           documentSet={documentSet}
+          visibleDocuments={documents}
           key={documentSet.id}
           onSelectFile={onSelectFile}
           selectedFileId={selectedFileId}
@@ -1783,10 +1956,12 @@ function DocumentSetNavigator({
 
 function DocumentSetRow({
   documentSet,
+  visibleDocuments,
   onSelectFile,
   selectedFileId,
 }: {
   documentSet: DocumentSetSummary;
+  visibleDocuments: MarkdownFileSummary[];
   onSelectFile: (file: MarkdownFileSummary) => void;
   selectedFileId?: string;
 }) {
@@ -1826,7 +2001,7 @@ function DocumentSetRow({
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap gap-1 pl-6">
-        {documentSet.documents.map((file) => (
+        {visibleDocuments.map((file) => (
           <DocumentTypeButton
             file={file}
             isSelected={file.id === selectedFileId}
@@ -1942,37 +2117,7 @@ function ProjectSwitcher({
 
   return (
     <div className="min-w-0 flex-1" aria-label={t("Projects")}>
-      <button
-        className="ak-row flex h-10 w-full min-w-0 items-center gap-3 px-3 text-left transition-colors hover:bg-[var(--ak-surface-hover)]"
-        onClick={() => setIsSwitcherOpen(true)}
-        title={selectedWorkspace?.root ?? t("Select a project")}
-        type="button"
-      >
-        <span className="grid min-w-0 flex-1 gap-0.5">
-          <span className="truncate text-sm font-semibold text-[var(--ak-ink)]">
-            {selectedWorkspace?.label ?? t("Select project")}
-          </span>
-          <span className="ak-body-muted truncate text-xs">
-            {selectedWorkspace?.root ?? t("Open recent or browse a workspace")}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          {selectedWorkspace ? (
-            <Badge variant={selectedWorkspace.isAvailable ? "muted" : "warning"}>
-              {selectedWorkspace.isAvailable
-                ? selectedWorkspace.hasDocs
-                  ? t("docs")
-                  : t("empty")
-                : t("missing")}
-            </Badge>
-          ) : null}
-          {isLoading ? (
-            <Loader2 className="size-3 animate-spin text-[var(--ak-ink-muted)]" />
-          ) : (
-            <ChevronDown className="size-3 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-          )}
-        </span>
-      </button>
+      <WorkspaceSwitcherTrigger workspace={selectedWorkspace} isLoading={isLoading} onClick={() => setIsSwitcherOpen(true)} />
 
       <Dialog onOpenChange={setIsSwitcherOpen} open={isSwitcherOpen}>
         <DialogContent className="h-[min(760px,calc(100vh-2rem))] grid-rows-[auto_auto_auto_minmax(0,1fr)]">
@@ -2205,9 +2350,7 @@ function FolderPickerDialog({
               </div>
               {currentDirectory ? (
                 <div className="flex flex-wrap items-center gap-1">
-                  <Badge variant={currentDirectory.hasDocs ? "muted" : "outline"}>
-                    {currentDirectory.hasDocs ? t("docs") : t("empty")}
-                  </Badge>
+                  <WorkspaceStatusBadge hasDocs={currentDirectory.hasDocs} />
                   {currentDirectory.isWorkspaceCandidate ? (
                     <Badge variant="success">{t("project")}</Badge>
                   ) : null}
@@ -2324,9 +2467,7 @@ function DirectoryEntryButton({
       </span>
       <span className="flex min-w-0 gap-1 overflow-hidden">
         {entry.isWorkspaceCandidate ? <Badge variant="success">{t("project")}</Badge> : null}
-        <Badge variant={entry.hasDocs ? "muted" : "outline"}>
-          {entry.hasDocs ? t("docs") : t("empty")}
-        </Badge>
+        <WorkspaceStatusBadge hasDocs={entry.hasDocs} />
       </span>
       <span className="ak-body-muted truncate text-xs">{entry.path}</span>
     </button>
@@ -2366,41 +2507,6 @@ function WorkspaceGroup({
         />
       ))}
     </div>
-  );
-}
-
-function WorkspaceButton({
-  isSelected,
-  onSelect,
-  workspace,
-}: {
-  isSelected: boolean;
-  onSelect: () => Promise<void>;
-  workspace: WorkspaceSummary;
-}) {
-  const { t } = useTranslation();
-  return (
-    <button
-      className={[
-        "ak-row grid min-h-14 min-w-0 gap-1 px-3 py-2 text-left transition-colors",
-        isSelected ? "ak-row-active" : "",
-        workspace.isAvailable ? "" : "opacity-70",
-      ].join(" ")}
-      disabled={!workspace.isAvailable}
-      onClick={() => void onSelect()}
-      title={workspace.root}
-      type="button"
-    >
-      <span className="flex min-w-0 items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium text-[var(--ak-ink)]">
-          {workspace.label}
-        </span>
-        <Badge variant={workspace.isAvailable ? "muted" : "warning"}>
-          {workspace.isAvailable ? (workspace.hasDocs ? t("docs") : t("empty")) : t("missing")}
-        </Badge>
-      </span>
-      <span className="ak-body-muted break-all text-xs leading-4">{workspace.root}</span>
-    </button>
   );
 }
 
@@ -2539,6 +2645,7 @@ function DocumentContent({
   documentSetsIsError,
   documentSetsIsLoading,
   hasDocumentSets,
+  showProjectGuide,
   markdownDocument,
   markdownError,
   markdownIsError,
@@ -2549,6 +2656,8 @@ function DocumentContent({
   runSummaryByTicket,
   selectedDocumentSet,
   selectedFile,
+  selectedFileError,
+  selectedFileIsLoading,
   selectedFileId,
   selectedWorkspace,
   ticketError,
@@ -2565,6 +2674,7 @@ function DocumentContent({
   documentSetsIsError: boolean;
   documentSetsIsLoading: boolean;
   hasDocumentSets: boolean;
+  showProjectGuide: boolean;
   markdownDocument?: MarkdownDocumentResponse;
   markdownError: Error | null;
   markdownIsError: boolean;
@@ -2575,6 +2685,8 @@ function DocumentContent({
   runSummaryByTicket: Map<string, CodexRunSummary>;
   selectedDocumentSet?: DocumentSetSummary;
   selectedFile?: MarkdownFileSummary;
+  selectedFileError: Error | null;
+  selectedFileIsLoading: boolean;
   selectedFileId?: string;
   selectedWorkspace?: WorkspaceSummary;
   ticketError: Error | null;
@@ -2588,7 +2700,8 @@ function DocumentContent({
   workspacesIsLoading: boolean;
 }) {
   const { t } = useTranslation();
-  if (workspacesIsLoading || documentSetsIsLoading) {
+  if (showProjectGuide) return <ProjectGuide />;
+  if (workspacesIsLoading || (!selectedFile && (selectedFileIsLoading || (documentSetsIsLoading && !selectedFileError)))) {
     return <BoardState isLoading title={t("Loading documents")} />;
   }
 
@@ -2602,7 +2715,7 @@ function DocumentContent({
     );
   }
 
-  if (documentSetsIsError) {
+  if (documentSetsIsError && !selectedFileId) {
     return (
       <BoardState
         icon="error"
@@ -2641,6 +2754,7 @@ function DocumentContent({
   }
 
   if (!selectedFile) {
+    if (selectedFileError) return <BoardState icon="error" title={t("Document unavailable")} description={formatClientError(selectedFileError)} />;
     return <BoardState title={t("Document unavailable")} />;
   }
 
@@ -2713,7 +2827,7 @@ export function TicketBoard({ document, onTicketSelect, onSaveStatus, runSummary
 
   return (
     <>
-      <div className="grid min-w-[900px] grid-cols-6 gap-3" aria-label={t("Ticket kanban board")}>
+      <div className="ak-project-board ak-kanban-grid grid min-w-[900px] grid-cols-6 gap-3" aria-label={t("Ticket kanban board")}>
         {BOARD_STATUSES.map((status) => (
           <KanbanColumn
             key={status}
@@ -2785,47 +2899,16 @@ function StartWorkspacePage({
   workspaceRootsSettings?: WorkspaceRootsSettingsResponse;
   workspaces: WorkspaceSummary[];
 }) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const availableWorkspaces = workspaces.filter((workspace) => workspace.isAvailable);
-  const recentWorkspaces = availableWorkspaces
-    .filter((workspace) => workspace.lastOpenedAt)
-    .slice(0, 5);
-
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-4 py-5">
-      <header className="flex flex-wrap items-start justify-between gap-3 px-1">
-        <div className="grid min-w-0 gap-2">
-          <div>
-            <p className="ak-muted-label">{t("Start")}</p>
-            <h2 className="ak-title mt-1.5 text-xl">{t("Choose a project")}</h2>
-          </div>
-          <label className="flex flex-wrap items-center gap-2 text-sm text-[var(--ak-ink-secondary)]">
-            <Checkbox
-              checked={autoOpenLastWorkspace}
-              onCheckedChange={(checked) => onAutoOpenLastWorkspaceChange(checked === true)}
-            />
-            <span>{t("Open last project automatically")}</span>
-            <span className="text-xs text-[var(--ak-ink-muted)]">
-              {t("Applies on next root URL load.")}
-            </span>
-          </label>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <LanguageSelector />
-          <Button onClick={() => navigate({ to: "/all" })} size="sm" type="button" variant="outline">
-            <LayoutGrid className="size-3" aria-hidden="true" />
-            {t("All tickets")}
-          </Button>
+    <div className="ak-start-page">
+      <StartPageNavigation />
+      <div className="ak-start-content">
+      <StartPageHeader autoOpen={autoOpenLastWorkspace} onAutoOpen={onAutoOpenLastWorkspaceChange}>
           <ProjectBrowseButton onOpen={onWorkspaceOpenPath} />
           <NewProjectButton onCreate={onWorkspaceCreate} />
-        </div>
-      </header>
+      </StartPageHeader>
 
-      <RecentProjectsPanel
-        onWorkspaceSelect={onWorkspaceSelect}
-        recentWorkspaces={recentWorkspaces}
-      />
+      <ProjectLists workspaces={workspaces} onSelect={onWorkspaceSelect} />
 
       <WorkspaceRootsPanel
         error={workspaceRootsError}
@@ -2834,47 +2917,9 @@ function StartWorkspacePage({
         settings={workspaceRootsSettings}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)]">
-        <HowAlphaKanbanWorksPanel />
+      <SkillGuide />
       </div>
     </div>
-  );
-}
-
-function RecentProjectsPanel({
-  onWorkspaceSelect,
-  recentWorkspaces,
-}: {
-  onWorkspaceSelect: (workspaceId: string) => Promise<void>;
-  recentWorkspaces: WorkspaceSummary[];
-}) {
-  const { t } = useTranslation();
-  return (
-    <section className="ak-panel grid content-start gap-3 p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="ak-muted-label">{t("Recent")}</p>
-          <h3 className="ak-title mt-1 text-base">{t("Recent projects")}</h3>
-        </div>
-        <Badge variant="muted">{recentWorkspaces.length}</Badge>
-      </div>
-      {recentWorkspaces.length > 0 ? (
-        <div className="grid gap-2">
-          {recentWorkspaces.map((workspace) => (
-            <WorkspaceButton
-              isSelected={false}
-              key={workspace.id}
-              onSelect={() => onWorkspaceSelect(workspace.id)}
-              workspace={workspace}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="ak-panel-muted px-3 py-4 text-sm text-[var(--ak-ink-muted)]">
-          {t("No recent projects yet.")}
-        </p>
-      )}
-    </section>
   );
 }
 
@@ -3347,9 +3392,7 @@ function WorkspaceRootBrowserDialog({
               </div>
               {currentDirectory ? (
                 <div className="flex flex-wrap items-center gap-1">
-                  <Badge variant={currentDirectory.hasDocs ? "muted" : "outline"}>
-                    {currentDirectory.hasDocs ? t("docs") : t("empty")}
-                  </Badge>
+                  <WorkspaceStatusBadge hasDocs={currentDirectory.hasDocs} />
                   {currentDirectory.isWorkspaceCandidate ? (
                     <Badge variant="success">{t("project")}</Badge>
                   ) : null}
@@ -3405,62 +3448,6 @@ function WorkspaceRootBrowserDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function HowAlphaKanbanWorksPanel() {
-  const { t } = useTranslation();
-  return (
-    <section className="ak-panel grid content-start gap-3 p-5">
-      <div>
-        <p className="ak-muted-label">{t("Guide")}</p>
-        <h3 className="ak-title mt-1 text-base">{t("Work through documents")}</h3>
-      </div>
-      <div className="grid gap-2">
-        <StartGuideStep
-          description={t("Open an existing folder or create a new project. It is fine if there are no Alpha Kanban docs yet.")}
-          icon={FolderKanban}
-          title={t("Open or create a project")}
-        />
-        <StartGuideStep
-          description={t("Discuss the project in Codex with the implementation-ledger skill.")}
-          icon={Bot}
-          title={t("Discuss the work")}
-        />
-        <StartGuideStep
-          description={t("Ask Codex to create a plan, tickets, and an inventory when the direction is clear.")}
-          icon={BookOpen}
-          title={t("Generate planning docs")}
-        />
-        <StartGuideStep
-          description={t("Review tickets here and record feedback or status-change reasons. Continue the work in Codex using the updated document.")}
-          icon={ListChecks}
-          title={t("Review and leave directions")}
-        />
-      </div>
-    </section>
-  );
-}
-
-function StartGuideStep({
-  description,
-  icon: Icon,
-  title,
-}: {
-  description: string;
-  icon: typeof FolderKanban;
-  title: string;
-}) {
-  return (
-    <div className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 rounded-[var(--ak-radius-md)] px-1 py-2">
-      <span className="flex size-8 items-center justify-center rounded-full border border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-muted)]">
-        <Icon className="size-4" aria-hidden="true" />
-      </span>
-      <span className="grid gap-1">
-        <span className="text-sm font-semibold text-[var(--ak-ink)]">{title}</span>
-        <span className="text-sm leading-6 text-[var(--ak-ink-muted)]">{description}</span>
-      </span>
-    </div>
   );
 }
 
@@ -3591,7 +3578,7 @@ function MarkdownDocumentReader({
           </h3>
         </div>
         <div className="ak-scroll-area min-h-0 flex-1 overflow-auto px-5 py-4">
-          <MarkdownMessage content={document.markdown} headingIdsByLine={headingIdsByLine} />
+          <MarkdownMessage content={document.markdown} headingIdsByLine={headingIdsByLine} file={file} />
         </div>
       </article>
     </div>
@@ -3657,13 +3644,13 @@ function KanbanColumn({
   const { t } = useTranslation();
   return (
     <section
-      className={`ak-panel-muted min-h-[calc(100vh-8rem)] overflow-hidden ${isDragOver ? "ring-2 ring-inset ring-primary" : ""}`}
+      className={`ak-kanban-column ak-panel-muted ${isDragOver ? "ring-2 ring-inset ring-primary" : ""}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       aria-label={t("{{status}} tickets", { status: t(status) })}
     >
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2">
+      <header className="ak-kanban-header flex items-center justify-between gap-2 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <StatusDot status={status} />
           <h3 className="ak-muted-label truncate">{t(status)}</h3>
@@ -6465,9 +6452,11 @@ function TicketChatMessage({
 function MarkdownMessage({
   content,
   headingIdsByLine,
+  file,
 }: {
   content: string;
   headingIdsByLine?: Record<number, string>;
+  file?: MarkdownFileSummary;
 }) {
   const remarkPlugins = headingIdsByLine
     ? [remarkGfm, remarkHeadingIds(headingIdsByLine)]
@@ -6475,7 +6464,10 @@ function MarkdownMessage({
 
   return (
     <div className="ak-markdown">
-      <ReactMarkdown remarkPlugins={remarkPlugins}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={IS_BROWSER_LOCAL ? {
+        img: ({ src, alt }) => <BrowserMarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} file={file} />,
+        a: ({ href, children }) => <BrowserMarkdownLink href={href} file={file}>{children}</BrowserMarkdownLink>,
+      } : undefined}>{content}</ReactMarkdown>
     </div>
   );
 }
@@ -7254,6 +7246,7 @@ export function normalizeClientError(error: unknown): ClientApiError | Error {
 }
 
 export function formatClientError(error: ClientApiError | Error): string {
+  if (IS_BROWSER_LOCAL) return t(error.message);
   return `${errorSummary(error)} (${errorDetails(error)})`;
 }
 

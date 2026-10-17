@@ -11,6 +11,7 @@ const route = vi.hoisted(() => ({ location: { hash: "", href: "/", pathname: "/"
 vi.mock("@tanstack/react-router", async (original) => ({
   ...await original<typeof import("@tanstack/react-router")>(),
   useNavigate: () => route.navigate, useLocation: () => route.location,
+  Link: ({ to, children, ...props }: React.PropsWithChildren<{ to: string }>) => <a href={to} {...props}>{children}</a>,
 }));
 
 describe("localized application screens", () => {
@@ -48,9 +49,9 @@ describe("localized application screens", () => {
 
   it("localizes Start, roots, guide and the new-project form without losing a typed name", async () => {
     await mount();
-    expect(document.body.textContent).toContain("프로젝트 선택");
+    expect(document.querySelector("h1")?.textContent).toBe("프로젝트");
     expect(document.body.textContent).toContain("프로젝트 루트");
-    expect(document.body.textContent).toContain("요구사항을 논의하세요");
+    expect(document.body.textContent).toContain("AI와 플랜 초안 만들기");
     const create = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "새 프로젝트")!;
     await act(async () => create.click());
     expect(document.body.textContent).toContain("등록된 루트 안에 새 프로젝트 폴더");

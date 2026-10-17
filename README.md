@@ -23,10 +23,10 @@ It does not change document content, canonical Markdown status/field names, path
 or stored user directions. Default status-change reasons remain in their original
 Korean because the input previews the exact text written to Markdown.
 
-1. Open or create a project. Existing compatible documents are optional.
+1. Open or create a project. You can start without documents.
 2. Discuss the work in Codex with `$implementation-ledger`, then ask it to create tickets and, when useful, a plan or inventory.
-3. Review those documents in Alpha Kanban. Leave a manual direction or change a ticket's status with an optional reason. Dragging a card opens a confirmation dialog before saving.
-4. Ask Codex to read the updated ticket file and carry out the work. The agent records its results and evidence in Markdown.
+3. Review the plan and progress in Alpha Kanban. All work can continue in your AI chat; editing the board is optional.
+4. When needed, leave a manual direction or move a ticket on the board, then ask Codex to reread the updated file. Dragging a card opens a confirmation dialog before saving.
 
 ## Install
 
@@ -51,6 +51,80 @@ Default local URLs:
 - API: `http://127.0.0.1:5174/`
 
 The dev server binds to `127.0.0.1` only.
+
+## Browser-Local Preview
+
+The separate browser-local build uses desktop Chrome's File System Access API.
+It keeps local Markdown on your computer and does not start an API server or Codex.
+The original `pnpm dev` and Node-backed workflow above remain unchanged.
+
+```bash
+pnpm dev:browser       # http://127.0.0.1:5187, browser file access
+pnpm build:browser     # apps/web/dist-browser
+pnpm preview:browser  # http://127.0.0.1:4187, serve the static output
+```
+
+The development/build commands need Node; visitors to the eventual hosted website do not.
+This branch has not been publicly deployed.
+
+The `/` route is the project launcher with separate recent/other project lists.
+The `/intro` route introduces the workflow with a fictional board and matching
+Markdown. Opening the introduction does not request folder access or load projects.
+
+1. Choose **프로젝트 열기 / Open project** for one project, or **워크스페이스 등록 / Register workspace** for a folder containing projects.
+2. Roots group their immediate child directories as projects. More specific folder connections take precedence. Selecting a folder grants access; the website cannot browse arbitrary paths.
+3. Open **로컬 폴더 / Local folders** and choose **편집 권한 허용 / Allow editing** before changing tickets. Read access and write access are separate.
+4. Optionally leave reasons and directions through the same ticket and drag-confirmation forms. Changes go to the original Markdown, not a cloud document store.
+5. Discuss and execute work in your external AI tool. Start, the introduction and empty projects share a reviewable Codex installation request, a GitHub source link and manual instructions. A complete skill ZIP is available inside manual installation. Back up and compare any installed skill before replacing it.
+
+Draft a plan with your AI, review its open questions, and discuss those that affect
+the implementation you are about to request. Questions about later work can stay
+open. Reflect agreed scope and completion criteria in new or existing tickets,
+then request implementation and review the results. The bundled skill checks for
+relevant unresolved decisions before dependent implementation; it does not require
+every question to be resolved or repeat decisions already answered or delegated.
+
+Connections, opaque IDs, recent projects, recovery copies and global card order live
+in this site's IndexedDB. Language, sorting, filters and detail dimensions remain
+browser preferences. A different hostname, port, browser profile, or cleared site
+data starts a different registry. Native `.alpha-kanban` state and absolute-path URLs
+are not automatically migrated. Reconnect the original folder when permission expires.
+
+The browser scans Markdown below connected projects, skipping hidden/build/dependency
+directories (including `.git`, `node_modules`, and `.alpha-kanban`). Native
+`alpha-kanban.config.json` allowlists and absolute docRoots are not imported. The
+initial limit is 5,000 files per project, 30 folder levels and 10 MiB per Markdown file.
+The body cache is capped at 64 MiB; metadata and grouped progress remain cached after
+body eviction, so listing unchanged documents does not require rereading their text.
+Files with invalid UTF-8 or ambiguous ticket fields are not silently rewritten.
+
+Saves check the current content hash and modification time, keep a durable recovery
+copy before writing, serialize this site's tabs, and verify the result after closing
+the write stream. External tools do not participate in those browser locks: a race
+after the last check remains possible, and an unseen intermediate external version
+cannot be recovered. Avoid simultaneous edits to the same file when practical.
+If a save is uncertain, open **Local folders → Recovery records**, download the
+original/intended copies, check the actual file, and explicitly finish the review.
+Do not submit the same direction again before checking whether it was already saved.
+
+While visible, projects are rescanned every 15 seconds and on window focus. File
+metadata avoids rereading unchanged bodies; the selected document is checked freshly.
+Edits in progress receive a stale-file notice instead of losing their draft.
+Browser writes and saved card order also notify other tabs. These are not background
+watch guarantees. Local I/O remains usable without a network after the app loads;
+offline first load/reload is not supported.
+
+### Cloudflare Pages
+
+- Build command: `pnpm build:browser`
+- Output directory: `apps/web/dist-browser`
+- Production target: a stable `<project>.pages.dev` hostname, not a new preview hostname on every run.
+- No Functions, Workers, API proxy, root `404.html`, or hash-router fallback. Pages' SPA fallback serves `/`, `/intro`, `/all`, and `/w/:id`; query and fragment preserve document/ticket state.
+- `public-browser/_headers` supplies CSP, no-referrer, and MIME-sniff protection. Markdown is not uploaded. External images only load on explicit request; local resources resolve through folder handles, not hosting paths.
+- `tk.giveit2.me` is a future custom-domain option, not configured by this change. Moving there requires reconnecting folders because browser storage is origin-scoped.
+
+See [browser-local validation](docs/browser_local_validation.md) for the verified
+checks and remaining real-folder/contributor-PC acceptance work.
 
 ## Config
 

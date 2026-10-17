@@ -1,3 +1,4 @@
+import { nativeFilePath } from "./files";
 import type {
   MarkdownFileChangeEvent,
   MarkdownFileSummary,
@@ -120,7 +121,7 @@ export class MarkdownFileEventHub {
         continue;
       }
 
-      const event = await fileStore.describeFileChange(nextFile.absolutePath);
+      const event = await fileStore.describeFileChange(nativeFilePath(nextFile));
       if (event) {
         events.push(event);
       }
@@ -131,7 +132,7 @@ export class MarkdownFileEventHub {
         continue;
       }
 
-      const event = await fileStore.describeFileChange(previousFile.absolutePath);
+      const event = await fileStore.describeFileChange(nativeFilePath(previousFile));
       if (event) {
         events.push(event);
       }

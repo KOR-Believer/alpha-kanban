@@ -1,3 +1,5 @@
+import { buildDocumentSets, inferMarkdownFileType, inferSlug, inferSequenceNumber, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
+export { buildDocumentSets } from "@alpha-kanban/shared/documents";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -39,6 +41,11 @@ export class FileStoreError extends Error {
     this.name = "FileStoreError";
     this.code = code;
   }
+}
+
+export function nativeFilePath(file: Pick<MarkdownFileSummary, "absolutePath">): string {
+  if (!file.absolutePath) throw new FileStoreError(FILE_ERROR.FILE_NOT_FOUND, "A native file path is required.");
+  return file.absolutePath;
 }
 
 export type WriteGuard = {
@@ -352,59 +359,25 @@ export class MarkdownFileStore {
   private async withTicketProgress(
     documentSet: DocumentSetSummary,
   ): Promise<DocumentSetSummary> {
-    const ticketsFile = documentSet.documents.find((file) => file.type === "tickets");
-    if (!ticketsFile) {
+    const ticketFiles = documentSet.documents.filter((file) => file.type === "tickets");
+    if (!ticketFiles.length) {
       return documentSet;
     }
 
     try {
-      const markdown = await fs.readFile(ticketsFile.absolutePath, "utf8");
-      const parsed = parseTicketDocument(markdown);
-      return {
-        ...documentSet,
-        ticketProgress: {
-          doneTickets: parsed.status.doneTickets,
-          totalTickets: parsed.status.totalTickets,
-        },
-      };
+      const progress = [];
+      for (const file of ticketFiles) {
+        const markdown = await fs.readFile(nativeFilePath(file), "utf8");
+        progress.push(parseTicketDocument(markdown).status);
+      }
+      const combined = sumDocumentSetTicketProgress(progress);
+      return { ...documentSet, ticketProgress: progress[0], allTicketsDone: combined
+        ? Boolean(combined.totalTickets && combined.doneTickets === combined.totalTickets)
+        : undefined };
     } catch {
       return documentSet;
     }
   }
-}
-
-export function buildDocumentSets(files: MarkdownFileSummary[]): DocumentSetSummary[] {
-  const groups = new Map<string, MarkdownFileSummary[]>();
-
-  for (const file of files) {
-    const key = `${file.workspaceId}::${file.directory}::${file.slug}`;
-    groups.set(key, [...(groups.get(key) ?? []), file]);
-  }
-
-  return [...groups.values()]
-    .map((documents) => {
-      const sortedDocuments = [...documents].sort(compareDocumentFiles);
-      const primaryFile = choosePrimaryFile(sortedDocuments);
-      const sequenceNumber = minSequenceNumber(sortedDocuments);
-      const types = uniqueTypes(sortedDocuments);
-
-      return {
-        id: encodeDocumentSetId({
-          directory: primaryFile.directory,
-          slug: primaryFile.slug,
-          workspaceId: primaryFile.workspaceId,
-        }),
-        workspaceId: primaryFile.workspaceId,
-        directory: primaryFile.directory,
-        slug: primaryFile.slug,
-        label: formatDocumentSetLabel(primaryFile.slug),
-        sequenceNumber,
-        documents: sortedDocuments,
-        types,
-        primaryFile,
-      };
-    })
-    .sort(compareDocumentSets);
 }
 
 export function createWorkspaceFileStore(
@@ -472,133 +445,12 @@ async function atomicWrite(filePath: string, contents: string): Promise<void> {
   await fs.rename(tempPath, filePath);
 }
 
-function inferMarkdownFileType(filePath: string): MarkdownFileType {
-  const basename = path.basename(filePath);
-
-  if (basename.endsWith("_tickets.md")) {
-    return "tickets";
-  }
-  if (basename.endsWith("_plan.md")) {
-    return "plan";
-  }
-  if (basename.endsWith("_inventory.md")) {
-    return "inventory";
-  }
-  return "markdown";
-}
-
-function inferSlug(filePath: string): string {
-  return path
-    .basename(filePath, ".md")
-    .replace(/^\d+_/, "")
-    .replace(/_(tickets|plan|inventory)$/, "");
-}
-
-function inferSequenceNumber(filePath: string): number | undefined {
-  const match = /^(\d+)_/.exec(path.basename(filePath));
-  if (!match?.[1]) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(match[1], 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
 function normalizeDirectory(directory: string): string {
   return directory === "." ? "" : normalizeRelativePath(directory);
-}
-
-function parseMarkdownOutline(markdown: string): MarkdownHeading[] {
-  return markdown.split(/\r?\n/).flatMap((line, index) => {
-    const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
-    if (!match?.[1] || !match[2]?.trim()) {
-      return [];
-    }
-
-    return [
-      {
-        level: match[1].length,
-        title: match[2].trim(),
-        line: index + 1,
-      },
-    ];
-  });
-}
-
-function compareDocumentFiles(
-  left: MarkdownFileSummary,
-  right: MarkdownFileSummary,
-): number {
-  return (
-    documentTypeSortOrder(left.type) - documentTypeSortOrder(right.type) ||
-    (left.sequenceNumber ?? Number.MAX_SAFE_INTEGER) -
-      (right.sequenceNumber ?? Number.MAX_SAFE_INTEGER) ||
-    left.relativePath.localeCompare(right.relativePath)
-  );
-}
-
-function compareDocumentSets(
-  left: DocumentSetSummary,
-  right: DocumentSetSummary,
-): number {
-  return (
-    (left.sequenceNumber ?? Number.MAX_SAFE_INTEGER) -
-      (right.sequenceNumber ?? Number.MAX_SAFE_INTEGER) ||
-    left.directory.localeCompare(right.directory) ||
-    left.label.localeCompare(right.label)
-  );
-}
-
-function choosePrimaryFile(files: MarkdownFileSummary[]): MarkdownFileSummary {
-  return (
-    files.find((file) => file.type === "tickets") ??
-    files.find((file) => file.type === "plan") ??
-    files.find((file) => file.type === "inventory") ??
-    files[0] ??
-    unreachablePrimaryFile()
-  );
-}
-
-function unreachablePrimaryFile(): never {
-  throw new Error("Document set requires at least one file.");
-}
-
-function uniqueTypes(files: MarkdownFileSummary[]): MarkdownFileType[] {
-  return [...new Set(files.map((file) => file.type))].sort(
-    (left, right) => documentTypeSortOrder(left) - documentTypeSortOrder(right),
-  );
-}
-
-function minSequenceNumber(files: MarkdownFileSummary[]): number | undefined {
-  const values = files
-    .map((file) => file.sequenceNumber)
-    .filter((value): value is number => value !== undefined);
-  return values.length > 0 ? Math.min(...values) : undefined;
-}
-
-function documentTypeSortOrder(type: MarkdownFileType): number {
-  return {
-    plan: 0,
-    tickets: 1,
-    inventory: 2,
-    markdown: 3,
-  }[type];
-}
-
-function encodeDocumentSetId(input: {
-  directory: string;
-  slug: string;
-  workspaceId: string;
-}): string {
-  return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
-}
-
-function formatDocumentSetLabel(slug: string): string {
-  return slug.replace(/[_-]+/g, " ");
 }
 
 function isPathInside(filePath: string, root: string): boolean {

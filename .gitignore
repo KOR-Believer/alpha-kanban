@@ -1,6 +1,8 @@
 .DS_Store
 node_modules/
 dist/
+dist-browser/
+apps/web/public-browser/downloads/
 build/
 .env
 .env.*
@@ -13,3 +15,5 @@ pnpm-debug.log*
 .vite/
 coverage/
 .alpha-kanban/
+.playwright-cli/
+output/

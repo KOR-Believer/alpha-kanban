@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardTickets, filterBoardTickets, loadBoard, reorderedKeys } from "./allProjectsData";
+import { boardTickets, filterBoardTickets, loadBoard, reorderedKeys, type BoardLoadProgress } from "./allProjectsData";
 import { documentFixture, projectFixture } from "./allProjectsFixtures";
 
 describe("all-projects board data", () => {
@@ -62,5 +62,56 @@ describe("all-projects board data", () => {
     const tickets = boardTickets({ documents, issues: [] });
     const [a, b] = tickets;
     expect(reorderedKeys(tickets, a!.key, b!.key, true, ["unavailable", a!.key])).toEqual([b!.key, a!.key, "unavailable"]);
+  });
+  it("publishes a ready project before a slow project's listing finishes", async () => {
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    let ready!: () => void;
+    const visible = new Promise<void>((resolve) => { ready = resolve; });
+    const updates: BoardLoadProgress[] = [];
+    const pending = loadBoard({
+      workspaces: async () => ({ workspaces: [first, second] }),
+      files: async (id) => { if (id === second.id) await slow; return { files: [documentFixture(id === first.id ? first : second).file] }; },
+      document: async (id) => documentFixture(id === first.id ? first : second),
+    }, { onProgress: (progress) => { updates.push(progress); if (progress.data.documents.length) ready(); } });
+    await visible;
+    expect(updates.at(-1)!.data.documents.map((item) => item.workspace.id)).toEqual([first.id]);
+    expect(updates.at(-1)!.totalProjects).toBe(2);
+    release();
+    expect((await pending).documents).toHaveLength(2);
+    expect(updates.at(-1)!.completedProjects).toBe(2);
+  });
+  it("stops publishing after cancellation and rejects the interrupted load", async () => {
+    const controller = new AbortController();
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    let ready!: () => void;
+    const visible = new Promise<void>((resolve) => { ready = resolve; });
+    let updates = 0;
+    const pending = loadBoard({
+      workspaces: async () => ({ workspaces: [first, second] }),
+      files: async (id) => { if (id === second.id) await slow; return { files: [documentFixture(id === first.id ? first : second).file] }; },
+      document: async (id) => documentFixture(id === first.id ? first : second),
+    }, { signal: controller.signal, onProgress: (progress) => { updates++; if (progress.data.documents.length) ready(); } });
+    await visible;
+    controller.abort();
+    const before = updates;
+    release();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(updates).toBe(before);
+  });
+  it("bounds document reads across projects, not just within one project", async () => {
+    let active = 0;
+    let maximum = 0;
+    await loadBoard({
+      workspaces: async () => ({ workspaces: [first, second] }),
+      files: async (id) => ({ files: Array.from({ length: 12 }, (_, i) => ({ ...documentFixture(first, `${id}-${i}`).file, absolutePath: `/${id}/${i}_tickets.md` })) }),
+      document: async (_, fileId) => {
+        active++; maximum = Math.max(maximum, active);
+        await new Promise((resolve) => setTimeout(resolve, 1)); active--;
+        return documentFixture(first, fileId);
+      },
+    });
+    expect(maximum).toBe(6);
   });
 });

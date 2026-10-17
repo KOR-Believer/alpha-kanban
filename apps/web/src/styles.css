@@ -1,12 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@fontsource-variable/raleway";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+@import "./start-pages.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Raleway Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Raleway Variable", "Pretendard Variable", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -216,10 +218,10 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .ak-all-board-columns {
+  .ak-all-board-columns,
+  .ak-project-board-scroll {
     min-height: 0;
     overflow: auto;
-    padding: var(--ak-space-md);
   }
 
   .ak-all-board-cards {
@@ -227,6 +229,21 @@
     align-content: start;
     gap: var(--ak-space-xs);
     padding: var(--ak-space-xs);
+  }
+
+  .ak-kanban-grid {
+    min-height: 100%;
+    padding: var(--ak-space-lg);
+  }
+
+  .ak-kanban-column {
+    overflow: clip;
+  }
+
+  .ak-kanban-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   .ak-sidebar-scroll-content {

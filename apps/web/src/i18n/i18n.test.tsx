@@ -62,6 +62,16 @@ describe("UI language", () => {
     expect(t("수동 지시")).toBe("Manual instruction");
   });
 
+  it("localizes the launcher and intro while preserving URLs in installation requests", async () => {
+    expect(t("Register workspace")).toBe("워크스페이스 등록");
+    expect(t("Search {{list}}", { list: t("Other projects") })).toBe("다른 프로젝트 검색");
+    expect(t("View ticket detail")).toBe("티켓 상세 보기");
+    expect(t("Ask your AI to implement the latest tickets, then connect the project folder to review progress. Moving tickets and leaving instructions are optional.")).toContain("선택 사항");
+    await setLanguage("en");
+    expect(t("Register workspace")).toBe("Register workspace");
+    expect(t("About Alpha Kanban")).toBe("About Alpha Kanban");
+  });
+
   it("exposes readable errors while preserving original diagnostic details", async () => {
     const error = Object.assign(new Error("File /repo/docs/tickets.md has changed"), { code: "STALE_FILE" });
     expect(errorSummary(error)).toContain("외부에서 문서가 변경");
@@ -78,6 +88,9 @@ describe("UI language", () => {
     try {
       await act(async () => root.render(<LanguageSelector />));
       const trigger = container.querySelector<HTMLElement>('[aria-label="언어"]')!;
+      expect(trigger.getAttribute("data-size")).toBe("sm");
+      expect(trigger.classList.contains("h-7")).toBe(true);
+      expect(trigger.classList.contains("text-xs")).toBe(true);
       await act(async () => { trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
       const englishOption = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent === "English");
       expect(englishOption).toBeDefined();

@@ -360,7 +360,7 @@ export const markdownFileSummarySchema = z.object({
   directory: z.string(),
   relativePath: z.string().min(1),
   workspaceRelativePath: z.string().min(1),
-  absolutePath: z.string().min(1),
+  absolutePath: z.string().min(1).optional(),
   mtimeMs: z.number().nonnegative(),
   hash: z.string().min(1),
   slug: z.string().min(1),
@@ -381,7 +381,7 @@ export const markdownFileChangeEventSchema = z.object({
   fileId: z.string().min(1),
   relativePath: z.string().min(1),
   workspaceRelativePath: z.string().min(1),
-  absolutePath: z.string().min(1),
+  absolutePath: z.string().min(1).optional(),
   observedAt: z.string().datetime(),
   file: markdownFileSummarySchema.optional(),
 });
@@ -418,6 +418,7 @@ export const documentSetSummarySchema = z.object({
   types: z.array(markdownFileTypeSchema),
   primaryFile: markdownFileSummarySchema,
   ticketProgress: documentSetTicketProgressSchema.optional(),
+  allTicketsDone: z.boolean().optional(),
 });
 
 export type DocumentSetSummary = z.infer<typeof documentSetSummarySchema>;

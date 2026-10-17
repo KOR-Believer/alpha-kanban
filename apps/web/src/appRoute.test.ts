@@ -7,6 +7,11 @@ describe("app route helpers", () => {
     expect(parseAppRouteState({ pathname: "/" })).toEqual({});
   });
 
+  it("does not change legacy server routes for the browser-only guide", () => {
+    expect(buildAppRoute({ workspaceId: "w_test", showGuide: true })).toBe("/w/w_test");
+    expect(parseAppRouteState({ pathname: "/w/w_test", searchStr: "?view=guide&file=docs/notes.md" })).toEqual({ workspaceId: "w_test", filePath: "docs/notes.md" });
+  });
+
   it("round-trips full ticket view while preserving the ticket route", () => {
     const route = { workspaceId: "w_test", ticketId: "TEST-01", detailMode: "full" as const };
     const url = new URL(buildAppRoute(route), "http://localhost");
