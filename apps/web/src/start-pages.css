@@ -39,6 +39,8 @@
   .ak-document-workflow p, .ak-skill-install p { margin-top: var(--ak-space-xxs); font-size: 12px; line-height: 1.8; color: var(--muted-foreground); overflow-wrap: anywhere; }
   .ak-skill-install { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ak-space-md); padding-top: var(--ak-space-md); border-top: 1px solid var(--border); }
   .ak-project-guide { width: 100%; max-width: 1264px; margin-inline: auto; padding: var(--ak-space-xxl); container: project-guide / inline-size; }
+  .ak-usage-guide-dialog { grid-template-rows: auto minmax(0, 1fr) auto; }
+  .ak-usage-guide-dialog .ak-project-guide { max-width: none; padding: 0; }
   .ak-project-guide-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--ak-space-lg); margin-bottom: var(--ak-space-lg); }
   .ak-project-guide-heading > div { min-width: 0; }
   .ak-project-guide-heading > a { flex-shrink: 0; }

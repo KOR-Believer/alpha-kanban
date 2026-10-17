@@ -11,6 +11,9 @@ import { createRoot } from "react-dom/client";
 import { AppRoot } from "./AppRoot";
 import "./styles.css";
 import { IS_BROWSER_LOCAL } from "./storageMode";
+import { appInstaller } from "./pwa/install";
+import { pwaClient } from "./pwa/client";
+import { startPwaSession } from "./pwa/session";
 
 const queryClient = new QueryClient(IS_BROWSER_LOCAL ? {
   defaultOptions: {
@@ -58,10 +61,24 @@ if (!rootElement) {
   throw new Error("Root element #root was not found.");
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  </StrictMode>,
-);
+async function mount() {
+  if (__PWA_ENABLED__ && "serviceWorker" in navigator && navigator.locks) {
+    appInstaller.start();
+    try {
+      if (!await startPwaSession()) return;
+      void pwaClient.start();
+    } catch {
+      // Fail closed before mounting anything that can write local files.
+      location.replace("/repair.html");
+      return;
+    }
+  }
+  createRoot(rootElement!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+void mount();

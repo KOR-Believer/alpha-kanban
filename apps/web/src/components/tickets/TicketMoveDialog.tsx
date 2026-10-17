@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TicketStatusFields, type SaveTicketStatus, type TicketStatusDraft, type TicketWriteGuard } from "./TicketStatusFields";
+import { usePwaDraft } from "../../pwa/usePwaDraft";
 
 export type TicketMove = { ticket: TicketItem; targetStatus: TicketStatus; guard: TicketWriteGuard };
 
@@ -34,6 +35,7 @@ export function TicketMoveDialog({ move, currentHash, currentMtimeMs, onSave, on
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  usePwaDraft(true);
   const [draft, setDraft] = useState<TicketStatusDraft>({
     status: move.targetStatus,
     progress: ticketProgressForStatus(move.targetStatus, move.ticket.progress),

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, FolderKanban } from "lucide-react";
 import { useTranslation } from "./i18n";
 import { LanguageSelector } from "./components/LanguageSelector";
+import { PwaMenu } from "./pwa/PwaMenu";
 import { DocumentWorkflow, SkillInstallPanel } from "./components/SkillGuide";
 import { buttonVariants } from "./components/ui/button";
 import { DEMO_MARKDOWN, IntroDemoBoard } from "./components/IntroDemoBoard";
@@ -36,6 +37,7 @@ export function IntroPage() {
         <a href="#workflow" className="ak-intro-section-link ak-focus-ring">{t("Workflow")}</a>
         <a href="#skill" className="ak-intro-section-link ak-focus-ring">{t("Skill guide")}</a>
         <LanguageSelector />
+        <PwaMenu />
         <Link to="/" className={buttonVariants({ variant: "outline", size: "sm", className: "hidden min-[701px]:inline-flex" })}>{t("Open project")}<ArrowUpRight aria-hidden="true" /></Link>
       </nav>
     </div></header>

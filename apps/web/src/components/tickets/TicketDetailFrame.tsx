@@ -6,6 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { TicketDetailMode } from "../../appRoute";
 import type { ResizeEdge, TicketDetailPresentation } from "./useTicketDetailPresentation";
+import { usePwaDraft } from "../../pwa/usePwaDraft";
+import { IS_BROWSER_LOCAL } from "../../storageMode";
+import { TourButton, useScreenTour } from "../../onboarding/ScreenTour";
 
 const views = [
   { mode: "side", label: "Side peek", icon: PanelRight },
@@ -23,8 +26,14 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  usePwaDraft(hasDraft || isBusy);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [pendingExit, setPendingExit] = useState<"close" | "workspace" | null>(null);
+  const tourContainer = useRef<HTMLDivElement>(null);
+  const tour = useScreenTour("detail", {
+    enabled: IS_BROWSER_LOCAL && !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
+    eligible: false, scope: `${ticketId}:${presentation.mode}`, container: tourContainer,
+  });
   const returnFocus = useRef(typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null);
   const currentView = views.find((view) => view.mode === presentation.mode)!;
   const ViewIcon = currentView.icon;
@@ -52,14 +61,16 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestExit("close"); }}>
-      <DialogContent layout="custom" showCloseButton={false} aria-describedby={undefined}
+      <DialogContent ref={tourContainer} layout="custom" showCloseButton={false} aria-describedby={undefined}
+        data-tour-active={tour.active || undefined}
         className="ak-ticket-detail-shell" data-mode={presentation.mode} data-resizing={presentation.isResizing || undefined} style={style}
         onCloseAutoFocus={(event) => {
           if (returnFocus.current?.isConnected) { event.preventDefault(); returnFocus.current.focus({ preventScroll: true }); }
         }}
-        onPointerDownOutside={(event) => { if (presentation.isResizing || hasDraft || isBusy) event.preventDefault(); }}
+        onPointerDownOutside={(event) => { if (tour.active || presentation.isResizing || hasDraft || isBusy) event.preventDefault(); }}
         onEscapeKeyDown={(event) => {
-          if (presentation.isResizing) { event.preventDefault(); presentation.stopResize(); }
+          if (tour.active) event.preventDefault();
+          else if (presentation.isResizing) { event.preventDefault(); presentation.stopResize(); }
           else if (isBusy) event.preventDefault();
         }}>
         <div className="ak-ticket-detail-frame">
@@ -68,6 +79,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
               <FileText className="size-4 shrink-0" aria-hidden="true" /><span className="truncate">{ticketId}</span>
             </span>
             <div className="ak-drawer-actions">
+              {IS_BROWSER_LOCAL ? <TourButton tour={tour} labelKey="Tour ticket details" /> : null}
               {onOpenInWorkspace ? (
                 <Button size="sm" variant="outline" disabled={isBusy} onClick={() => requestExit("workspace")}>
                   <ExternalLink aria-hidden="true" />{t("Go to project")}
@@ -75,7 +87,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
               ) : null}
               <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
                 <PopoverTrigger asChild>
-                  <Button size="sm" variant="ghost" aria-label={t("Ticket view")} title={t(currentView.label)}>
+                  <Button data-tour="ticket-view" size="sm" variant="ghost" aria-label={t("Ticket view")} title={t(currentView.label)}>
                     <ViewIcon className="size-4" aria-hidden="true" /><ChevronDown className="size-3" aria-hidden="true" />
                   </Button>
                 </PopoverTrigger>

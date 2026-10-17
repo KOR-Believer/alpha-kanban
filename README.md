@@ -1,289 +1,208 @@
 # Alpha Kanban
 
-Local kanban workspace for browsing implementation-ledger Markdown sets, reviewing work, and leaving durable ticket directions. Discuss and execute work in Codex; exchange context through the project's Markdown files.
+**한국어** · [English](README.en.md)
 
-## What It Does
+AI와 함께 만든 계획과 티켓을, 내 프로젝트 폴더에서 바로 보는 칸반.
 
-- Lists available target projects from configured `workspaceRoots`.
-- Groups selected workspace Markdown files into document sets for `*_plan.md`, `*_tickets.md`, `*_inventory.md`, and other `.md` files.
-- Renders selected ticket documents as a Notion-like flat kanban board and renders plan/inventory/markdown files in reader mode.
-- Opens a ticket detail drawer with canonical fields, status/progress controls, user instruction history, and progress notes.
-- Appends manual user directions and status-change reasons to the selected ticket's Markdown.
-- Writes ticket changes back to Markdown with stale-file protection and external Markdown change detection.
+Alpha Kanban은 로컬 Markdown을 읽어 계획, 티켓, 인벤토리를 한곳에 보여주는 웹 앱입니다. AI와의 대화는 사용하는 AI 도구에서 이어가고, 여기서는 문서를 읽고 진행 상황을 확인하세요. 필요하면 보드에서 상태를 바꾸거나 지시를 남길 수도 있습니다.
 
-In-app Workspace Chat, ticket chat, model options, and run controls are temporarily
-hidden. Existing chat/run data and backend APIs are retained, but document saves
-do not send prompts or start Codex.
+## 주요 기능
 
-## Workflow
+- **프로젝트 연결:** 프로젝트 하나를 열거나, 여러 프로젝트가 들어 있는 워크스페이스를 등록합니다.
+- **문서 탐색:** 계획·티켓·인벤토리를 묶어 보고, 문서를 검색·정렬합니다. 일반 Markdown이나 모두 완료된 문서 세트를 숨길 수 있습니다.
+- **프로젝트 보드와 전체 보드:** 한 문서의 티켓에 집중하거나, 여러 프로젝트의 티켓을 모아 봅니다.
+- **티켓 상세:** 작업 범위, 완료 기준, 사용자 지시, 진행 메모를 확인합니다. 사이드·중앙·전체 화면을 선택하고 창 크기를 조절할 수 있습니다.
+- **원본 Markdown 보기:** 티켓을 보드 대신 Markdown으로 열어 문서 전체를 읽습니다.
+- **선택적인 편집:** 상태·진행률 변경과 수동 지시를 원본 파일에 저장합니다. 드래그로 상태를 바꿀 때도 먼저 내용을 확인합니다.
+- **설치와 오프라인 사용:** PWA로 설치해 독립된 창에서 사용하고, 준비가 끝나면 오프라인에서도 로컬 문서를 읽고 편집합니다.
+- **한국어와 영어:** 기본 언어는 한국어이며 상단에서 영어로 전환할 수 있습니다. 문서 내용과 사용자가 작성한 글은 번역하지 않습니다.
 
-The UI defaults to Korean. Choose **한국어 / English** in the Start page or either
-board's top bar; the choice applies immediately and is remembered in this browser.
-It does not change document content, canonical Markdown status/field names, paths,
-or stored user directions. Default status-change reasons remain in their original
-Korean because the input previews the exact text written to Markdown.
+## 시작하기
 
-1. Open or create a project. You can start without documents.
-2. Discuss the work in Codex with `$implementation-ledger`, then ask it to create tickets and, when useful, a plan or inventory.
-3. Review the plan and progress in Alpha Kanban. All work can continue in your AI chat; editing the board is optional.
-4. When needed, leave a manual direction or move a ticket on the board, then ask Codex to reread the updated file. Dragging a card opens a confirmation dialog before saving.
+데스크톱 Chrome에서 사용하세요. 폴더 접근에는 HTTPS 또는 localhost 주소가 필요합니다. 앱을 사용하는 데 Node.js나 별도 계정은 필요하지 않습니다.
 
-## Install
+1. **프로젝트 열기**에서 작업할 폴더를 선택합니다. 상위 워크스페이스를 먼저 등록할 필요는 없습니다.
+2. 여러 프로젝트를 함께 다루려면 **워크스페이스 등록**에서 공통 상위 폴더를 선택합니다. 바로 아래 폴더들이 프로젝트 목록에 나타납니다.
+3. 프로젝트를 열고 사이드바에서 문서를 선택합니다. 계획·티켓·인벤토리가 없으면 사용 안내가 먼저 열립니다. 일반 Markdown은 사이드바에서 직접 선택할 수 있습니다.
 
-```bash
-pnpm install
-pnpm install:skill
-```
-
-`pnpm install:skill` installs the bundled `implementation-ledger` Codex skill from
-`skills/implementation-ledger` into `${CODEX_HOME:-~/.codex}/skills/implementation-ledger`.
-Restart Codex after installing so the skill list refreshes.
-
-## Run
-
-```bash
-pnpm dev
-```
-
-Default local URLs:
-
-- Web: `http://127.0.0.1:5173/`
-- API: `http://127.0.0.1:5174/`
-
-The dev server binds to `127.0.0.1` only.
-
-## Browser-Local Preview
-
-The separate browser-local build uses desktop Chrome's File System Access API.
-It keeps local Markdown on your computer and does not start an API server or Codex.
-The original `pnpm dev` and Node-backed workflow above remain unchanged.
-
-```bash
-pnpm dev:browser       # http://127.0.0.1:5187, browser file access
-pnpm build:browser     # apps/web/dist-browser
-pnpm preview:browser  # http://127.0.0.1:4187, serve the static output
-```
-
-The development/build commands need Node; visitors to the eventual hosted website do not.
-This branch has not been publicly deployed.
-
-The `/` route is the project launcher with separate recent/other project lists.
-The `/intro` route introduces the workflow with a fictional board and matching
-Markdown. Opening the introduction does not request folder access or load projects.
-
-1. Choose **프로젝트 열기 / Open project** for one project, or **워크스페이스 등록 / Register workspace** for a folder containing projects.
-2. Roots group their immediate child directories as projects. More specific folder connections take precedence. Selecting a folder grants access; the website cannot browse arbitrary paths.
-3. Open **로컬 폴더 / Local folders** and choose **편집 권한 허용 / Allow editing** before changing tickets. Read access and write access are separate.
-4. Optionally leave reasons and directions through the same ticket and drag-confirmation forms. Changes go to the original Markdown, not a cloud document store.
-5. Discuss and execute work in your external AI tool. Start, the introduction and empty projects share a reviewable Codex installation request, a GitHub source link and manual instructions. A complete skill ZIP is available inside manual installation. Back up and compare any installed skill before replacing it.
-
-Draft a plan with your AI, review its open questions, and discuss those that affect
-the implementation you are about to request. Questions about later work can stay
-open. Reflect agreed scope and completion criteria in new or existing tickets,
-then request implementation and review the results. The bundled skill checks for
-relevant unresolved decisions before dependent implementation; it does not require
-every question to be resolved or repeat decisions already answered or delegated.
-
-Connections, opaque IDs, recent projects, recovery copies and global card order live
-in this site's IndexedDB. Language, sorting, filters and detail dimensions remain
-browser preferences. A different hostname, port, browser profile, or cleared site
-data starts a different registry. Native `.alpha-kanban` state and absolute-path URLs
-are not automatically migrated. Reconnect the original folder when permission expires.
-
-The browser scans Markdown below connected projects, skipping hidden/build/dependency
-directories (including `.git`, `node_modules`, and `.alpha-kanban`). Native
-`alpha-kanban.config.json` allowlists and absolute docRoots are not imported. The
-initial limit is 5,000 files per project, 30 folder levels and 10 MiB per Markdown file.
-The body cache is capped at 64 MiB; metadata and grouped progress remain cached after
-body eviction, so listing unchanged documents does not require rereading their text.
-Files with invalid UTF-8 or ambiguous ticket fields are not silently rewritten.
-
-Saves check the current content hash and modification time, keep a durable recovery
-copy before writing, serialize this site's tabs, and verify the result after closing
-the write stream. External tools do not participate in those browser locks: a race
-after the last check remains possible, and an unseen intermediate external version
-cannot be recovered. Avoid simultaneous edits to the same file when practical.
-If a save is uncertain, open **Local folders → Recovery records**, download the
-original/intended copies, check the actual file, and explicitly finish the review.
-Do not submit the same direction again before checking whether it was already saved.
-
-While visible, projects are rescanned every 15 seconds and on window focus. File
-metadata avoids rereading unchanged bodies; the selected document is checked freshly.
-Edits in progress receive a stale-file notice instead of losing their draft.
-Browser writes and saved card order also notify other tabs. These are not background
-watch guarantees. Local I/O remains usable without a network after the app loads;
-offline first load/reload is not supported.
-
-### Cloudflare Pages
-
-- Build command: `pnpm build:browser`
-- Output directory: `apps/web/dist-browser`
-- Production target: a stable `<project>.pages.dev` hostname, not a new preview hostname on every run.
-- No Functions, Workers, API proxy, root `404.html`, or hash-router fallback. Pages' SPA fallback serves `/`, `/intro`, `/all`, and `/w/:id`; query and fragment preserve document/ticket state.
-- `public-browser/_headers` supplies CSP, no-referrer, and MIME-sniff protection. Markdown is not uploaded. External images only load on explicit request; local resources resolve through folder handles, not hosting paths.
-- `tk.giveit2.me` is a future custom-domain option, not configured by this change. Moving there requires reconnecting folders because browser storage is origin-scoped.
-
-See [browser-local validation](docs/browser_local_validation.md) for the verified
-checks and remaining real-folder/contributor-PC acceptance work.
-
-## Config
-
-Alpha Kanban reads `alpha-kanban.config.json` from the workspace root.
-
-```json
-{
-  "workspaceRoots": [".."],
-  "defaultDocRoots": ["docs", "examples"],
-  "codexCommand": "codex"
-}
-```
-
-- `workspaceRoots`: target project allowlist. Project selection, file reads/writes, and Codex cwd routing must stay inside these roots.
-- `defaultDocRoots`: Markdown roots scanned inside each selected target workspace.
-- `docRoots`: backward-compatible alias for `defaultDocRoots`.
-- `codexCommand`: executable for the retained runner API; unused by document-only UI actions.
-
-If the config file is missing, the server defaults to `defaultDocRoots: ["docs"]`, `workspaceRoots: ["."]`, and `codexCommand: "codex"`.
-
-## Required Codex Skill
-
-Alpha Kanban is designed around the bundled `implementation-ledger` Codex skill.
-The app can browse and edit compatible Markdown without Codex. Install the skill
-in Codex to create compatible documents and interpret the directions left here.
-
-The full skill directory is vendored in this repository:
+예를 들어 다음 구조에서 `workspace`를 등록하면 `reading-journal`과 `design-system`이 프로젝트로 표시됩니다.
 
 ```text
-skills/implementation-ledger/
-  SKILL.md
-  agents/openai.yaml
-  scripts/check-ledger.mjs
-  scripts/ticket-md.mjs
-  assets/
-  references/
+workspace/
+  reading-journal/
+    docs/
+      01_reading_plan.md
+      01_reading_tickets.md
+  design-system/
 ```
 
-Install or refresh it with:
+**새 프로젝트**에서는 등록한 워크스페이스 아래에 프로젝트 폴더를 만들 수 있습니다.
+
+처음에는 **화면 둘러보기**로 폴더 연결과 보드 탐색을 익혀보세요. 안내는 건너뛸 수 있고, **사용 안내**에서 다시 볼 수 있습니다.
+
+## implementation-ledger란?
+
+[implementation-ledger](skills/implementation-ledger/SKILL.md)는 AI가 **무엇을 만들기로 했는지, 어디까지 구현했는지, 무엇을 확인해야 하는지**를 프로젝트의 Markdown에 남기도록 돕는 스킬입니다. 스킬은 AI가 반복해서 참고하는 작업 지침과 문서 템플릿 묶음으로, Codex에 설치해 사용합니다.
+
+- **계획(플랜):** 목표와 범위, 주요 결정, 아직 사용자에게 확인할 질문을 정리합니다.
+- **티켓:** 구현할 일을 나누고, 각 작업의 완료 기준·상태·진행률·검증 결과를 기록합니다.
+- **인벤토리:** 조사한 내용이나 반복해서 참고할 근거를 별도 문서로 남깁니다. 필요한 작업에서만 추가합니다.
+
+문서 형식만 맞추는 스킬은 아닙니다. 토론과 문서 작성, 구현 요청을 구분하고, 이번 구현에 영향을 주는 열린 질문은 먼저 확인하도록 안내합니다. 구현 후에는 사람이 결과를 검토할 수 있도록 티켓을 갱신합니다.
+
+**스킬은 AI 도구에서 문서를 작성·관리하는 역할, Alpha Kanban은 그 문서를 읽고 진행 상황을 살펴보는 역할**입니다. 대화와 개발은 Codex에서 이어가고, 같은 프로젝트 폴더를 Alpha Kanban에 연결하세요. 웹 앱 설치와 스킬 설치는 별개입니다.
+
+## 스킬 설치
+
+### Codex에 설치 요청하기
+
+로컬 파일을 다룰 수 있는 Codex 채팅에 아래 요청문을 전달하세요. **Alpha Kanban 저장소를 클론하거나, 웹 앱을 로컬에서 실행하거나, `pnpm`을 설치할 필요는 없습니다.** Codex에 GitHub의 스킬 위치를 알려주면 됩니다. GitHub에서 파일을 가져오므로 설치할 때는 인터넷 연결이 필요합니다.
+
+```text
+$skill-installer로 아래 GitHub 경로의 implementation-ledger 스킬을 설치해 줘.
+
+https://github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger
+
+SKILL.md뿐 아니라 references, assets, scripts, agents를 포함한 폴더 전체를 설치해 줘.
+내 Codex 환경이 인식하는 개인 스킬 경로를 확인해서 사용해 줘.
+같은 이름의 스킬이 이미 있으면 먼저 비교해서 변경 내용을 알려줘.
+기존 설치본은 백업하고 개인 수정은 보존해. 덮어쓰기 전에는 내 확인을 받아.
+설치가 끝나면 설치 위치와 인식 여부를 알려줘. 프로젝트 문서나 코드는 변경하지 마.
+```
+
+Codex는 기본 제공 `$skill-installer`를 통해 GitHub 저장소의 스킬을 설치할 수 있습니다. 자세한 설치 방식은 [Codex 공식 스킬 안내](https://learn.chatgpt.com/docs/build-skills#install-curated-skills-for-local-use)를 참고하세요.
+
+웹에서도 **사용 안내 → AI와 문서로 작업하기 → 설치 요청문 확인·복사**에서 요청문을 받아 Codex에 전달할 수 있습니다. 프로젝트 안에서는 사이드바의 **사용 안내**에 설치 안내가 있습니다. 웹은 요청문을 제공하며, 설치는 Codex에서 진행합니다.
+
+### 설치 확인과 첫 요청
+
+설치 후 Codex에서 `$implementation-ledger`를 선택해 요청하세요. 스킬이 보이지 않으면 Codex를 다시 연 뒤 확인합니다. 먼저 다음과 같이 문서를 바꾸지 않는 요청으로 시작할 수 있습니다.
+
+```text
+$implementation-ledger를 사용해 줘.
+독서 기록 앱을 만들고 싶은데, 우선 기능 아이데이션을 토론 모드로 진행하자.
+아직 문서나 코드는 작성하지 마.
+```
+
+스킬을 찾지 못한다면 설치 위치 바로 아래에 `SKILL.md`가 있는지, 참조 파일과 템플릿을 함께 설치했는지 Codex에 확인해 달라고 요청하세요. 업데이트할 때도 위 설치 요청문으로 기존 설치본과 비교하고, 개인 수정 사항을 확인한 뒤 교체하세요.
+
+## AI와 함께 작업하기
+
+문서를 만들기 전부터 시작해도 됩니다. 핵심은 AI가 쓴 초안을 사람이 읽고, 이번 구현에 필요한 결정을 문서에 반영한 뒤 개발을 요청하는 것입니다.
+
+1. **아이디어를 논의합니다.** “독서 기록 앱을 만들고 싶어. 기능 아이데이션을 토론 모드로 진행하자. 아직 문서나 코드는 작성하지 마.”
+2. **계획과 티켓 초안을 요청합니다.** “`$implementation-ledger`로 지금까지의 대화를 바탕으로 플랜과 티켓 초안을 작성해 줘. 합의한 내용과 열린 질문을 구분해 줘.”
+3. **초안을 직접 읽습니다.** 원하는 기능, 제외한 범위, 티켓별 완료 기준이 의도와 맞는지 확인합니다.
+4. **관련 열린 질문을 논의합니다.** 이번 구현에 영향을 주는 질문을 AI와 하나씩 정리합니다. 다음 작업에 관한 질문까지 모두 없앨 필요는 없습니다.
+5. **결정한 내용을 문서에 반영합니다.** “방금 결정한 내용을 플랜과 티켓의 범위·완료 기준에 반영해 줘. 해결된 질문은 정리하고, 아직 구현하지는 마.”
+6. **최종 문서를 검토합니다.** 답변이 실제 문서에 반영됐는지 읽어보고, 더 논의할 부분이 있으면 다시 대화합니다.
+7. **티켓 순서대로 개발을 요청합니다.** “검토한 티켓을 선행 관계에 맞춰 순서대로 구현해 줘. 완료 기준을 검증하고 결과를 문서에 남겨 줘.”
+
+모든 작업을 AI 채팅에서 진행하고 Alpha Kanban은 읽기용으로만 사용해도 됩니다. 보드에서 상태를 옮기거나 지시를 남기는 것은 선택 사항입니다.
+
+## 문서와 보드
+
+같은 작업의 문서는 공통 이름에 다음 접미사를 붙여 묶습니다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `01_reading_plan.md` | 목표, 범위, 설계와 열린 질문 |
+| `01_reading_tickets.md` | 티켓별 작업 범위, 상태, 완료 기준과 기록 |
+| `01_reading_inventory.md` | 조사 결과와 참고 자료 |
+
+세 파일을 항상 만들 필요는 없습니다. 작업에 맞는 문서만 사용하세요. 다른 `.md` 파일도 문서 목록에서 읽을 수 있습니다.
+
+- **프로젝트 보드:** 선택한 티켓 문서의 상태와 진행 상황을 봅니다.
+- **전체 티켓:** 연결된 프로젝트의 티켓을 모아 검색하고 프로젝트별로 필터링합니다.
+- **문서 필터:** 일반 Markdown을 제외하거나, 티켓이 모두 완료된 문서 세트를 숨깁니다.
+- **보기 설정:** 정렬, 필터, 상세창 크기와 전체 보드의 카드 순서는 브라우저에 저장됩니다. 문서 내용을 바꾸지 않습니다.
+
+문서 작성 규칙은 [Markdown 형식](skills/implementation-ledger/references/ledger-format.md), 실제 예시는 [샘플 티켓](examples/sample_tickets.md)을 참고하세요.
+
+### 보드에서 수정하기
+
+편집하려면 **로컬 폴더 → 편집 권한 허용**으로 쓰기 권한을 부여합니다.
+
+- 상태·진행률을 변경하면 변경 사유와 함께 같은 Markdown에 저장됩니다. 사유를 비워두면 입력란에 표시된 기본 문구가 기록됩니다.
+- 다른 상태 열로 카드를 드래그하면 확인 창이 열립니다. 취소하면 파일과 카드 위치가 그대로 유지되고, 저장에 성공해야 카드가 이동합니다.
+- 하단 입력창의 수동 지시는 `[수동지시]` 말머리로 `사용자 지시`에 추가됩니다.
+- 완료된 티켓을 다시 열어도 이전 체크리스트와 진행 메모는 유지됩니다.
+- 문서를 수정한 뒤에는 AI 도구에 최신 파일을 다시 읽도록 요청하세요. 보드에서 저장하는 동작이 AI 작업을 실행하지는 않습니다.
+
+외부 편집으로 파일이 달라졌다면 최신 문서를 확인한 뒤 저장해야 합니다. AI와 브라우저에서 같은 파일을 동시에 수정하지 않는 것이 좋습니다.
+
+## 데이터와 권한
+
+문서는 선택한 로컬 폴더에서 읽고, 편집을 확정하면 원본 파일에 저장합니다. Alpha Kanban은 프로젝트 Markdown을 업로드하지 않습니다.
+
+연결한 폴더, 최근 프로젝트, 보기 설정과 저장 복구 기록은 해당 브라우저와 사이트 주소에 보관됩니다.
+
+- 도메인, 포트 또는 브라우저 프로필이 다르면 폴더 연결과 설정도 별개입니다.
+- 사이트 데이터를 지우면 연결과 설정을 다시 구성해야 합니다. 디스크의 원본 파일이 삭제되지는 않습니다.
+- **폴더 연결 해제**는 앱의 연결만 제거합니다. 실제 폴더나 문서는 삭제하지 않습니다.
+- 폴더 권한이 만료되면 **폴더 다시 연결**로 접근을 허용하세요.
+- 저장 결과를 확인할 수 없는 경우 **로컬 폴더 → 복구 기록**에서 저장 전·후 사본을 확인하세요. 실제 파일을 확인하기 전에는 같은 지시를 다시 저장하지 마세요.
+
+## 앱 설치와 오프라인 사용
+
+상단 **앱 설치 및 업데이트** 메뉴에서 Chrome이 제공하는 **앱 설치**를 선택하면 별도 창으로 사용할 수 있습니다. 설치가 폴더 접근 권한까지 부여하지는 않습니다.
+
+**오프라인 사용 준비 완료**가 표시된 뒤에는 인터넷 연결 없이 앱을 다시 열고 로컬 문서를 읽거나 편집할 수 있습니다. 클라우드 동기화 폴더의 파일은 기기에 내려받아 두세요. 외부 AI 도구, GitHub 링크와 원격 이미지는 각 서비스의 연결이 필요합니다.
+
+- **업데이트 확인:** 새 앱 파일을 확인하고 준비합니다.
+- **업데이트 적용:** 작성 중인 입력과 저장 작업이 없는지 확인한 뒤 새 버전으로 전환합니다. 다른 앱 창의 미완료 작업도 먼저 저장하거나 취소하세요.
+- **앱 복구:** 앱이 제대로 열리지 않을 때 앱 파일을 다시 준비합니다. 폴더 연결, 사용자 설정과 문서 복구 기록은 보존합니다. 인터넷에 연결하고 다른 앱 창을 닫은 뒤 진행하세요. 앱을 열 수 없다면 같은 사이트의 `/repair.html`에 직접 접속할 수 있습니다.
+
+## 로컬에서 실행하기
+
+개발 환경은 Node.js 24와 pnpm 11.3.0을 권장합니다. 저장소에서 다음 명령을 실행합니다.
 
 ```bash
-pnpm install:skill
+pnpm install --frozen-lockfile
+pnpm dev:browser
 ```
 
-By default the installer writes to `~/.codex/skills/implementation-ledger`. Set
-`CODEX_HOME` if your Codex home directory is elsewhere:
+기본 주소는 [http://127.0.0.1:5187](http://127.0.0.1:5187)입니다. 포트가 사용 중이면 터미널에 표시된 주소를 확인하세요.
+
+설치·오프라인·업데이트 동작을 확인하려면 빌드 결과를 실행합니다.
 
 ```bash
-CODEX_HOME=/path/to/.codex pnpm install:skill
+pnpm build:browser
+pnpm preview:browser
 ```
 
-After installation, restart Codex. Then prompts can reference `$implementation-ledger`
-to create or update plan, ticket, and inventory documents.
+기본 주소는 [http://127.0.0.1:4187](http://127.0.0.1:4187)입니다. 개발 실행은 서비스 워커를 등록하지 않습니다. 두 주소는 포트가 다르므로 폴더 연결과 설정을 각각 보관합니다.
 
-The installer does not delete an existing `~/.codex/skills/plan-ticketing`
-directory because it may contain user changes. Remove that legacy skill manually
-when both skills should not be discoverable.
+### 정적 호스팅
 
-The installed skill also includes the deterministic ticket Markdown helper, so
-it can be used outside Alpha Kanban WebUI:
+Cloudflare Pages에서 다음 설정을 사용합니다.
+
+| 항목 | 값 |
+| --- | --- |
+| 빌드 명령 | `pnpm build:browser` |
+| 출력 디렉터리 | `apps/web/dist-browser` |
+
+HTTPS로 제공하고 `/`, `/intro`, `/all`, `/w/:id`에 SPA 라우팅을 적용합니다. Cloudflare Pages에서는 출력 루트에 `404.html`을 추가하지 않으면 [기본 SPA 처리](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering)를 사용할 수 있습니다. 생성된 서비스 워커, 복구 파일과 `_headers`도 함께 배포하세요.
+
+설치와 폴더 연결을 계속 사용할 고정 주소를 정해 운영하세요. 서비스 워커 업데이트·복구·폐기 절차는 [PWA 운영 가이드](docs/pwa_operations.md)에 정리되어 있습니다.
+
+### 검증
 
 ```bash
-node ~/.codex/skills/implementation-ledger/scripts/ticket-md.mjs show examples/sample_tickets.md SMP-01
-node ~/.codex/skills/implementation-ledger/scripts/check-ledger.mjs examples/sample_tickets.md
+pnpm --filter @alpha-kanban/web typecheck
+pnpm --filter @alpha-kanban/shared test
+pnpm --filter @alpha-kanban/web test
+pnpm build:browser
 ```
 
-Inside this repository the shorter wrapper is available:
+Chrome을 사용하는 브라우저 검사도 제공합니다.
 
 ```bash
-pnpm ticket-md show docs/11_alpha_kanban_autonomous_runs_tickets.md NVD-03
+# 5187에서 개발 앱을 실행한 상태
+pnpm test:tours
+
+# 별도 Chrome 프로필에서 설치·오프라인·업데이트·복구 검사
+pnpm test:pwa
 ```
 
-## Ticket Editing
-
-Ticket writes are intentionally narrow:
-
-- Status/progress changes share one form in ticket detail and the drag confirmation dialog. An empty reason uses the displayed user-action default; custom text is labeled `사용자 사유:`. One guarded file update changes the ticket body, completion timestamp, top-level `현재 진행률`, and appends the record to `사용자 지시`.
-- Dragging to another column opens a dialog; canceling does not move or save the card. The card moves only after a successful save. Same-column drops on a workspace board do not reorder tickets; the all-projects board supports a separate saved order. Stale documents or save failures do not cause an optimistic move.
-- `DONE` tickets get `Completed at: YYYY-MM-DDTHH:mm:ss+HH:MM` using the server's local offset immediately after `Progress`; reopening removes that field. Old checked items and progress notes are preserved for reassessment, not silently reset. A user's DONE action is not a claim that an agent ran verification.
-- Legacy `Progress Board` sections may remain in older docs, but new docs do not require them and the UI/API do not use them as the source of truth.
-- `문서에 추가` appends free text prefixed by `[수동지시]` to `사용자 지시`. There is no record-type selector. It does not change status or start a chat/run.
-- Codex records its own outcomes in `진행 메모` during separately authorized work.
-- Writes include the current file hash and mtime from the UI; if the Markdown changed on disk, the API returns `STALE_FILE` and the UI asks for reload.
-- The server emits workspace-scoped Markdown change events for selected workspace doc roots. The UI refetches the current document or, when a ticket drawer is open, shows `File changed externally` with a `Reload` action before saving.
-
-New records retain the ledger's single-line dated format. Input line breaks are
-collapsed to spaces so they cannot create new ticket headings or fields:
-
-```md
-- 2026-10-13: DONE -> TODO 사용자가 명시적으로 할 일로 변경했습니다.
-- 2026-10-13: DONE -> TODO 사용자 사유: 저장 후 값이 초기화되는 버그 발견.
-- 2026-10-13: [수동지시] 자동 저장은 이번 범위에서 제외한다.
-```
-
-## All-Projects Board
-
-- `/all` groups tickets by the first directory beneath a registered `workspaceRoots` entry. Overlapping roots use the most specific enclosing root, not a common prefix guessed from discovered projects. A workspace equal to a registered root represents that root itself.
-- Project identity comes from its canonical absolute path. Identical folder names in different roots remain separate; their tabs show the full path to disambiguate. For example, registering `~/workspace` groups `sparkone/apps/crew-admin` under `sparkone`; additionally registering `~/workspace/sparkone/apps` groups it under `crew-admin` instead.
-- Existing discovery still lists project candidates and explicitly opened recent workspaces; registering a root does not recursively open every nested directory. Nested workspaces that expose the same document are deduplicated, preferring the most specific workspace for API routing.
-- Search, project filters, and Hide DONE are remembered locally. The header counts visible cards; project tabs count all loaded tickets in that project.
-- Reads are concurrency-limited. An inaccessible project or document produces a warning while the remaining tickets stay visible. The board polls every 15 seconds; an open editor preserves its draft and requires reload if its file changed.
-- Workspace and all-projects views share the reason dialog, editable ticket detail, manual direction input, and detail preferences. Ticket views offer side peek, center peek, and full view. Drag the side edge or center edges/corner to resize; double-click an edge to reset. Each peek remembers its size, and switching views preserves unsaved input. Saving edits Markdown only and does not start Codex.
-- Same-column card ordering can be changed by drag/drop or the up/down buttons. Order saves are serialized within the view, roll back on failure, and preserve entries for temporarily unavailable projects. A cross-column move saves the status and reason first; an order-save failure is reported separately and does not undo an already saved Markdown change.
-- State-file mutations and guarded Markdown writes are serialized per path across service instances in one API process. This does not coordinate separate API processes or external editors. File revisions still protect against stale UI saves; the global board order is last-save-wins across browser tabs.
-
-## Retained Runner
-
-The runner and chat APIs remain for compatibility and a later product decision.
-They are not exposed by the current UI. Hiding the UI is not an API security
-boundary and does not cancel an already running process.
-
-Runner behavior:
-
-- New document run: `codex exec --json <prompt>`
-- Existing document session: `codex exec resume --json <sessionId> <prompt>`
-- Non-git target workspaces add `--skip-git-repo-check` so Codex can run from selected project roots that are not repositories.
-- Process launch uses `spawn(command, args)` with `shell: false`.
-- The process stdin is closed with `stdio: ["ignore", "pipe", "pipe"]`; prompt input is passed through argv, not stdin.
-- The run draft and assistant answer are stored in ticket/workspace chat logs; durable Markdown logs are appended only where the run policy allows.
-- Session ids are stored by `workspaceId::documentPath` in `.alpha-kanban/state.json`.
-- `.alpha-kanban/` is gitignored and should not be committed.
-- JSONL logs are stored under `.alpha-kanban/runs/`.
-
-The prompt gives Codex the selected target workspace root, ticket file path, selected ticket id, plan path when known, normalized scope block, run instruction summary, raw run draft, and instructions to use `rg`/`sed` for fresh context instead of embedding the whole Markdown document.
-
-## Sample Fixture
-
-`examples/sample_tickets.md` is a small fixture for UI and API smoke tests. It may be listed when `examples` is included in `defaultDocRoots`, but it is not treated as an operating project on its own.
-
-## Verify
-
-```bash
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-Manual smoke checklist:
-
-- Open `http://127.0.0.1:5173/`.
-- Select or open an allowed target project from the project switcher.
-- Confirm document sets list plan/tickets/inventory/markdown documents and that tickets open as a board while plan/inventory files open as readers.
-- Open a ticket card in both boards and confirm side/center/full view, independent size preferences, resize handles, and unsaved-input preservation work.
-- Confirm there is no Workspace Chat launcher, ticket chat composer, or model/run control.
-- Change status/progress on a disposable ticket, enter a reason, save, and confirm the ticket body, top-level progress, and `사용자 지시` update together.
-- Reopen a DONE fixture ticket and confirm `Completed at` disappears, a user-authored transition is appended, and old checklists/notes remain.
-- Drag a fixture card to another status and confirm the dialog uses the same default reason. Cancel once, then confirm a move; the card must not move until saving succeeds.
-- Append a manual direction and confirm one dated `[수동지시]` line appears in the selected ticket's `사용자 지시` without a chat message or Codex run.
-- Edit the selected Markdown file externally, then confirm the board refetches or the open ticket drawer shows `File changed externally` with a working `Reload` action.
-- Refresh the browser or open a direct route and confirm selected workspace, selected document, and ticket detail hash state are restored.
-
-## Local-Only Security Checklist
-
-- Keep server and Vite host bound to `127.0.0.1`.
-- Keep `workspaceRoots` and `defaultDocRoots` as narrow as possible.
-- Do not commit `.alpha-kanban/`.
-- Do not pass user input through shell-interpolated command strings.
-- Treat Markdown content as local project data; avoid adding secrets to ticket logs.
-
-## License
-
-TBD. No open-source license has been selected yet.
+[English README](README.en.md)

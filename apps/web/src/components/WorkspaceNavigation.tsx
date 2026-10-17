@@ -12,6 +12,7 @@ export function WorkspaceSwitcherTrigger({ workspace, isLoading, onClick }: {
 }) {
   const { t } = useTranslation();
   return <button
+    data-tour="project-switcher"
     className="ak-row ak-focus-ring flex h-10 w-full min-w-0 items-center gap-3 px-3 text-left transition-colors hover:bg-[var(--ak-surface-hover)]"
     aria-label={t("Switch project")}
     aria-haspopup="dialog"
@@ -79,7 +80,7 @@ export function StartPageHeader({ autoOpen, onAutoOpen, children }: {
       </div>
       <div className="ak-start-commands">{children}</div>
     </div>
-      <label className="ak-start-auto flex flex-wrap items-center gap-2 text-sm text-[var(--ak-ink-secondary)]">
+      <label data-tour="auto-open" className="ak-start-auto flex flex-wrap items-center gap-2 text-sm text-[var(--ak-ink-secondary)]">
         <Checkbox checked={autoOpen} onCheckedChange={(checked) => onAutoOpen(checked === true)} />
         <span>{t("Open last project automatically")}</span>
         <span className="text-xs text-[var(--ak-ink-muted)]">{t("Applies on next root URL load.")}</span>

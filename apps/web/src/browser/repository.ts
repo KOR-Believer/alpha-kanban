@@ -5,6 +5,7 @@ import type {
 import { buildDocumentSets, inferMarkdownFileType, inferSequenceNumber, inferSlug, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
 import { appendUserInstruction, parseTicketDocument, updateTicketStatusAndProgress } from "@alpha-kanban/shared/ticketMarkdown";
 import { IndexedDbStorage, type BrowserStorage } from "./storage";
+import { appActivity } from "../pwa/activity";
 
 export class BrowserFileError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = "BrowserFileError"; }
@@ -34,7 +35,7 @@ export function browserSupported(): boolean {
 
 const browserLock: Lock = (name, action) => {
   if (!navigator.locks) throw new BrowserFileError("UNSUPPORTED", "Browser file locking is unavailable.");
-  return navigator.locks.request("alpha-kanban:" + name, action);
+  return appActivity.run(() => navigator.locks.request("alpha-kanban:" + name, action), name.startsWith("document:"));
 };
 const newId = (prefix: string) => prefix + crypto.randomUUID();
 const isErrorNamed = (error: unknown, name: string) => error instanceof Error && error.name === name;
@@ -224,17 +225,19 @@ export class BrowserRepository {
   }
 
   async createProject(connection: Connection, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === "." || trimmed === ".." || /[\\/\u0000-\u001f]/.test(trimmed)) throw new BrowserFileError("INVALID_NAME", "Enter a valid project name.");
-    if (connection.kind !== "root") throw new BrowserFileError("INVALID_ROOT", "Select a connected root.");
-    try { await connection.handle.getDirectoryHandle(trimmed); throw new BrowserFileError("ALREADY_EXISTS", "This folder already exists."); }
-    catch (error) { if (!isErrorNamed(error, "NotFoundError")) throw error; }
-    if (await connection.handle.queryPermission({ mode: "readwrite" }) !== "granted") throw new BrowserFileError("PERMISSION_REQUIRED", "Grant write access to this folder first.");
-    await connection.handle.getDirectoryHandle(trimmed, { create: true });
-    this.invalidateListings();
-    const workspaces = await this.workspaces();
-    this.changed();
-    return workspaces.workspaces.find((workspace) => workspace.label === trimmed && workspace.project?.workspaceRoot === connection.name);
+    return appActivity.run(async () => {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === "." || trimmed === ".." || /[\\/\u0000-\u001f]/.test(trimmed)) throw new BrowserFileError("INVALID_NAME", "Enter a valid project name.");
+      if (connection.kind !== "root") throw new BrowserFileError("INVALID_ROOT", "Select a connected root.");
+      try { await connection.handle.getDirectoryHandle(trimmed); throw new BrowserFileError("ALREADY_EXISTS", "This folder already exists."); }
+      catch (error) { if (!isErrorNamed(error, "NotFoundError")) throw error; }
+      if (await connection.handle.queryPermission({ mode: "readwrite" }) !== "granted") throw new BrowserFileError("PERMISSION_REQUIRED", "Grant write access to this folder first.");
+      await connection.handle.getDirectoryHandle(trimmed, { create: true });
+      this.invalidateListings();
+      const workspaces = await this.workspaces();
+      this.changed();
+      return workspaces.workspaces.find((workspace) => workspace.label === trimmed && workspace.project?.workspaceRoot === connection.name);
+    });
   }
 
   async files(workspaceId: string, force = false): Promise<MarkdownFileSummary[]> {

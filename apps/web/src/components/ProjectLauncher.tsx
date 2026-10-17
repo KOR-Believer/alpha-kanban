@@ -4,18 +4,21 @@ import type { WorkspaceSummary } from "@alpha-kanban/shared";
 import { BookOpen, FolderKanban, LayoutGrid, Search } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { LanguageSelector } from "./LanguageSelector";
+import { PwaMenu } from "../pwa/PwaMenu";
 import { WorkspaceButton } from "./WorkspaceNavigation";
 import { Button, buttonVariants } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
-export function StartPageNavigation() {
+export function StartPageNavigation({ help }: { help?: ReactNode }) {
   const { t } = useTranslation();
   return <div className="ak-start-navigation">
     <Link to="/" className="ak-public-brand ak-focus-ring"><FolderKanban aria-hidden="true" />{t("Alpha Kanban")}</Link>
     <nav aria-label={t("Start navigation")}>
       <LanguageSelector />
+      <PwaMenu />
+      {help}
       <Link to="/intro" className={buttonVariants({ size: "sm", variant: "ghost" })}><BookOpen aria-hidden="true" />{t("About Alpha Kanban")}</Link>
       <Link to="/all" className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" />{t("All tickets")}</Link>
     </nav>
@@ -79,7 +82,7 @@ function ProjectListPanel({ id, kind, workspaces, onSelect, reconnect, selecting
   if (sort === "name") visible.sort((left, right) => left.label.localeCompare(right.label, i18n.language));
   return <section id={id} className="ak-project-list-panel" data-mobile-active={mobileActive} aria-label={t(title)}>
     <div className="ak-start-section-heading"><h2 id={heading}>{t(title)} <Badge variant="muted">{visible.length}</Badge></h2><span>{t(kind === "recent" ? "Last opened" : "Connected projects")}</span></div>
-    <div className="ak-project-list-tools">
+    <div data-tour="project-list-tools" className="ak-project-list-tools">
       <div className="ak-project-search"><Search aria-hidden="true" /><Input className="pl-8" type="search" aria-label={t("Search {{list}}", { list: t(title) })} placeholder={t("Search name or path")} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
       <Select value={sort} onValueChange={setSort}><SelectTrigger size="field" aria-label={t("Sort {{list}}", { list: t(title) })}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">{t("Default order")}</SelectItem><SelectItem value="name">{t("Name order")}</SelectItem></SelectContent></Select>
     </div>

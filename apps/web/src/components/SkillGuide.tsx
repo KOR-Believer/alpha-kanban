@@ -69,7 +69,7 @@ export function SkillInstallDialog() {
 
 export function SkillInstallPanel() {
   const { t } = useTranslation();
-  return <div className="ak-skill-install">
+  return <div data-tour="skill-install" className="ak-skill-install">
     <div><h3>{"implementation-ledger"}</h3><p>{t("Give your AI a shared structure for writing plans and tickets.")}</p></div>
     <div className="flex flex-wrap items-center gap-2">
       <SkillInstallDialog />
@@ -81,7 +81,7 @@ export function SkillInstallPanel() {
 export function SkillGuide() {
   const { t } = useTranslation();
   return <section className="ak-start-guide" aria-label={t("Work with your AI coding tool")}>
-    <div className="ak-start-section-heading"><div><h2>{t("Keep work moving with AI and documents")}</h2><p>{t("Work in your AI chat. See the plan and progress here.")}</p></div><Link to="/intro" className={buttonVariants({ variant: "ghost", size: "sm" })}><BookOpen aria-hidden="true" />{t("How it works")}</Link></div>
+    <div data-tour="ai-workflow" className="ak-start-section-heading"><div><h2>{t("Keep work moving with AI and documents")}</h2><p>{t("Work in your AI chat. See the plan and progress here.")}</p></div><Link to="/intro" className={buttonVariants({ variant: "ghost", size: "sm" })}><BookOpen aria-hidden="true" />{t("How it works")}</Link></div>
     <DocumentWorkflow />
     <SkillInstallPanel />
   </section>;

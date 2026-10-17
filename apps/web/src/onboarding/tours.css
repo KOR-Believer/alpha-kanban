@@ -1,0 +1,71 @@
+.ak-tour-invitation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ak-space-xxs);
+}
+
+.driver-popover.ak-screen-tour {
+  box-sizing: border-box;
+  width: 340px;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  padding: var(--ak-space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--ak-radius-sm);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--ak-shadow-soft);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+.ak-screen-tour .driver-popover-title {
+  margin-bottom: var(--ak-space-xs);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.ak-screen-tour .driver-popover-description {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.ak-screen-tour .driver-popover-footer {
+  align-items: center;
+  gap: var(--ak-space-xxs);
+  margin-top: var(--ak-space-md);
+}
+
+.ak-screen-tour .driver-popover-progress-text {
+  margin-right: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ak-screen-tour .driver-popover-navigation-btns {
+  display: flex;
+  gap: var(--ak-space-xxs);
+}
+
+.ak-screen-tour .driver-popover-close-btn {
+  position: static;
+  width: auto;
+}
+
+.ak-screen-tour button { box-sizing: border-box; font-family: inherit; text-shadow: none; }
+.ak-screen-tour .driver-popover-navigation-btns button + button { margin-left: 0; }
+.ak-screen-tour .driver-popover-arrow { display: none; }
+
+/* Fixed tour elements must use viewport coordinates even inside a center peek. */
+.ak-ticket-detail-shell[data-mode="modal"][data-tour-active] {
+  left: max(0px, calc((100dvw - var(--ticket-detail-width)) / 2));
+  top: max(0px, calc((100dvh - var(--ticket-detail-height)) / 2));
+  transform: none;
+}
+
+[data-tour="ticket-order"].driver-active-element { opacity: 1; }

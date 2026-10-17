@@ -4,6 +4,8 @@ import { BrowserFilesMenu } from "./browser/BrowserConnections";
 import { documentIdentity, documentRouteId } from "./appRoute";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { PwaMenu } from "./pwa/PwaMenu";
+import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { buildAppRoute, type TicketDetailMode } from "./appRoute";
 import {
   boardOrderSchema, filesResponseSchema,
@@ -82,6 +84,10 @@ export function AllProjectsBoard() {
   }, [tickets]);
   const visible = filterBoardTickets(tickets, filters);
   const statuses = BOARD_STATUSES.filter((status) => !(filters.hideDone && status === "DONE"));
+  const tour = useScreenTour("all", {
+    enabled: IS_BROWSER_LOCAL && ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
+    eligible: visible.length > 0,
+  });
   const detailTicket = detail?.document.response.document.tickets.find((ticket) => ticket.id === detail.ticketId);
   const currentDetail = detail ? currentDocument(detail.document) : undefined;
   const currentMove = pendingMove ? currentDocument(pendingMove.document) : undefined;
@@ -201,9 +207,11 @@ export function AllProjectsBoard() {
       <header className="ak-all-board-toolbar">
         <Button onClick={() => navigate({ to: "/" })} size="sm" variant="ghost"><ArrowLeft aria-hidden="true" />{t("Workspaces")}</Button>
         <h1 className="ak-title text-sm">{t("All tickets")}</h1>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{t("{{count}} tickets", { count: visible.length })}</span>
           <LanguageSelector />
+          <PwaMenu />
+          {IS_BROWSER_LOCAL ? <TourHelp tour={tour} /> : null}
           {IS_BROWSER_LOCAL ? <BrowserFilesMenu /> : null}
           {isWriting ? <Loader2 aria-label={t("Saving")} className="size-4 animate-spin" /> : null}
           {ticketsQuery.isFetching ? <span role="status" className="text-xs tabular-nums text-muted-foreground">
@@ -217,7 +225,7 @@ export function AllProjectsBoard() {
         </div>
       </header>
       <div className="ak-all-board-toolbar min-w-0">
-        <div className="ak-scroll-area flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="group" aria-label={t("Project filters")}>
+        <div data-tour="project-filters" className="ak-scroll-area flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="group" aria-label={t("Project filters")}>
           <Button aria-pressed={!filters.projectIds.length} onClick={() => setFilters({ ...filters, projectIds: [] })} size="xs" variant={!filters.projectIds.length ? "secondary" : "ghost"}>{t("All projects")}</Button>
           {groups.map(([id, group]) => (
             <Button key={id} title={group.root} aria-pressed={filters.projectIds.includes(id)}
@@ -231,9 +239,9 @@ export function AllProjectsBoard() {
         </div>
         <div className="relative w-52 shrink-0">
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input aria-label={t("Search tickets")} className="pl-9" placeholder={t("Search tickets")} value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
+          <Input data-tour="ticket-search" aria-label={t("Search tickets")} className="pl-9" placeholder={t("Search tickets")} value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
         </div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <label data-tour="hide-done" className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Checkbox checked={filters.hideDone} onCheckedChange={(checked) => setFilters({ ...filters, hideDone: checked === true })} />{t("Hide DONE")}
         </label>
       </div>
@@ -272,7 +280,7 @@ export function AllProjectsBoard() {
                     handleDrop(event.dataTransfer.getData("text/ticket-key"), status, dropTarget);
                     endDrag();
                   }}>
-                  <header className="ak-kanban-header flex items-center justify-between gap-2 border-b border-border bg-background px-3 py-2">
+                  <header data-tour="board-status" className="ak-kanban-header flex items-center justify-between gap-2 border-b border-border bg-background px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2"><StatusDot status={status} /><h2 className="ak-muted-label truncate">{t(status)}</h2></div>
                     <Badge variant="muted">{columnTickets.length}</Badge>
                   </header>
@@ -333,7 +341,7 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
     workspaceId: ticket.workspaceId, filePath: documentRouteId(ticket.file), ticketId: ticket.id, detailMode,
   });
   return (
-    <article className="ak-card group relative p-3" data-ticket-key={ticket.key} draggable={!disabled}
+    <article data-tour="board-card" className="ak-card group relative p-3" data-ticket-key={ticket.key} draggable={!disabled}
       onDragStart={(event) => { event.dataTransfer.setData("text/ticket-key", ticket.key); event.dataTransfer.effectAllowed = "move"; onDragStart(); }}
       onDragEnd={onDragEnd} onDragOver={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -341,7 +349,7 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
       }}>
       {dropPosition ? <span aria-hidden="true" className={cn("pointer-events-none absolute inset-x-1 h-0.5 bg-primary", dropPosition === "before" ? "-top-1" : "-bottom-1")} /> : null}
       <div className="flex items-start justify-between gap-2">
-        <a href={projectHref} draggable={false} className="ak-focus-ring group/project inline-flex min-w-0 rounded-full"
+        <a data-tour="ticket-project" href={projectHref} draggable={false} className="ak-focus-ring group/project inline-flex min-w-0 rounded-full"
           aria-label={t("Go to {{project}} project", { project: ticket.projectLabel })}
           title={t("Go to {{project}} project", { project: ticket.projectRoot })}
           onClick={(event) => {
@@ -363,7 +371,7 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
       <div className="mt-3 flex items-center gap-2">
         <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${ticket.progress}%` }} /></div>
         <span className="text-xs tabular-nums text-muted-foreground">{ticket.progress}%</span>
-        <div className="flex shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div data-tour="ticket-order" className="flex shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
           <Button title={t("Move up")} aria-label={t("Move {{id}} up", { id: ticket.id })} size="iconSm" variant="ghost" disabled={disabled || !canMoveUp} onClick={() => onReorder(-1)}><ArrowUp aria-hidden="true" /></Button>
           <Button title={t("Move down")} aria-label={t("Move {{id}} down", { id: ticket.id })} size="iconSm" variant="ghost" disabled={disabled || !canMoveDown} onClick={() => onReorder(1)}><ArrowDown aria-hidden="true" /></Button>
         </div>

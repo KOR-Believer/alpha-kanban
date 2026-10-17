@@ -12,6 +12,9 @@ import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { browserRepository, browserSupported, type Connection, type RecoveryRecord } from "./repository";
+import { appActivity } from "../pwa/activity";
+import { usePwaDraft } from "../pwa/usePwaDraft";
+import { TourHelp, useScreenTour } from "../onboarding/ScreenTour";
 
 const connectionKey = ["browser-connections"];
 const recoveryKey = ["browser-recoveries"];
@@ -32,7 +35,7 @@ function useBrowserActions() {
   };
   const run = async (action: () => Promise<unknown>) => {
     setError(""); setBusy(true);
-    try { await action(); await refresh(); }
+    try { await appActivity.run(async () => { await action(); await refresh(); }); }
     catch (error) { if (!(error instanceof Error && error.name === "AbortError")) setError(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
   };
@@ -63,19 +66,23 @@ export function BrowserStartPage({ autoOpen, onAutoOpen, onSelect, workspaces, e
   const supported = browserSupported();
   const connections = useQuery({ queryKey: connectionKey, queryFn: () => browserRepository.connections(), retry: false });
   const roots = connections.data?.filter((connection) => connection.kind === "root") ?? [];
+  const tour = useScreenTour("start", {
+    enabled: supported && !actions.busy,
+    eligible: connections.isSuccess && !isLoading && !error && !actions.error && connections.data.length === 0 && workspaces.length === 0,
+  });
   return <div className="ak-start-page">
-    <StartPageNavigation />
+    <StartPageNavigation help={<TourHelp tour={tour} />} />
     <div className="ak-start-content">
     <StartPageHeader autoOpen={autoOpen} onAutoOpen={onAutoOpen}>
-      <Button size="sm" disabled={!supported || actions.busy} onClick={() => void actions.pick("project", onSelect)}><FolderOpen />{t("Open project")}</Button>
-      <Button size="sm" disabled={!supported || actions.busy} variant="outline" onClick={() => void actions.pick("root")}><FolderPlus />{t("Register workspace")}</Button>
+      <Button data-tour="open-project" size="sm" disabled={!supported || actions.busy} onClick={() => void actions.pick("project", onSelect)}><FolderOpen />{t("Open project")}</Button>
+      <Button data-tour="register-workspace" size="sm" disabled={!supported || actions.busy} variant="outline" onClick={() => void actions.pick("root")}><FolderPlus />{t("Register workspace")}</Button>
       <BrowserNewProject />
     </StartPageHeader>
     {!supported ? <ErrorText message="Open this page in desktop Chrome over HTTPS or localhost." /> : null}
     <ErrorText message={actions.error || (error instanceof Error ? error.message : "")} />
     <ProjectLists workspaces={workspaces} onSelect={onSelect} isLoading={isLoading} reconnect={(workspace) => <BrowserReconnect workspaceId={workspace.id} />} />
     <section className="ak-start-workspaces" aria-label={t("Registered workspaces")}>
-      <div className="ak-start-section-heading">
+      <div data-tour="registered-workspaces" className="ak-start-section-heading">
         <h2><Folder className="size-4" aria-hidden="true" />{t("Registered workspaces")} <Badge variant="muted">{roots.length}</Badge></h2>
         <span className="ak-start-workspace-names">{roots.map((connection) => connection.name).join(" / ") || t("No registered workspaces")}</span>
         <BrowserFilesMenu triggerLabel="Manage" />
@@ -140,7 +147,7 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
   const recoveries = useQuery({ queryKey: recoveryKey, queryFn: () => browserRepository.recoveries(), retry: false });
   const [removing, setRemoving] = useState<Connection>();
   return <>
-    <Button variant="outline" size="sm" onClick={() => setOpen(true)}><Link2 />{t(triggerLabel)}{recoveries.data?.length ? <span role="status">({t("Recovery pending")}: {recoveries.data.length})</span> : null}</Button>
+    <Button data-tour="local-folders" variant="outline" size="sm" onClick={() => setOpen(true)}><Link2 />{t(triggerLabel)}{recoveries.data?.length ? <span role="status">({t("Recovery pending")}: {recoveries.data.length})</span> : null}</Button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent>
         <DialogHeader><DialogTitle>{t("Local folders")}</DialogTitle><DialogDescription>{t("Connections and board order are saved only in this browser and site address.")}</DialogDescription></DialogHeader>
@@ -223,9 +230,10 @@ function BrowserNewProject() {
   const [open, setOpen] = useState(false);
   const [root, setRoot] = useState("");
   const [name, setName] = useState("");
+  usePwaDraft(open && Boolean(name));
   const selected = roots.find((item) => item.id === root);
   return <>
-    <Button size="sm" variant="outline" disabled={!roots.length} onClick={() => setOpen(true)}><Plus />{t("New project")}</Button>
+    <Button data-tour="new-project" size="sm" variant="outline" disabled={!roots.length} onClick={() => setOpen(true)}><Plus />{t("New project")}</Button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent>
       <DialogHeader><DialogTitle>{t("New project")}</DialogTitle><DialogDescription>{t("Create a project folder. Git initialization is done in your terminal.")}</DialogDescription></DialogHeader>
       <DialogBody><div className="grid gap-3">

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, Check, Copy } from "lucide-react";
+import { BookOpen, Check, Copy, Route } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { SkillInstallPanel } from "./SkillGuide";
 import { Button, buttonVariants } from "./ui/button";
@@ -99,16 +99,19 @@ function ExampleRequest({ prompt, title }: { prompt: string; title: string }) {
   </div>;
 }
 
-export function ProjectGuide() {
+export function ProjectGuide({ onBoardTour }: { onBoardTour?: () => void } = {}) {
   const { t } = useTranslation();
   return <section className="ak-project-guide" aria-labelledby="project-guide-title">
-    <header className="ak-project-guide-heading">
+    <header data-tour="project-guide" className="ak-project-guide-heading">
       <div>
         <p className="ak-guide-eyebrow">{t("Example: a reading journal app")}</p>
         <h2 id="project-guide-title">{t("From a conversation to your first implementation")}</h2>
         <p>{t("Start with an idea in your AI chat. Make a draft together, review it yourself, and decide what to build before asking for code.")}</p>
       </div>
-      <Link to="/intro" className={buttonVariants({ variant: "ghost", size: "sm" })}><BookOpen aria-hidden="true" />{t("About Alpha Kanban")}</Link>
+      <div className="flex flex-wrap items-center gap-2">
+        {onBoardTour ? <Button data-tour-replay="" variant="outline" size="sm" onClick={onBoardTour}><Route aria-hidden="true" />{t("Replay board tour")}</Button> : null}
+        <Link to="/intro" className={buttonVariants({ variant: "ghost", size: "sm" })}><BookOpen aria-hidden="true" />{t("About Alpha Kanban")}</Link>
+      </div>
     </header>
     <SkillInstallPanel />
     <ol className="ak-guide-steps">

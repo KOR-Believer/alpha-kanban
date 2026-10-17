@@ -1,3 +1,9 @@
+import { appActivity } from "../pwa/activity";
+
+// Stable across web releases. Only an explicit, tested schema migration may bump this.
+export const BROWSER_DATABASE_NAME = "alpha-kanban.browser.v1";
+export const BROWSER_SCHEMA_VERSION = 1;
+
 export interface BrowserStorage {
   get<T>(key: string): Promise<T | undefined>;
   set<T>(key: string, value: T): Promise<void>;
@@ -8,16 +14,23 @@ export interface BrowserStorage {
 export class IndexedDbStorage implements BrowserStorage {
   private database?: Promise<IDBDatabase>;
 
-  constructor(private readonly name = "alpha-kanban.browser.v1") {}
+  constructor(private readonly name = BROWSER_DATABASE_NAME) {}
 
   private open(): Promise<IDBDatabase> {
     this.database ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.name, 1);
+      const request = indexedDB.open(this.name, BROWSER_SCHEMA_VERSION);
+      let blocked = false;
       request.onupgradeneeded = () => request.result.createObjectStore("records");
-      request.onerror = () => { this.database = undefined; reject(request.error); };
-      request.onblocked = () => { this.database = undefined; reject(new Error("Browser storage is blocked by another tab.")); };
+      request.onerror = () => {
+        this.database = undefined;
+        reject(request.error?.name === "VersionError"
+          ? Object.assign(new Error("Your saved app data needs a newer app version. Update the app before making changes."), { name: "VersionError" })
+          : request.error);
+      };
+      request.onblocked = () => { blocked = true; this.database = undefined; reject(new Error("Browser storage is blocked by another tab.")); };
       request.onsuccess = () => {
         const db = request.result;
+        if (blocked) { db.close(); return; }
         db.onversionchange = () => { db.close(); this.database = undefined; };
         resolve(db);
       };
@@ -44,10 +57,10 @@ export class IndexedDbStorage implements BrowserStorage {
     return this.transaction("readonly", (store) => store.get(key));
   }
   async set<T>(key: string, value: T): Promise<void> {
-    await this.transaction("readwrite", (store) => store.put(value, key));
+    await appActivity.run(() => this.transaction("readwrite", (store) => store.put(value, key)));
   }
   async delete(key: string): Promise<void> {
-    await this.transaction("readwrite", (store) => store.delete(key));
+    await appActivity.run(() => this.transaction("readwrite", (store) => store.delete(key)));
   }
   async entries<T>(prefix: string): Promise<Array<{ key: string; value: T }>> {
     const db = await this.open();

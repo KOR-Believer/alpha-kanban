@@ -1,8 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "driver.js/dist/driver.css" layer(base);
 @import "@fontsource-variable/raleway";
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 @import "./start-pages.css";
+@import "./onboarding/tours.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -792,6 +794,7 @@
 
   .ak-ticket-detail-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     flex-shrink: 0;
     min-height: 48px;
@@ -824,6 +827,12 @@
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
+  }
+
+  .ak-ticket-detail-toolbar > .ak-drawer-actions {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .ak-drawer-body {

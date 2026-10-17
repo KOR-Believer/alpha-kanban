@@ -12,7 +12,8 @@ import { AllProjectsBoard } from "../AllProjectsBoard";
 import { buildAppRoute, parseAppRouteState } from "../appRoute";
 import { browserRepository } from "./repository";
 import { BrowserMarkdownImage } from "./MarkdownResources";
-import { BrowserSkillGuide } from "./BrowserConnections";
+import { BrowserSkillGuide, BrowserStartPage } from "./BrowserConnections";
+import { tourStorageKey } from "../onboarding/tourState";
 import { ProjectGuide } from "../components/ProjectGuide";
 import { setLanguage } from "../i18n";
 import { projectFixture, documentFixture } from "../allProjectsFixtures";
@@ -43,6 +44,8 @@ describe("browser mode UI boundaries", () => {
     vi.clearAllMocks(); window.localStorage.clear();
     routing.location = { pathname: "/", searchStr: "", hash: "", href: "/" };
     await setLanguage("ko");
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue([new DOMRect(0, 0, 100, 28)] as unknown as DOMRectList);
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
     vi.spyOn(browserRepository, "workspaces").mockResolvedValue({ workspaces: [workspace] });
     vi.spyOn(browserRepository, "connections").mockResolvedValue([]);
     vi.spyOn(browserRepository, "recoveries").mockResolvedValue([]);
@@ -160,6 +163,112 @@ describe("browser mode UI boundaries", () => {
     expect(recent.map((item) => item.id)).toEqual(["bw_6", "bw_5", "bw_4", "bw_3", "bw_2"]);
     expect(other.map((item) => item.id)).toEqual(["bw_0", "bw_1", "bw_unopened"]);
     expect(partitionProjects([neverOpened]).recent).toEqual([]);
+  });
+
+  it.each(["empty", "direct", "root", "loading", "error", "permission"])("only offers the connection tour for a genuinely empty start (%s)", async (state) => {
+    vi.stubGlobal("isSecureContext", true);
+    vi.stubGlobal("showDirectoryPicker", vi.fn());
+    vi.stubGlobal("indexedDB", {});
+    vi.spyOn(navigator, "locks", "get").mockReturnValue({} as LockManager);
+    if (["root", "permission"].includes(state)) vi.mocked(browserRepository.connections).mockResolvedValue([{ id: "root", kind: "root", name: "workspace", handle: {} } as never]);
+    if (state === "error") vi.mocked(browserRepository.connections).mockRejectedValue(new Error("permission failure"));
+    await render(<BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()}
+      workspaces={state === "direct" ? [workspace] : []} error={null} isLoading={state === "loading"} />);
+    expect(Boolean(container.querySelector("[data-tour-offer]"))).toBe(state === "empty");
+    expect(document.querySelector(".driver-popover")).toBeNull();
+    expect(window.showDirectoryPicker).not.toHaveBeenCalled();
+  });
+
+  it("waits for connection discovery instead of showing a first-use offer prematurely", async () => {
+    vi.stubGlobal("isSecureContext", true); vi.stubGlobal("showDirectoryPicker", vi.fn()); vi.stubGlobal("indexedDB", {});
+    vi.spyOn(navigator, "locks", "get").mockReturnValue({} as LockManager);
+    let resolve!: (value: []) => void;
+    vi.mocked(browserRepository.connections).mockReturnValue(new Promise((done) => { resolve = done; }));
+    await render(<BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()} workspaces={[]} error={null} isLoading={false} />);
+    expect(container.querySelector("[data-tour-offer]")).toBeNull();
+    await act(async () => { resolve([]); await new Promise((done) => setTimeout(done, 20)); });
+    expect(container.querySelector("[data-tour-offer]")).not.toBeNull();
+  });
+
+  it("replays directly from the populated board and keeps all-project guidance independent", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    const patch = vi.spyOn(browserRepository, "patch");
+    const append = vi.spyOn(browserRepository, "append");
+    selectDocument(); await render(<App />);
+    const offer = await waitForElement("[data-tour-offer]");
+    await act(async () => offer.querySelector<HTMLButtonElement>("button:last-child")!.click());
+    expect(localStorage.getItem(tourStorageKey("project"))).toBe("dismissed");
+    const replay = await waitForElement<HTMLButtonElement>("[data-tour-replay]");
+    await act(async () => replay.click());
+    const tour = await waitForElement(".ak-screen-tour", document);
+    expect(tour.textContent).toContain("현재 프로젝트 전환하기");
+    await act(async () => tour.querySelector<HTMLButtonElement>(".driver-popover-close-btn")!.click());
+    await render(<AllProjectsBoard />);
+    expect(container.querySelector("[data-tour-offer]")).not.toBeNull();
+    expect(patch).not.toHaveBeenCalled(); expect(append).not.toHaveBeenCalled();
+  });
+
+  it("tours an open ticket without closing the detail or discarding an instruction draft", async () => {
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    const patch = vi.spyOn(browserRepository, "patch");
+    const append = vi.spyOn(browserRepository, "append");
+    selectDocument("TEST-01"); await render(<App />);
+    const draft = await waitForElement<HTMLTextAreaElement>('[role="dialog"] form textarea', document);
+    await typeInto(draft, "Keep this instruction");
+    const detail = document.querySelector<HTMLElement>(".ak-ticket-detail-shell")!;
+    await act(async () => detail.querySelector<HTMLButtonElement>("[data-tour-replay]")!.click());
+    const popover = await waitForElement(".ak-screen-tour", detail);
+    expect(popover.textContent).toContain("편한 크기로 상세 보기");
+    for (let index = 1; index < 6; index++) await act(async () => detail.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+    expect(detail.querySelector(".ak-screen-tour")?.textContent).toContain("작업 결과와 이력 읽기");
+    await act(async () => detail.querySelector<HTMLButtonElement>(".driver-popover-close-btn")!.click());
+    expect(detail.isConnected).toBe(true);
+    expect(draft.isConnected).toBe(true); expect(draft.value).toBe("Keep this instruction");
+    expect(patch).not.toHaveBeenCalled(); expect(append).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a board tour over a ticket draft or on a board without cards", async () => {
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    selectDocument("TEST-01"); await render(<App />);
+    const draft = await waitForElement<HTMLTextAreaElement>('[role="dialog"] form textarea', document);
+    await typeInto(draft, "Keep this instruction");
+    expect(container.querySelector("[data-tour-offer]")).toBeNull();
+    expect(draft.value).toBe("Keep this instruction");
+    await act(async () => root.render(null));
+    queryClient.clear();
+    vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: { ...response.document, tickets: [] } });
+    selectDocument(); await render(<App />);
+    expect(container.querySelector("[data-tour-offer]")).toBeNull();
+  });
+
+  it.each(["start", "all"])("opens the detailed AI guide from %s without navigation or document writes", async (surface) => {
+    const patch = vi.spyOn(browserRepository, "patch");
+    const append = vi.spyOn(browserRepository, "append");
+    await render(surface === "start"
+      ? <BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()} workspaces={[]} error={null} isLoading={false} />
+      : <AllProjectsBoard />);
+    const help = container.querySelector<HTMLButtonElement>("[data-tour-help]")!;
+    await act(async () => { help.focus(); help.click(); });
+    const read = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "AI와 문서로 작업하기")!;
+    await act(async () => read.click());
+    const guide = await waitForElement<HTMLElement>(".ak-usage-guide-dialog", document);
+    expect(guide.getAttribute("role")).toBe("dialog");
+    expect(guide.querySelectorAll(".ak-guide-step")).toHaveLength(7);
+    expect(guide.textContent).toContain("토론 모드로 진행하자");
+    expect(guide.textContent).toContain("선행 관계를 지키면서 티켓을 순서대로 구현");
+    expect(document.querySelector(".driver-overlay")).toBeNull();
+    await act(async () => { await setLanguage("en"); });
+    expect(guide.isConnected).toBe(true);
+    expect(guide.textContent).toContain("Read the draft yourself");
+    const close = [...guide.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Close")!;
+    await act(async () => { close.click(); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    expect(document.querySelector(".ak-usage-guide-dialog")).toBeNull();
+    expect(document.activeElement).toBe(help);
+    expect(localStorage.getItem(tourStorageKey("start"))).toBeNull();
+    expect(localStorage.getItem(tourStorageKey("board"))).toBeNull();
+    expect(routing.navigate).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled(); expect(append).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("preserves auto-open=%s on a fresh root-page load", async (autoOpen) => {
@@ -331,6 +440,7 @@ describe("browser mode UI boundaries", () => {
     vi.spyOn(browserRepository, "documentSets").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     await render(<App />);
     expect(browserRepository.file).toHaveBeenCalledWith(workspace.id, file.id);
+    await waitForElement(type === "tickets" ? ".ak-project-board" : ".ak-markdown");
     const content = () => type === "tickets" ? container.querySelector(".ak-project-board") : container.querySelector(".ak-markdown");
     expect(content()?.textContent).toContain(type === "tickets" ? "TEST-01" : "Original body");
     expect(container.querySelector('aside[aria-label]')?.textContent).toContain("문서 불러오는 중");

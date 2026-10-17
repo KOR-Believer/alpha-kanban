@@ -1,8 +1,28 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' blob: https:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' blob: https:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
 /downloads/INSTALL.txt
   Content-Type: text/plain; charset=utf-8
+/sw.js
+  Cache-Control: no-store
+  Content-Type: application/javascript; charset=utf-8
+/release.json
+  Cache-Control: no-store
+  Content-Type: application/json; charset=utf-8
+/offline-assets.json
+  Cache-Control: no-store
+  Content-Type: application/json; charset=utf-8
+/offline-ready.json
+  Cache-Control: no-store
+  Content-Type: application/json; charset=utf-8
+/manifest.webmanifest
+  Cache-Control: no-cache
+/repair.html
+  Cache-Control: no-store
+/repair.js
+  Cache-Control: no-store
+/repair.css
+  Cache-Control: no-store

@@ -6,10 +6,12 @@ import { BrowserStartPage, BrowserProjectSwitcher, BrowserFilesMenu, BrowserReco
 import { documentRouteId } from "./appRoute";
 import { t, locale, useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { PwaMenu } from "./pwa/PwaMenu";
 import { StartPageHeader, WorkspaceButton, WorkspaceStatusBadge, WorkspaceSwitcherTrigger } from "@/components/WorkspaceNavigation";
 import { ProjectLists, StartPageNavigation } from "@/components/ProjectLauncher";
 import { SkillGuide } from "@/components/SkillGuide";
 import { ProjectGuide } from "@/components/ProjectGuide";
+import { TourButton, useScreenTour } from "./onboarding/ScreenTour";
 import { errorSummary, errorDetails } from "@/i18n/errors";
 import {
   useCallback,
@@ -764,6 +766,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   );
   const [selectedFileId, setSelectedFileId] = useState<string | undefined>();
   const [isProjectGuideOpen, setIsProjectGuideOpen] = useState(initialRouteRef.current.showGuide === true);
+  const [pendingBoardTour, setPendingBoardTour] = useState<string>();
+  const lastBoardFile = useRef<MarkdownFileSummary | undefined>(undefined);
   const [preferredFilePath, setPreferredFilePath] = useState<string | undefined>(
     initialRouteRef.current.filePath,
   );
@@ -1326,6 +1330,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }
 
   async function handleWorkspaceSelect(workspaceId: string): Promise<void> {
+    setPendingBoardTour(undefined);
     const response = await selectWorkspaceById(workspaceId);
     setIsProjectGuideOpen(false);
     setSelectedFileId(undefined);
@@ -1383,6 +1388,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }
 
   function handleGoToStartPage(): void {
+    setPendingBoardTour(undefined);
     shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
     setIsProjectGuideOpen(false);
     setSelectedFileId(undefined);
@@ -1392,6 +1398,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }
 
   function handleShowProjectGuide(): void {
+    lastBoardFile.current = selectedFile?.type === "tickets" ? selectedFile : undefined;
+    setPendingBoardTour(undefined);
     setIsProjectGuideOpen(true);
     setSelectedFileId(undefined);
     setPreferredFilePath(undefined);
@@ -1400,6 +1408,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }
 
   function handleDocumentSelect(file: MarkdownFileSummary): void {
+    setPendingBoardTour(undefined);
     setIsProjectGuideOpen(false);
     setSelectedFileId(file.id);
     setPreferredFilePath(documentRouteId(file));
@@ -1445,6 +1454,18 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       }),
     );
   }
+
+  const boardTour = useScreenTour("project", {
+    enabled: IS_BROWSER_LOCAL && canLoadWorkspace && !selectedTicketId,
+    eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
+    scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}`,
+  });
+  const tourFile = allFiles.find((file) => file.id === lastBoardFile.current?.id && file.type === "tickets") ?? allFiles.find((file) => file.type === "tickets");
+  useEffect(() => {
+    if (!pendingBoardTour) return;
+    if (resolvedSelectedFileId !== pendingBoardTour || isProjectGuideVisible || selectedTicketId) { setPendingBoardTour(undefined); return; }
+    if (boardTour.enabled && ticketQuery.isSuccess) { boardTour.start(); setPendingBoardTour(undefined); }
+  }, [pendingBoardTour, resolvedSelectedFileId, isProjectGuideVisible, selectedTicketId, boardTour.enabled, boardTour.start, ticketQuery.isSuccess]);
 
   if (!selectedWorkspaceId) {
     return (
@@ -1492,9 +1513,11 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
             workspaces={workspacesQuery.data?.workspaces ?? []}
           />}
 
-          <div className="flex shrink-0 items-center justify-end gap-2">
+          <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+            {IS_BROWSER_LOCAL ? <TourButton tour={boardTour} /> : null}
             <LanguageSelector />
-            <Button onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
+            <PwaMenu />
+            <Button data-tour="all-tickets" onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
               <LayoutGrid aria-hidden="true" />
               {t("All tickets")}
             </Button>
@@ -1555,6 +1578,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
             {IS_BROWSER_LOCAL ? (
               <div className="shrink-0 border-t border-border p-3">
                 <Button
+                  data-tour-help=""
                   aria-current={isProjectGuideVisible ? "page" : undefined}
                   className="w-full justify-start"
                   onClick={handleShowProjectGuide}
@@ -1641,6 +1665,12 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 markdownIsLoading={markdownQuery.isLoading}
                 hasDocumentSets={sortedDocumentSets.length > 0}
                 showProjectGuide={isProjectGuideVisible}
+                onBoardTour={tourFile ? () => {
+                  handleDocumentSelect(tourFile);
+                  setTicketViewMode("board");
+                  setSelectedTicketId(undefined);
+                  setPendingBoardTour(tourFile.id);
+                } : undefined}
                 onFileSelect={handleDocumentSelect}
                 onTicketSelect={setSelectedTicketId}
                 onTicketStatusChange={handlePatchTicket}
@@ -1842,6 +1872,7 @@ function DocumentListHeader({
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input
+          data-tour="documents"
           role="searchbox"
           aria-label={t("Search documents")}
           placeholder={t("Search documents")}
@@ -1856,7 +1887,7 @@ function DocumentListHeader({
           </Button> : null}
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="iconSm" variant={activeFilters ? "primary" : "ghost"} disabled={disabled}
+              <Button data-tour="document-filters" size="iconSm" variant={activeFilters ? "primary" : "ghost"} disabled={disabled}
                 aria-label={t("Document filters")} title={t("Document filters ({{count}} active)", { count: activeFilters })}>
                 <Filter className="size-3.5" aria-hidden="true" />
               </Button>
@@ -1878,7 +1909,7 @@ function DocumentListHeader({
           </Popover>
         </div>
       </div>
-      <div className="flex min-w-0 items-center gap-2">
+      <div data-tour="document-sort" className="flex min-w-0 items-center gap-2">
         <Select
           disabled={disabled}
           onValueChange={(value) => {
@@ -2559,6 +2590,7 @@ function TicketDocumentViewToggle({
   return (
     <div
       aria-label={t("Ticket document view")}
+      data-tour="document-view"
       className="inline-flex items-center gap-0.5 rounded-[var(--ak-radius-lg)] border border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] p-0.5"
       role="group"
     >
@@ -2646,6 +2678,7 @@ function DocumentContent({
   documentSetsIsLoading,
   hasDocumentSets,
   showProjectGuide,
+  onBoardTour,
   markdownDocument,
   markdownError,
   markdownIsError,
@@ -2675,6 +2708,7 @@ function DocumentContent({
   documentSetsIsLoading: boolean;
   hasDocumentSets: boolean;
   showProjectGuide: boolean;
+  onBoardTour?: () => void;
   markdownDocument?: MarkdownDocumentResponse;
   markdownError: Error | null;
   markdownIsError: boolean;
@@ -2700,7 +2734,7 @@ function DocumentContent({
   workspacesIsLoading: boolean;
 }) {
   const { t } = useTranslation();
-  if (showProjectGuide) return <ProjectGuide />;
+  if (showProjectGuide) return <ProjectGuide onBoardTour={onBoardTour} />;
   if (workspacesIsLoading || (!selectedFile && (selectedFileIsLoading || (documentSetsIsLoading && !selectedFileError)))) {
     return <BoardState isLoading title={t("Loading documents")} />;
   }
@@ -3650,7 +3684,7 @@ function KanbanColumn({
       onDrop={onDrop}
       aria-label={t("{{status}} tickets", { status: t(status) })}
     >
-      <header className="ak-kanban-header flex items-center justify-between gap-2 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2">
+      <header data-tour="board-status" className="ak-kanban-header flex items-center justify-between gap-2 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <StatusDot status={status} />
           <h3 className="ak-muted-label truncate">{t(status)}</h3>
@@ -3697,6 +3731,7 @@ function TicketCard({
   const { t } = useTranslation();
   return (
     <article
+      data-tour="board-card"
       className="ak-card transition-colors hover:border-border hover:bg-muted"
       draggable={draggable}
       onDragStart={onDragStart}
@@ -4639,7 +4674,7 @@ export function TicketDetailDrawer({
             <p className="mb-3 text-sm text-[var(--ak-ink-muted)]" role="status">{t(savedMessage)}</p>
           ) : null}
 
-          <section className="grid gap-3 border-b border-[var(--ak-hairline)] pb-5">
+          <section data-tour="ticket-status" className="grid gap-3 border-b border-[var(--ak-hairline)] pb-5">
             <h3 className="ak-title text-sm">{t("Properties")}</h3>
             <TicketStatusFields
               currentStatus={ticket.status}
@@ -4672,11 +4707,12 @@ export function TicketDetailDrawer({
           <div className="grid gap-6 py-5">
             <CanonicalSection title={t("Repository")} items={ticket.repository} />
             <CanonicalSection title={t("Depends on")} items={ticket.dependsOn} />
-            <CanonicalSection title={t("목표")} items={ticket.goal} />
+            <CanonicalSection tourAnchor="ticket-scope" title={t("목표")} items={ticket.goal} />
             <CanonicalSection title={t("현재 문제")} items={ticket.currentProblem} />
             <CanonicalSection title={t("구현 범위")} items={ticket.implementationScope} />
             <CanonicalSection title={t("제외 범위")} items={ticket.outOfScope} />
             <CanonicalSection
+              tourAnchor="ticket-criteria"
               title={t("완료 기준")}
               items={ticket.completionCriteria}
               checklistItems={ticket.completionCriteriaItems}
@@ -4693,7 +4729,7 @@ export function TicketDetailDrawer({
                 <Badge variant="muted">{ticket.userInstructions.length}</Badge>
               </div>
               <LogTimeline emptyLabel={t("No user instructions")} entries={ticket.userInstructions} />
-              <form className="grid gap-3" onSubmit={(event) => void saveInstruction(event)}>
+              <form data-tour="ticket-instructions" className="grid gap-3" onSubmit={(event) => void saveInstruction(event)}>
                 <label className="grid gap-2 text-xs font-medium text-[var(--ak-ink-muted)]">
                   {t("수동 지시")}<Textarea
                     disabled={isSaving || isAppendingInstruction}
@@ -4715,7 +4751,7 @@ export function TicketDetailDrawer({
             </section>
 
             <section className="grid gap-3 border-t border-[var(--ak-hairline)] pt-5">
-              <div className="flex items-center justify-between gap-3">
+              <div data-tour="ticket-notes" className="flex items-center justify-between gap-3">
                 <h3 className="ak-title text-sm">{t("진행 메모")}</h3>
                 <Badge variant="muted">{ticket.progressNotes.length}</Badge>
               </div>
@@ -5766,15 +5802,17 @@ function CanonicalSection({
   checklistItems,
   items,
   title,
+  tourAnchor,
 }: {
   checklistItems?: TicketChecklistItem[];
   items: string[];
   title: string;
+  tourAnchor?: string;
 }) {
   if (checklistItems && checklistItems.length > 0) {
     return (
       <section className="grid gap-2">
-        <h3 className="ak-title text-sm">{title}</h3>
+        <h3 data-tour={tourAnchor} className="ak-title text-sm">{title}</h3>
         <ul className="grid gap-2 text-sm leading-6 text-[var(--ak-ink-secondary)]">
           {checklistItems.map((item) => (
             <li className="grid grid-cols-[18px_minmax(0,1fr)] gap-2" key={item.index}>
@@ -5808,7 +5846,7 @@ function CanonicalSection({
 
   return (
     <section className="grid gap-2">
-      <h3 className="ak-title text-sm">{title}</h3>
+      <h3 data-tour={tourAnchor} className="ak-title text-sm">{title}</h3>
       {items.length > 0 ? (
         <ul className="grid gap-1 text-sm leading-6 text-[var(--ak-ink-secondary)]">
           {items.map((item, index) => (
