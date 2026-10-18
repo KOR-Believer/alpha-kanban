@@ -5,6 +5,18 @@ export type TourResult = "dismissed" | "completed";
 export const tourStorageKey = (id: TourId) => `alpha-kanban.tours.v1.${id}`;
 const changedEvent = "alpha-kanban-tour-changed";
 const sessionResults = new Map<TourId, TourResult>();
+const sessionOffers = new Set<TourId>();
+
+// Seeing an invitation is separate from completing or dismissing its tour.
+export function claimTourOffer(id: TourId): boolean {
+  if (readTourResult(id) || sessionOffers.has(id)) return false;
+  const key = `${tourStorageKey(id)}.offered`;
+  try {
+    if (localStorage.getItem(key) === "true") return false;
+    localStorage.setItem(key, "true");
+  } catch { sessionOffers.add(id); }
+  return true;
+}
 
 export function readTourResult(id: TourId): TourResult | null {
   let value: string | null;

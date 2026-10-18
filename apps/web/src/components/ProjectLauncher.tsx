@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import type { WorkspaceSummary } from "@alpha-kanban/shared";
-import { BookOpen, FolderKanban, LayoutGrid, Search } from "lucide-react";
+import { FolderKanban, LayoutGrid, Search } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { LanguageSelector } from "./LanguageSelector";
 import { PwaMenu } from "../pwa/PwaMenu";
@@ -19,7 +19,6 @@ export function StartPageNavigation({ help }: { help?: ReactNode }) {
       <LanguageSelector />
       <PwaMenu />
       {help}
-      <Link to="/intro" className={buttonVariants({ size: "sm", variant: "ghost" })}><BookOpen aria-hidden="true" />{t("About Alpha Kanban")}</Link>
       <Link to="/all" className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" />{t("All tickets")}</Link>
     </nav>
   </div>;

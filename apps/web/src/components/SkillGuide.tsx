@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, BookOpen, Copy, Download } from "lucide-react";
 import { useTranslation } from "../i18n";
-import { IS_BROWSER_LOCAL } from "../storageMode";
 import { Button, buttonVariants } from "./ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Textarea } from "./ui/textarea";
@@ -58,7 +57,7 @@ export function SkillInstallDialog() {
               <li>{t("Reopen Codex and invoke {{skill}} to discuss what you want to build and draft a plan.", { skill: "$implementation-ledger" })}</li>
               <li>{t("Before requesting implementation, discuss open questions that affect the work and create or update the tickets. Connect the project folder to review progress.")}</li>
             </ol>
-            {IS_BROWSER_LOCAL ? <a className={buttonVariants({ variant: "ghost", size: "sm", className: "mt-3" })} href="/downloads/implementation-ledger.zip" download><Download aria-hidden="true" />{t("Download Codex skill")}</a> : null}
+            <a className={buttonVariants({ variant: "ghost", size: "sm", className: "mt-3" })} href="/downloads/implementation-ledger.zip" download><Download aria-hidden="true" />{t("Download Codex skill")}</a>
           </details>
         </DialogBody>
         <DialogFooter className="flex-wrap"><p role="status" className="mr-auto text-xs text-muted-foreground">{t(copyStatus)}</p><Button variant="outline" onClick={() => setOpen(false)}>{t("Close")}</Button><Button onClick={() => void copy()}><Copy aria-hidden="true" />{t("Copy request")}</Button></DialogFooter>

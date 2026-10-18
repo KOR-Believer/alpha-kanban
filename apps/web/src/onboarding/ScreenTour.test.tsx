@@ -6,7 +6,7 @@ import { setLanguage, t } from "../i18n";
 import { TourButton, tourSteps, useScreenTour, type TourKind } from "./ScreenTour";
 import { availableTourSteps } from "./tourSteps";
 import { english, korean } from "../i18n/messages";
-import { readTourResult, saveTourResult, subscribeToTours, tourStorageKey } from "./tourState";
+import { claimTourOffer, readTourResult, saveTourResult, subscribeToTours, tourStorageKey } from "./tourState";
 
 function Harness({ enabled = true, eligible = true, scope = "test", kind = "start" }: {
   enabled?: boolean; eligible?: boolean; scope?: string; kind?: TourKind;
@@ -64,6 +64,33 @@ describe("screen tours", () => {
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", code: "Escape" })); });
     expect(document.querySelector(".driver-popover")).toBeNull();
     expect(readTourResult("start")).toBe("dismissed");
+  });
+
+  it("offers only on the first visit even when the user leaves without starting or skipping", async () => {
+    await render();
+    expect(container.querySelector("[data-tour-offer]")).not.toBeNull();
+    expect(readTourResult("start")).toBeNull();
+    await act(async () => root.render(null));
+    await render();
+    expect(container.querySelector("[data-tour-offer]")).toBeNull();
+    expect(readTourResult("start")).toBeNull();
+    await click("[data-tour-help]");
+    expect(document.querySelector(".driver-popover")).not.toBeNull();
+    await click(".driver-popover-close-btn");
+  });
+
+  it("does not consume a first visit while disabled or ineligible and does not repeat across project scopes", async () => {
+    await render({ enabled: false });
+    expect(localStorage.getItem(`${tourStorageKey("start")}.offered`)).toBeNull();
+    await render({ eligible: false });
+    expect(localStorage.getItem(`${tourStorageKey("start")}.offered`)).toBeNull();
+    await render({ kind: "project", scope: "first-project" });
+    expect(container.querySelector("[data-tour-offer]")).not.toBeNull();
+    await render({ kind: "project", scope: "second-project" });
+    expect(container.querySelector("[data-tour-offer]")).toBeNull();
+    await render({ kind: "project", scope: "first-project" });
+    expect(container.querySelector("[data-tour-offer]")).toBeNull();
+    expect(readTourResult("project")).toBeNull();
   });
 
   it("does not offer on an ineligible surface but permits explicit replay", async () => {
@@ -170,6 +197,24 @@ describe("tour preferences", () => {
     saveTourResult("start", "completed");
     expect(readTourResult("start")).toBe("completed");
     expect(localStorage.getItem("alpha-kanban.locale")).toBe("en");
+  });
+  it("records an invitation independently and honors old completed and dismissed tours", () => {
+    localStorage.setItem("alpha-kanban.locale", "en");
+    localStorage.setItem("alpha-kanban.autoOpenLastWorkspace", "true");
+    expect(claimTourOffer("start")).toBe(true);
+    expect(claimTourOffer("start")).toBe(false);
+    expect(readTourResult("start")).toBeNull();
+    saveTourResult("board", "dismissed");
+    expect(claimTourOffer("project")).toBe(false);
+    expect(claimTourOffer("all")).toBe(false);
+    expect(localStorage.getItem("alpha-kanban.locale")).toBe("en");
+    expect(localStorage.getItem("alpha-kanban.autoOpenLastWorkspace")).toBe("true");
+  });
+  it("remembers an invitation in this session when storage is unavailable", () => {
+    vi.spyOn(Object.getPrototypeOf(localStorage), "setItem").mockImplementation(() => { throw new Error("quota"); });
+    expect(claimTourOffer("detail")).toBe(true);
+    expect(claimTourOffer("detail")).toBe(false);
+    expect(readTourResult("detail")).toBeNull();
   });
   it("honors existing shared board results without deleting or rewriting preferences", () => {
     saveTourResult("board", "dismissed");

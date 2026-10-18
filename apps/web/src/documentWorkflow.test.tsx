@@ -76,22 +76,12 @@ describe("document-only ticket detail", () => {
       {open ? (
         <QueryClientProvider client={queryClient}>
           <TicketDetailDrawer
-            availableTickets={[ticket]}
-            documentHash="fixture-hash"
-            documentMtimeMs={1}
-            fileId="fixture-file"
-            workspaceId="fixture-workspace"
-            isLoadingCodexRunDefaults={false}
             presentation={presentation}
             onAppendInstruction={onAppendInstruction}
             onPatchTicket={onPatchTicket}
-            onCodexRunDefaultsChange={async () => {}}
             onClose={() => setOpen(false)}
             onExternalFileReload={async () => {}}
             onReload={async () => {}}
-            onRunDocumentChange={async () => {}}
-            onRunRead={async () => {}}
-            onRunStatusChange={async () => {}}
             ticket={ticket}
           />
         </QueryClientProvider>

@@ -46,7 +46,7 @@ describe("ticket drag confirmation", () => {
     const grouped = new Map<TicketStatus, TicketItem[]>();
     for (const item of data.document.tickets) grouped.set(item.status, [...(grouped.get(item.status) ?? []), item]);
     root.render(<TicketBoard document={data} ticketsByStatus={grouped} onTicketSelect={() => {}}
-      onSaveStatus={save} runSummaryByTicket={new Map()} />);
+      onSaveStatus={save} />);
   }
   function button(text: string) {
     const element = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.trim() === text);
@@ -143,7 +143,7 @@ describe("ticket drag confirmation", () => {
     await act(async () => render());
     await drag("TODO");
     await act(async () => { root.render(<TicketBoard key="different-file" document={fixture} ticketsByStatus={new Map()}
-      onSaveStatus={save} onTicketSelect={() => {}} runSummaryByTicket={new Map()} />); });
+      onSaveStatus={save} onTicketSelect={() => {}} />); });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(save).not.toHaveBeenCalled();
   });

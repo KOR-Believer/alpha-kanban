@@ -1,5 +1,4 @@
 import type { MarkdownFileChangeEvent, MarkdownFileSummary } from "@alpha-kanban/shared";
-import { IS_BROWSER_LOCAL } from "../storageMode";
 import { BrowserFileError, browserRepository } from "./repository";
 
 export function subscribeFileEvents(
@@ -8,14 +7,6 @@ export function subscribeFileEvents(
   onUnavailable: () => void,
   selectedFile?: MarkdownFileSummary,
 ): () => void {
-  if (!IS_BROWSER_LOCAL) {
-    const source = new EventSource(`/api/workspaces/${workspaceId}/files/events`);
-    source.addEventListener("markdown-file", (message) => {
-      try { onChange(JSON.parse((message as MessageEvent).data as string) as MarkdownFileChangeEvent); }
-      catch { /* Ignore malformed stream messages. */ }
-    });
-    return () => source.close();
-  }
   if (!selectedFile) return () => undefined;
   let active = true;
   let running = false;

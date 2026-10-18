@@ -7,9 +7,9 @@ describe("app route helpers", () => {
     expect(parseAppRouteState({ pathname: "/" })).toEqual({});
   });
 
-  it("does not change legacy server routes for the browser-only guide", () => {
-    expect(buildAppRoute({ workspaceId: "w_test", showGuide: true })).toBe("/w/w_test");
-    expect(parseAppRouteState({ pathname: "/w/w_test", searchStr: "?view=guide&file=docs/notes.md" })).toEqual({ workspaceId: "w_test", filePath: "docs/notes.md" });
+  it("opens the guide independently of a selected document or ticket", () => {
+    expect(buildAppRoute({ workspaceId: "w_test", showGuide: true })).toBe("/w/w_test?view=guide");
+    expect(parseAppRouteState({ pathname: "/w/w_test", searchStr: "?view=guide&doc=d_notes", hash: "ticket=T-01" })).toEqual({ workspaceId: "w_test", showGuide: true });
   });
 
   it("round-trips full ticket view while preserving the ticket route", () => {
@@ -24,49 +24,49 @@ describe("app route helpers", () => {
         hash: "ticket=AKW-07&detail=modal",
         pathname: "/w/w_e0de4c45b76dc637",
         searchStr:
-          "?file=docs%2F04_alpha_kanban_multi_workspace_tickets.md&view=markdown",
+          "?doc=d_tickets&view=markdown",
       }),
     ).toEqual({
       detailMode: "modal",
-      filePath: "docs/04_alpha_kanban_multi_workspace_tickets.md",
+      filePath: "d_tickets",
       ticketId: "AKW-07",
       ticketViewMode: "markdown",
       workspaceId: "w_e0de4c45b76dc637",
     });
   });
 
-  it("builds the existing deep-link contract", () => {
+  it("builds an opaque-document deep link", () => {
     expect(
       buildAppRoute({
         detailMode: "side",
-        filePath: "docs/04_alpha_kanban_multi_workspace_tickets.md",
+        filePath: "d_tickets",
         ticketId: "AKW-07",
         workspaceId: "w_e0de4c45b76dc637",
       }),
     ).toBe(
-      "/w/w_e0de4c45b76dc637?file=docs%2F04_alpha_kanban_multi_workspace_tickets.md#ticket=AKW-07&detail=side",
+      "/w/w_e0de4c45b76dc637?doc=d_tickets#ticket=AKW-07&detail=side",
     );
   });
 
   it("persists the ticket Markdown view without changing the default board URL", () => {
     expect(
       buildAppRoute({
-        filePath: "docs/04_alpha_kanban_multi_workspace_tickets.md",
+        filePath: "d_tickets",
         ticketViewMode: "markdown",
         workspaceId: "w_e0de4c45b76dc637",
       }),
     ).toBe(
-      "/w/w_e0de4c45b76dc637?file=docs%2F04_alpha_kanban_multi_workspace_tickets.md&view=markdown",
+      "/w/w_e0de4c45b76dc637?doc=d_tickets&view=markdown",
     );
 
     expect(
       buildAppRoute({
-        filePath: "docs/04_alpha_kanban_multi_workspace_tickets.md",
+        filePath: "d_tickets",
         ticketViewMode: "board",
         workspaceId: "w_e0de4c45b76dc637",
       }),
     ).toBe(
-      "/w/w_e0de4c45b76dc637?file=docs%2F04_alpha_kanban_multi_workspace_tickets.md",
+      "/w/w_e0de4c45b76dc637?doc=d_tickets",
     );
   });
 });

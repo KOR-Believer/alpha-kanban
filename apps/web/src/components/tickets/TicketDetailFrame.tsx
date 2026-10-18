@@ -7,7 +7,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { TicketDetailMode } from "../../appRoute";
 import type { ResizeEdge, TicketDetailPresentation } from "./useTicketDetailPresentation";
 import { usePwaDraft } from "../../pwa/usePwaDraft";
-import { IS_BROWSER_LOCAL } from "../../storageMode";
 import { TourButton, useScreenTour } from "../../onboarding/ScreenTour";
 
 const views = [
@@ -31,7 +30,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
   const [pendingExit, setPendingExit] = useState<"close" | "workspace" | null>(null);
   const tourContainer = useRef<HTMLDivElement>(null);
   const tour = useScreenTour("detail", {
-    enabled: IS_BROWSER_LOCAL && !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
+    enabled: !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
     eligible: false, scope: `${ticketId}:${presentation.mode}`, container: tourContainer,
   });
   const returnFocus = useRef(typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null);
@@ -79,7 +78,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
               <FileText className="size-4 shrink-0" aria-hidden="true" /><span className="truncate">{ticketId}</span>
             </span>
             <div className="ak-drawer-actions">
-              {IS_BROWSER_LOCAL ? <TourButton tour={tour} labelKey="Tour ticket details" /> : null}
+              <TourButton tour={tour} labelKey="Tour ticket details" />
               {onOpenInWorkspace ? (
                 <Button size="sm" variant="outline" disabled={isBusy} onClick={() => requestExit("workspace")}>
                   <ExternalLink aria-hidden="true" />{t("Go to project")}

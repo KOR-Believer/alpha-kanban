@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { driver } from "driver.js";
-import { BookOpen, CircleHelp, Route } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { BookOpen, CircleHelp, Info, Route } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Button, buttonVariants } from "../components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { ProjectGuide } from "../components/ProjectGuide";
-import { readTourResult, saveTourResult, subscribeToTours } from "./tourState";
+import { claimTourOffer, readTourResult, saveTourResult, subscribeToTours } from "./tourState";
 import { availableTourSteps, type TourKind } from "./tourSteps";
 export { tourSteps, type TourKind } from "./tourSteps";
 
@@ -22,6 +23,7 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
   const { t, i18n } = useTranslation();
   const id = kind;
   const result = useSyncExternalStore(subscribeToTours, () => readTourResult(id), () => null);
+  const [invitation, setInvitation] = useState<{ id: TourKind; scope: string } | null>(null);
   const [run, setRun] = useState<{ scope: string } | null>(null);
   const index = useRef(0);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -29,8 +31,14 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
     if (!enabled || otherDialog(container?.current)) return;
     index.current = 0;
     returnFocus.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    setInvitation(null);
     setRun({ scope });
   }, [enabled, scope, container]);
+
+  useEffect(() => {
+    const firstVisit = enabled && eligible && claimTourOffer(id);
+    setInvitation((current) => firstVisit ? { id, scope } : current?.id === id && current.scope === scope ? current : null);
+  }, [enabled, eligible, id, scope]);
 
   useEffect(() => {
     if (!run) return;
@@ -99,7 +107,7 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
   }, [enabled, id, kind, run, scope, container, t, i18n.language]);
 
   return {
-    start, enabled, active: Boolean(run), offered: enabled && eligible && !result && !run,
+    start, enabled, active: Boolean(run), offered: enabled && eligible && !result && !run && invitation?.id === id && invitation.scope === scope,
     skip: () => saveTourResult(id, "dismissed"),
   };
 }
@@ -119,21 +127,22 @@ export function TourHelp({ tour }: { tour: ReturnType<typeof useScreenTour> }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const action = useRef<(() => void) | null>(null);
   return <>
-    <TourButton tour={tour} />
+    {tour.offered ? <TourButton tour={tour} /> : null}
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild><Button ref={trigger} data-tour-help="" size="sm" variant="ghost"><CircleHelp aria-hidden="true" />{t("Usage guide")}</Button></PopoverTrigger>
+      <PopoverTrigger asChild><Button ref={trigger} data-tour-help="" size="sm" variant="ghost"><CircleHelp aria-hidden="true" />{t("Help")}</Button></PopoverTrigger>
       <PopoverContent align="end" className="grid min-w-52 gap-1" onCloseAutoFocus={(event) => {
         if (action.current) { event.preventDefault(); const next = action.current; action.current = null; requestAnimationFrame(next); }
       }}>
-        <Button size="sm" variant="ghost" className="justify-start" onClick={() => { action.current = () => setGuideOpen(true); setOpen(false); }}><BookOpen aria-hidden="true" />{t("Working with AI and documents")}</Button>
-        <Button size="sm" variant="ghost" className="justify-start" disabled={!tour.enabled} onClick={() => { action.current = tour.start; setOpen(false); }}><Route aria-hidden="true" />{t("Replay screen tour")}</Button>
+        <Button data-tour-replay="" size="sm" variant="ghost" className="justify-start" disabled={!tour.enabled} onClick={() => { action.current = tour.start; setOpen(false); }}><Route aria-hidden="true" />{t("Take a quick tour")}</Button>
+        <Button size="sm" variant="ghost" className="justify-start" onClick={() => { action.current = () => setGuideOpen(true); setOpen(false); }}><BookOpen aria-hidden="true" />{t("Create plans and tickets with AI")}</Button>
+        <Link to="/intro" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`} onClick={() => setOpen(false)}><Info aria-hidden="true" />{t("About Alpha Kanban")}</Link>
       </PopoverContent>
     </Popover>
     <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
       <DialogContent className="ak-usage-guide-dialog" aria-describedby={undefined} onCloseAutoFocus={(event) => {
         event.preventDefault(); trigger.current?.focus({ preventScroll: true });
       }}>
-        <DialogHeader><DialogTitle>{t("Working with AI and documents")}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t("Create plans and tickets with AI")}</DialogTitle></DialogHeader>
         <DialogBody><ProjectGuide /></DialogBody>
         <DialogFooter><Button variant="outline" onClick={() => setGuideOpen(false)}>{t("Close")}</Button></DialogFooter>
       </DialogContent>

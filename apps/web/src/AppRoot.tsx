@@ -4,7 +4,6 @@ import { useLocation } from "@tanstack/react-router";
 import { App } from "./App";
 import { AllProjectsBoard } from "./AllProjectsBoard";
 import { IntroPage } from "./IntroPage";
-import { IS_BROWSER_LOCAL } from "./storageMode";
 import { browserRepository } from "./browser/repository";
 
 export function AppRoot() {
@@ -15,7 +14,7 @@ export function AppRoot() {
     if (pathname !== "/") setAllowStartupAutoOpen(false);
   }, [pathname]);
   useEffect(() => {
-    if (!IS_BROWSER_LOCAL || pathname === "/intro") return;
+    if (pathname === "/intro") return;
     return browserRepository.subscribe(() => {
       for (const key of ["workspaces", "browser-connections", "browser-recoveries", "board-order", "document-sets"]) {
         void queryClient.invalidateQueries({ queryKey: [key] });

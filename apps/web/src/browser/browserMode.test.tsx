@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, requestJson } from "../App";
+import { App } from "../App";
 import { AppRoot } from "../AppRoot";
 import { partitionProjects, ProjectLists } from "../components/ProjectLauncher";
 import { WorkspaceButton, WorkspaceSwitcherTrigger } from "../components/WorkspaceNavigation";
@@ -20,7 +20,6 @@ import { projectFixture, documentFixture } from "../allProjectsFixtures";
 import { buildDocumentSets } from "@alpha-kanban/shared/documents";
 
 const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn() }));
-vi.mock("../storageMode", () => ({ IS_BROWSER_LOCAL: true }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...await importOriginal<object>(),
   useNavigate: () => routing.navigate,
@@ -190,7 +189,7 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector("[data-tour-offer]")).not.toBeNull();
   });
 
-  it("replays directly from the populated board and keeps all-project guidance independent", async () => {
+  it("replays from Help on the populated board and keeps all-project guidance independent", async () => {
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
     vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
     const patch = vi.spyOn(browserRepository, "patch");
@@ -199,7 +198,9 @@ describe("browser mode UI boundaries", () => {
     const offer = await waitForElement("[data-tour-offer]");
     await act(async () => offer.querySelector<HTMLButtonElement>("button:last-child")!.click());
     expect(localStorage.getItem(tourStorageKey("project"))).toBe("dismissed");
-    const replay = await waitForElement<HTMLButtonElement>("[data-tour-replay]");
+    expect(container.querySelector("[data-tour-replay]")).toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-tour-help]")!.click());
+    const replay = await waitForElement<HTMLButtonElement>("[data-tour-replay]", document);
     await act(async () => replay.click());
     const tour = await waitForElement(".ak-screen-tour", document);
     expect(tour.textContent).toContain("현재 프로젝트 전환하기");
@@ -242,15 +243,29 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector("[data-tour-offer]")).toBeNull();
   });
 
-  it.each(["start", "all"])("opens the detailed AI guide from %s without navigation or document writes", async (surface) => {
+  it.each(["start", "project", "all"])("unifies Help on %s and opens the AI guide without navigation or document writes", async (surface) => {
     const patch = vi.spyOn(browserRepository, "patch");
     const append = vi.spyOn(browserRepository, "append");
+    localStorage.setItem(`${tourStorageKey(surface as "start" | "project" | "all")}.offered`, "true");
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    if (surface === "project") selectDocument();
     await render(surface === "start"
       ? <BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()} workspaces={[]} error={null} isLoading={false} />
-      : <AllProjectsBoard />);
+      : surface === "project" ? <App /> : <AllProjectsBoard />);
+    expect(container.querySelectorAll("header [data-tour-help], .ak-start-navigation [data-tour-help]")).toHaveLength(1);
+    expect(container.querySelector("[data-tour-replay]")).toBeNull();
+    expect(container.querySelector('header a[href="/intro"], .ak-start-navigation a[href="/intro"]')).toBeNull();
     const help = container.querySelector<HTMLButtonElement>("[data-tour-help]")!;
+    expect(help.textContent).toBe("도움말");
     await act(async () => { help.focus(); help.click(); });
-    const read = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "AI와 문서로 작업하기")!;
+    const menu = await waitForElement('[role="dialog"]', document);
+    expect([...menu.querySelectorAll("button, a")].map((item) => item.textContent)).toEqual(["화면 둘러보기", "AI와 계획·티켓 만들기", "Alpha Kanban 소개"]);
+    expect(menu.querySelector("a")?.getAttribute("href")).toBe("/intro");
+    await act(async () => { await setLanguage("en"); });
+    expect(help.textContent).toBe("Help");
+    expect([...menu.querySelectorAll("button, a")].map((item) => item.textContent)).toEqual(["Take a quick tour", "Create plans and tickets with AI", "About Alpha Kanban"]);
+    await act(async () => { await setLanguage("ko"); });
+    const read = [...menu.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "AI와 계획·티켓 만들기")!;
     await act(async () => read.click());
     const guide = await waitForElement<HTMLElement>(".ak-usage-guide-dialog", document);
     expect(guide.getAttribute("role")).toBe("dialog");
@@ -761,10 +776,6 @@ describe("browser mode UI boundaries", () => {
     expect(route).toBe("/w/bw_1?doc=d_abc#ticket=T-01&detail=full");
     expect(parseAppRouteState({ pathname: "/w/bw_1", searchStr: "?file=docs%2Fprivate_tickets.md" }).filePath).toBe("unavailable");
     expect(buildAppRoute({ filePath: "/Users/private/repo/docs/a.md" })).not.toContain("private");
-  });
-  it("blocks accidental API calls even if a native control is exposed", async () => {
-    await expect(requestJson("/api/health", { parse: (value) => value })).rejects.toThrow("disabled");
-    expect(fetch).not.toHaveBeenCalled();
   });
   it("does not load a tracking image until the user explicitly allows it", async () => {
     await render(<BrowserMarkdownImage src="https://example.invalid/tracker.png" alt="preview" />);

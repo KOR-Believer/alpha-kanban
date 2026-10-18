@@ -19,9 +19,30 @@ const popup = () => page.locator(".ak-screen-tour");
 const next = () => popup().locator(".driver-popover-next-btn").click();
 const title = () => popup().locator(".driver-popover-title").innerText();
 const offer = () => page.locator("[data-tour-offer]");
+async function checkStartLayout(owner) {
+  for (const [width, height] of [[2560, 1440], [1920, 1080], [1360, 900], [390, 844]]) {
+    await owner.setViewportSize({ width, height });
+    const layout = await owner.locator(".ak-start-page").evaluate((element) => {
+      const header = element.querySelector(".ak-start-navigation").getBoundingClientRect();
+      const content = element.querySelector(".ak-start-content").getBoundingClientRect();
+      const panels = [...element.querySelectorAll(".ak-project-list-panel")].filter((panel) => panel.getClientRects().length > 0);
+      return { header: header.toJSON(), content: content.toJSON(), panels: panels.map((panel) => panel.getBoundingClientRect().toJSON()), scrollWidth: document.documentElement.scrollWidth };
+    });
+    assert.equal(layout.header.left, 0); assert.equal(layout.header.width, width);
+    assert.equal(layout.content.width, Math.min(width, 1600));
+    assert.equal(layout.content.left, (width - layout.content.width) / 2);
+    assert.equal(layout.panels.length, width > 700 ? 2 : 1);
+    if (layout.panels.length === 2) assert.equal(layout.panels[0].width, layout.panels[1].width);
+    assert(layout.panels.every((panel) => panel.left > layout.content.left && panel.right < layout.content.right));
+    assert(layout.scrollWidth <= width, `start layout at ${width}px has no horizontal overflow`);
+    await owner.screenshot({ path: resolve(output, `start-layout-${width}.png`) });
+  }
+  await owner.setViewportSize({ width: 1360, height: 900 });
+}
 async function waitGone(selector) { await page.locator(selector).waitFor({ state: "detached" }); }
 async function replay(owner = page) {
-  await owner.getByRole("button", { name: "화면 둘러보기", exact: true }).click();
+  await owner.getByRole("button", { name: "도움말", exact: true }).click();
+  await owner.locator('[role="dialog"]').getByRole("button", { name: "화면 둘러보기", exact: true }).click();
   await owner.locator(".ak-screen-tour").waitFor();
 }
 async function finishTour(name, titles, owner = page) {
@@ -59,9 +80,13 @@ async function bounds(name, owner = page) {
 }
 async function readGuide(name, owner = page) {
   const url = owner.url();
-  await owner.getByRole("button", { name: "사용 안내", exact: true }).click();
-  await owner.getByRole("button", { name: "AI와 문서로 작업하기", exact: true }).click();
-  const guide = owner.getByRole("dialog", { name: "AI와 문서로 작업하기", exact: true });
+  await owner.getByRole("button", { name: "도움말", exact: true }).click();
+  const menu = owner.locator('[role="dialog"]');
+  assert.deepEqual(await menu.locator("button, a").allTextContents(), ["화면 둘러보기", "AI와 계획·티켓 만들기", "Alpha Kanban 소개"]);
+  assert.equal(await menu.getByRole("link", { name: "Alpha Kanban 소개", exact: true }).getAttribute("href"), "/intro");
+  await owner.screenshot({ path: resolve(output, name + "-help-menu.png") });
+  await menu.getByRole("button", { name: "AI와 계획·티켓 만들기", exact: true }).click();
+  const guide = owner.getByRole("dialog", { name: "AI와 계획·티켓 만들기", exact: true });
   await guide.waitFor();
   assert.equal(await guide.locator(".ak-guide-step").count(), 7);
   assert.equal(owner.url(), url);
@@ -153,9 +178,20 @@ try {
   await page.setViewportSize({ width: 1360, height: 900 });
   assert.equal(await offer().count(), 1);
   record("AI guide opens visibly on start without navigation, at desktop and narrow widths");
-  await offer().getByRole("button", { name: "건너뛰기", exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.tours.v1.start")), null);
   await page.reload(); await page.getByText("아직 최근 프로젝트가 없습니다.", { exact: true }).waitFor();
   assert.equal(await offer().count(), 0);
+  assert.equal(await page.getByRole("button", { name: "화면 둘러보기", exact: true }).count(), 0);
+  assert.equal(await page.locator('.ak-start-navigation a[href="/intro"]').count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.tours.v1.start")), null);
+  await page.screenshot({ path: resolve(output, "start-returning-visitor.png") });
+  await page.getByRole("button", { name: "도움말", exact: true }).click();
+  await page.getByRole("link", { name: "Alpha Kanban 소개", exact: true }).click();
+  await page.waitForURL("**/intro");
+  await page.goBack();
+  await page.getByRole("button", { name: "도움말", exact: true }).waitFor();
+  assert.equal(await offer().count(), 0);
+  record("one Help menu replaces duplicate header actions; an untouched first-visit invitation does not return after reload or introduction navigation");
   await replay();
   assert.equal(await title(), "프로젝트 하나 열기");
   await bounds("start-desktop");
@@ -166,10 +202,10 @@ try {
   await page.keyboard.press("ArrowRight");
   assert.equal(await title(), "여러 프로젝트 함께 연결하기");
   await page.keyboard.press("Escape"); await waitGone(".ak-screen-tour");
-  await page.waitForFunction(() => document.activeElement?.hasAttribute("data-tour-replay"));
+  await page.waitForFunction(() => document.activeElement?.hasAttribute("data-tour-help"));
   await replay(); await finishTour("start-desktop", startTitles);
   assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.tours.v1.start")), "completed");
-  assert(await page.getByRole("button", { name: "화면 둘러보기", exact: true }).isVisible());
+  assert(await page.getByRole("button", { name: "도움말", exact: true }).isVisible());
   record("eight-step empty start, skip/revisit/direct replay/finish, keyboard focus and theme");
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -192,6 +228,7 @@ try {
   await finishTour("project-desktop", projectTitles);
   assert.equal(await original(), fixture);
   assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.tours.v1.project")), "completed");
+  await readGuide("project-usage-guide");
   record("nine-step populated project board completes without changing Markdown");
 
   await page.getByRole("button", { name: "사용 안내", exact: true }).click();
@@ -250,9 +287,8 @@ try {
   await all.locator('[data-tour="board-card"]').waitFor();
   assert.equal(await all.locator("[data-tour-offer]").count(), 1);
   await readGuide("all-usage-guide", all);
-  await all.getByRole("button", { name: "사용 안내", exact: true }).click();
-  await all.getByRole("button", { name: "화면 안내 다시 보기", exact: true }).click();
-  await all.locator(".ak-screen-tour").waitFor();
+  await all.locator("[data-tour-offer]").getByRole("button", { name: "건너뛰기", exact: true }).click();
+  await replay(all);
   await finishTour("all-desktop", allTitles, all);
   await all.reload(); await all.locator('[data-tour="board-card"]').waitFor();
   assert.equal(await all.locator("[data-tour-offer]").count(), 0);
@@ -292,6 +328,8 @@ try {
   const direct = await context.newPage();
   await direct.goto(origin);
   await direct.getByRole("button", { name: /tour-fixture/ }).waitFor();
+  await checkStartLayout(direct);
+  record("start keeps a full-width header and centered 1600px body on wide monitors, preserving equal project columns and narrow-screen tabs");
   await direct.evaluate(() => localStorage.removeItem("alpha-kanban.tours.v1.start"));
   await direct.reload(); await direct.getByRole("button", { name: /tour-fixture/ }).waitFor();
   assert.equal(await direct.locator("[data-tour-offer]").count(), 0);

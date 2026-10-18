@@ -18,7 +18,7 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
     step("auto-open", "Choose where the app starts", "Enable this to reopen your last project next time. Changing this setting does not leave the current screen."),
     step("registered-workspaces", "Review connected workspaces", "See the parent folders you registered here. Manage lets you reconnect folders, allow editing, or disconnect them without deleting files."),
     step("skill-install", "Prepare your AI tool", "Review and copy the installation request into Codex. The implementation-ledger skill helps your AI write plans and tickets for this board."),
-    step("ai-workflow", "From discussion to implementation", "Discuss your idea with AI, review the plan, resolve questions affecting this work, and update the tickets before requesting implementation. Usage guide walks through an example."),
+    step("ai-workflow", "From discussion to implementation", "Discuss your idea with AI, review the plan, resolve questions affecting this work, and update the tickets before requesting implementation. Open Help to see an example of creating plans and tickets with AI."),
   ];
   if (kind === "detail") return [
     step("ticket-view", "Choose a comfortable detail view", "Use side, center, or full view. Drag the edges of a peek to resize it. Changing the view keeps your unfinished inputs."),

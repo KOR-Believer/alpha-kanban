@@ -1,4 +1,3 @@
-import { IS_BROWSER_LOCAL } from "./storageMode";
 import { browserRepository } from "./browser/repository";
 import { BrowserFilesMenu } from "./browser/BrowserConnections";
 import { documentIdentity, documentRouteId } from "./appRoute";
@@ -7,19 +6,16 @@ import { LanguageSelector } from "@/components/LanguageSelector";
 import { PwaMenu } from "./pwa/PwaMenu";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { buildAppRoute, type TicketDetailMode } from "./appRoute";
-import {
-  boardOrderSchema, filesResponseSchema,
-  type MarkdownFileChangeEvent, type TicketDocumentResponse, type TicketInstructionKind,
-  type TicketProgress, type TicketStatus,
+import type {
+  MarkdownFileChangeEvent, TicketDocumentResponse, TicketInstructionKind, TicketProgress, TicketStatus,
 } from "@alpha-kanban/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Folder, Loader2, RefreshCcw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-
 import {
   BOARD_STATUSES, TicketDetailDrawer, appendTicketInstruction, fetchTicketDocument,
-  fetchWorkspaces, formatClientError, normalizeClientError, patchTicket, priorityVariant, requestJson, StatusDot,
+  fetchWorkspaces, formatClientError, normalizeClientError, patchTicket, priorityVariant, StatusDot,
 } from "./App";
 import {
   BOARD_FILTERS_KEY, boardTickets, filterBoardTickets, loadBoard, readBoardFilters, reorderedKeys,
@@ -42,8 +38,8 @@ type Detail = { document: BoardDocument; ticketId: string };
 
 const fetchAllTickets = (options: BoardLoadOptions) => loadBoard({
   workspaces: fetchWorkspaces,
-  files: async (id) => IS_BROWSER_LOCAL ? { files: await browserRepository.ticketFiles(id) } : requestJson(`/api/workspaces/${id}/files`, filesResponseSchema),
-  document: (workspaceId, fileId) => IS_BROWSER_LOCAL ? browserRepository.tickets(workspaceId, fileId, false) : fetchTicketDocument(workspaceId, fileId),
+  files: async (id) => ({ files: await browserRepository.ticketFiles(id) }),
+  document: (workspaceId, fileId) => browserRepository.tickets(workspaceId, fileId, false),
 }, options);
 const errorText = (error: unknown) => formatClientError(normalizeClientError(error));
 
@@ -68,7 +64,7 @@ export function AllProjectsBoard() {
     refetchInterval: draggingKey || isWriting ? false : 15_000,
   });
   const boardOrderQuery = useQuery({
-    queryFn: () => IS_BROWSER_LOCAL ? browserRepository.boardOrder() : requestJson("/api/board-order", boardOrderSchema), queryKey: boardOrderKey,
+    queryFn: () => browserRepository.boardOrder(), queryKey: boardOrderKey,
   });
   const boardData = ticketsQuery.data ?? loadProgress?.data;
   const tickets = useMemo(() => {
@@ -85,7 +81,7 @@ export function AllProjectsBoard() {
   const visible = filterBoardTickets(tickets, filters);
   const statuses = BOARD_STATUSES.filter((status) => !(filters.hideDone && status === "DONE"));
   const tour = useScreenTour("all", {
-    enabled: IS_BROWSER_LOCAL && ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
+    enabled: ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
     eligible: visible.length > 0,
   });
   const detailTicket = detail?.document.response.document.tickets.find((ticket) => ticket.id === detail.ticketId);
@@ -147,7 +143,7 @@ export function AllProjectsBoard() {
     const previous = queryClient.getQueryData<{ keys: string[] }>(boardOrderKey) ?? { keys: [] };
     queryClient.setQueryData(boardOrderKey, { keys });
     try {
-      const saved = IS_BROWSER_LOCAL ? await browserRepository.saveBoardOrder({ keys }, previous) : await requestJson("/api/board-order", boardOrderSchema, { body: JSON.stringify({ keys }), method: "PUT" });
+      const saved = await browserRepository.saveBoardOrder({ keys }, previous);
       queryClient.setQueryData(boardOrderKey, saved);
     } catch (error) {
       queryClient.setQueryData(boardOrderKey, previous);
@@ -186,7 +182,7 @@ export function AllProjectsBoard() {
   }
   async function refreshBoard() {
     setManualRefresh(true);
-    if (IS_BROWSER_LOCAL) browserRepository.invalidateListings();
+    browserRepository.invalidateListings();
     try { await Promise.all([ticketsQuery.refetch(), boardOrderQuery.refetch()]); }
     finally { setManualRefresh(false); }
   }
@@ -211,8 +207,8 @@ export function AllProjectsBoard() {
           <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{t("{{count}} tickets", { count: visible.length })}</span>
           <LanguageSelector />
           <PwaMenu />
-          {IS_BROWSER_LOCAL ? <TourHelp tour={tour} /> : null}
-          {IS_BROWSER_LOCAL ? <BrowserFilesMenu /> : null}
+          <TourHelp tour={tour} />
+          <BrowserFilesMenu />
           {isWriting ? <Loader2 aria-label={t("Saving")} className="size-4 animate-spin" /> : null}
           {ticketsQuery.isFetching ? <span role="status" className="text-xs tabular-nums text-muted-foreground">
             {ticketsQuery.isLoading && loadProgress
@@ -307,10 +303,7 @@ export function AllProjectsBoard() {
         )}
       </main>
       {detail && detailTicket ? (
-        <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`}
-          availableTickets={detail.document.response.document.tickets} ticket={detailTicket}
-          documentHash={detail.document.response.file.hash} documentMtimeMs={detail.document.response.file.mtimeMs}
-          workspaceId={detail.document.workspace.id} fileId={detail.document.response.file.id}
+        <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`} ticket={detailTicket}
           presentation={presentation}
           onOpenInWorkspace={() => { void navigate({ href: buildAppRoute({
             workspaceId: detail.document.workspace.id, filePath: documentRouteId(detail.document.response.file),

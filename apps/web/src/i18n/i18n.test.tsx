@@ -76,7 +76,7 @@ describe("UI language", () => {
     const error = Object.assign(new Error("File /repo/docs/tickets.md has changed"), { code: "STALE_FILE" });
     expect(errorSummary(error)).toContain("외부에서 문서가 변경");
     expect(errorDetails(error)).toBe("STALE_FILE: File /repo/docs/tickets.md has changed");
-    expect(errorSummary(new TypeError("Failed to fetch"))).toContain("서버에 연결할 수 없습니다");
+    expect(errorSummary(new Error("Folder access was not granted."))).toBe(t("Folder access was not granted."));
     await setLanguage("en");
     expect(errorSummary(error)).toBe("The document changed externally. Reload before saving.");
   });

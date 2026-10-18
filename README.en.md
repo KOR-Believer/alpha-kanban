@@ -38,7 +38,7 @@ workspace/
 
 **New project** creates a project folder inside a registered workspace.
 
-Choose **Take a quick tour** to learn folder connections and board navigation. Tours can be skipped and replayed from **Usage guide**.
+Choose **Help → Take a quick tour** to explore the current screen's folder connections and board navigation. An invitation appears on your first visit; skip it or replay the tour from Help whenever you need it.
 
 ## What Is implementation-ledger?
 
@@ -73,7 +73,7 @@ Do not change any project documents or code.
 
 Codex's built-in `$skill-installer` can install skills from GitHub repositories. See the [official Codex skill guide](https://learn.chatgpt.com/docs/build-skills#install-curated-skills-for-local-use) for installation details.
 
-In the web app, **Usage guide → Working with AI and documents → Review and copy install request** also provides a request you can send to Codex. Inside a project, installation guidance is available from the sidebar's **Usage guide**. The website provides the request; Codex performs the installation.
+In the web app, **Help → Create plans and tickets with AI → Review and copy install request** also provides a request you can send to Codex. Inside a project, installation guidance is available from the sidebar's **Usage guide**. The website provides the request; Codex performs the installation.
 
 ### Check the Installation and Start a Conversation
 
@@ -160,7 +160,7 @@ Recommended development environment: Node.js 24 and pnpm 11.3.0. From the reposi
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm dev:browser
+pnpm dev
 ```
 
 The default address is [http://127.0.0.1:5187](http://127.0.0.1:5187). If the port is occupied, use the address printed in your terminal.
@@ -168,8 +168,8 @@ The default address is [http://127.0.0.1:5187](http://127.0.0.1:5187). If the po
 To try installation, offline access, and updates, serve the built app:
 
 ```bash
-pnpm build:browser
-pnpm preview:browser
+pnpm build
+pnpm preview
 ```
 
 The default address is [http://127.0.0.1:4187](http://127.0.0.1:4187). Development mode does not register a service worker. The two addresses use different ports, so each keeps its own connections and settings.
@@ -180,7 +180,7 @@ Use these settings on Cloudflare Pages:
 
 | Setting | Value |
 | --- | --- |
-| Build command | `pnpm build:browser` |
+| Build command | `pnpm build` |
 | Output directory | `apps/web/dist-browser` |
 
 Serve over HTTPS with SPA routing for `/`, `/intro`, `/all`, and `/w/:id`. Cloudflare Pages provides its [default SPA handling](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering) when the output root has no `404.html`. Deploy the generated service worker, repair files, and `_headers` with the app.
@@ -193,7 +193,7 @@ Use a stable site address for installation and folder connections. See the [PWA 
 pnpm --filter @alpha-kanban/web typecheck
 pnpm --filter @alpha-kanban/shared test
 pnpm --filter @alpha-kanban/web test
-pnpm build:browser
+pnpm build
 ```
 
 Browser checks use Chrome:

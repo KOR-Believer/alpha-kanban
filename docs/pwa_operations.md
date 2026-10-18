@@ -10,8 +10,8 @@
 ## Build Modes
 
 ```sh
-pnpm build:browser
-pnpm preview:browser
+pnpm build
+pnpm preview
 pnpm test:pwa
 
 # Generate local emergency artifacts, without publishing them:
@@ -20,7 +20,7 @@ pnpm build:browser:retired
 ```
 
 All build modes write `apps/web/dist-browser`. Keep separate copies of verified
-releases when rehearsing an incident. Normal `build:browser` restores the regular
+releases when rehearsing an incident. Normal `build` restores the regular
 PWA build after an emergency build. Do not publish an emergency artifact by accident.
 The smoke script builds its own versions under ignored `output/playwright/` instead
 of overwriting `dist-browser` or touching user browser data.

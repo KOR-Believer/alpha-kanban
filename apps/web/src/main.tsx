@@ -10,17 +10,16 @@ import { createRoot } from "react-dom/client";
 
 import { AppRoot } from "./AppRoot";
 import "./styles.css";
-import { IS_BROWSER_LOCAL } from "./storageMode";
 import { appInstaller } from "./pwa/install";
 import { pwaClient } from "./pwa/client";
 import { startPwaSession } from "./pwa/session";
 
-const queryClient = new QueryClient(IS_BROWSER_LOCAL ? {
+const queryClient = new QueryClient({
   defaultOptions: {
     queries: { networkMode: "always", retry: false, refetchOnWindowFocus: false },
     mutations: { networkMode: "always", retry: false },
   },
-} : undefined);
+});
 
 const ALL_TICKETS_PATH = "/all";
 

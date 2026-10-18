@@ -38,7 +38,7 @@ workspace/
 
 **새 프로젝트**에서는 등록한 워크스페이스 아래에 프로젝트 폴더를 만들 수 있습니다.
 
-처음에는 **화면 둘러보기**로 폴더 연결과 보드 탐색을 익혀보세요. 안내는 건너뛸 수 있고, **사용 안내**에서 다시 볼 수 있습니다.
+**도움말 → 화면 둘러보기**에서 현재 화면의 폴더 연결과 보드 탐색 방법을 확인할 수 있습니다. 첫 방문에는 시작 제안이 표시되며, 건너뛰거나 나중에 도움말에서 다시 볼 수 있습니다.
 
 ## implementation-ledger란?
 
@@ -72,7 +72,7 @@ SKILL.md뿐 아니라 references, assets, scripts, agents를 포함한 폴더 �
 
 Codex는 기본 제공 `$skill-installer`를 통해 GitHub 저장소의 스킬을 설치할 수 있습니다. 자세한 설치 방식은 [Codex 공식 스킬 안내](https://learn.chatgpt.com/docs/build-skills#install-curated-skills-for-local-use)를 참고하세요.
 
-웹에서도 **사용 안내 → AI와 문서로 작업하기 → 설치 요청문 확인·복사**에서 요청문을 받아 Codex에 전달할 수 있습니다. 프로젝트 안에서는 사이드바의 **사용 안내**에 설치 안내가 있습니다. 웹은 요청문을 제공하며, 설치는 Codex에서 진행합니다.
+웹에서도 **도움말 → AI와 계획·티켓 만들기 → 설치 요청문 확인·복사**에서 요청문을 받아 Codex에 전달할 수 있습니다. 프로젝트 안에서는 사이드바의 **사용 안내**에 설치 안내가 있습니다. 웹은 요청문을 제공하며, 설치는 Codex에서 진행합니다.
 
 ### 설치 확인과 첫 요청
 
@@ -159,7 +159,7 @@ $implementation-ledger를 사용해 줘.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm dev:browser
+pnpm dev
 ```
 
 기본 주소는 [http://127.0.0.1:5187](http://127.0.0.1:5187)입니다. 포트가 사용 중이면 터미널에 표시된 주소를 확인하세요.
@@ -167,8 +167,8 @@ pnpm dev:browser
 설치·오프라인·업데이트 동작을 확인하려면 빌드 결과를 실행합니다.
 
 ```bash
-pnpm build:browser
-pnpm preview:browser
+pnpm build
+pnpm preview
 ```
 
 기본 주소는 [http://127.0.0.1:4187](http://127.0.0.1:4187)입니다. 개발 실행은 서비스 워커를 등록하지 않습니다. 두 주소는 포트가 다르므로 폴더 연결과 설정을 각각 보관합니다.
@@ -179,7 +179,7 @@ Cloudflare Pages에서 다음 설정을 사용합니다.
 
 | 항목 | 값 |
 | --- | --- |
-| 빌드 명령 | `pnpm build:browser` |
+| 빌드 명령 | `pnpm build` |
 | 출력 디렉터리 | `apps/web/dist-browser` |
 
 HTTPS로 제공하고 `/`, `/intro`, `/all`, `/w/:id`에 SPA 라우팅을 적용합니다. Cloudflare Pages에서는 출력 루트에 `404.html`을 추가하지 않으면 [기본 SPA 처리](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering)를 사용할 수 있습니다. 생성된 서비스 워커, 복구 파일과 `_headers`도 함께 배포하세요.
@@ -192,7 +192,7 @@ HTTPS로 제공하고 `/`, `/intro`, `/all`, `/w/:id`에 SPA 라우팅을 적용
 pnpm --filter @alpha-kanban/web typecheck
 pnpm --filter @alpha-kanban/shared test
 pnpm --filter @alpha-kanban/web test
-pnpm build:browser
+pnpm build
 ```
 
 Chrome을 사용하는 브라우저 검사도 제공합니다.

@@ -8,15 +8,16 @@ import { AllProjectsBoard, allTicketsKey } from "./AllProjectsBoard";
 import { BOARD_FILTERS_KEY, type BoardData } from "./allProjectsData";
 import { documentFixture, projectFixture } from "./allProjectsFixtures";
 import { setLanguage, t } from "./i18n";
+import { browserRepository } from "./browser/repository";
 
 const api = vi.hoisted(() => ({
-  workspaces: vi.fn(), document: vi.fn(), request: vi.fn(), patch: vi.fn(), append: vi.fn(),
+  workspaces: vi.fn(), document: vi.fn(), files: vi.fn(), saveOrder: vi.fn(), patch: vi.fn(), append: vi.fn(),
   navigate: vi.fn(),
 }));
 vi.mock("./App", async (original) => ({
   ...await original<typeof import("./App")>(),
   fetchWorkspaces: api.workspaces, fetchTicketDocument: api.document,
-  requestJson: api.request, patchTicket: api.patch, appendTicketInstruction: api.append,
+  patchTicket: api.patch, appendTicketInstruction: api.append,
 }));
 vi.mock("@tanstack/react-router", async (original) => ({
   ...await original<typeof import("@tanstack/react-router")>(), useNavigate: () => api.navigate,
@@ -36,14 +37,18 @@ describe("all-projects document workflow", () => {
     window.localStorage.clear();
     await setLanguage("ko");
     window.localStorage.setItem("alpha-kanban.ticketDetailMode", "modal");
-    documents = { [first.id]: documentFixture(first), [second.id]: documentFixture(second) };
+    documents = { [first.id]: documentFixture(first, "d_first"), [second.id]: documentFixture(second, "d_second") };
     api.workspaces.mockResolvedValue({ workspaces: [first, second] });
     api.document.mockImplementation(async (id: string) => documents[id]);
-    api.request.mockImplementation(async (url: string, _schema: unknown, init?: RequestInit) => {
-      if (url === "/api/board-order") return init?.body ? JSON.parse(String(init.body)) : { keys: [] };
-      const id = url.split("/")[3]!;
-      return { files: [documents[id]!.file] };
-    });
+    api.files.mockImplementation(async (id: string) => [documents[id]!.file]);
+    api.saveOrder.mockImplementation(async (order) => order);
+    vi.spyOn(browserRepository, "ticketFiles").mockImplementation(api.files);
+    vi.spyOn(browserRepository, "tickets").mockImplementation(api.document);
+    vi.spyOn(browserRepository, "boardOrder").mockResolvedValue({ keys: [] });
+    vi.spyOn(browserRepository, "saveBoardOrder").mockImplementation(api.saveOrder);
+    vi.spyOn(browserRepository, "connections").mockResolvedValue([]);
+    vi.spyOn(browserRepository, "recoveries").mockResolvedValue([]);
+    vi.spyOn(browserRepository, "subscribe").mockReturnValue(() => undefined);
     api.patch.mockImplementation(async (workspaceId: string, _fileId: string, _ticketId: string, body: { status: string; progress: number }) => {
       const before = documents[workspaceId]!;
       const next = { ...before, file: { ...before.file, hash: "saved-hash", mtimeMs: 2 },
@@ -57,7 +62,7 @@ describe("all-projects document workflow", () => {
   });
   afterEach(async () => {
     await act(async () => root.unmount());
-    client.clear(); container.remove(); vi.unstubAllGlobals();
+    client.clear(); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   });
   async function mount() {
     await act(async () => root.render(<QueryClientProvider client={client}><AllProjectsBoard /></QueryClientProvider>));
@@ -111,10 +116,10 @@ describe("all-projects document workflow", () => {
   it("shows ready cards and loading progress before all projects finish", async () => {
     let release!: () => void;
     const slow = new Promise<void>((resolve) => { release = resolve; });
-    const original = api.request.getMockImplementation()!;
-    api.request.mockImplementation(async (url, schema, init) => {
-      if (url === `/api/workspaces/${second.id}/files`) await slow;
-      return original(url, schema, init);
+    const original = api.files.getMockImplementation()!;
+    api.files.mockImplementation(async (id) => {
+      if (id === second.id) await slow;
+      return original(id);
     });
     await act(async () => root.render(<QueryClientProvider client={client}><AllProjectsBoard /></QueryClientProvider>));
     for (let attempt = 0; attempt < 30 && !document.querySelector("[data-ticket-key]"); attempt++) {
@@ -166,7 +171,7 @@ describe("all-projects document workflow", () => {
     expect(api.patch).not.toHaveBeenCalled();
     await act(async () => button("취소").click());
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(api.request.mock.calls.some((call) => call[2]?.method === "PUT")).toBe(false);
+    expect(api.saveOrder).not.toHaveBeenCalled();
   });
   it("saves to the exact workspace/file, waits for success, and leaves the other same-id ticket untouched", async () => {
     let finish!: (value: TicketDocumentResponse) => void;
@@ -175,8 +180,8 @@ describe("all-projects document workflow", () => {
     api.patch.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     await mount(); await drag("TODO"); await enter(document.querySelector("textarea")!, "회귀 버그 발견");
     await act(async () => button("저장하고 이동").click());
-    expect(api.patch).toHaveBeenCalledExactlyOnceWith(first.id, first.id, "TEST-01", {
-      expectedHash: "hash-w_first", expectedMtimeMs: 1, status: "TODO", progress: 0, reason: "회귀 버그 발견",
+    expect(api.patch).toHaveBeenCalledExactlyOnceWith(first.id, "d_first", "TEST-01", {
+      expectedHash: "hash-d_first", expectedMtimeMs: 1, status: "TODO", progress: 0, reason: "회귀 버그 발견",
     });
     expect(column("DONE").textContent).toContain("Fixture w_first");
     expect(button("저장하고 이동").disabled).toBe(true);
@@ -191,7 +196,7 @@ describe("all-projects document workflow", () => {
     await act(async () => button("저장하고 이동").click());
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("STALE_FILE");
     expect(column("DONE").textContent).toContain("Fixture w_first");
-    expect(api.request.mock.calls.some((call) => call[2]?.method === "PUT")).toBe(false);
+    expect(api.saveOrder).not.toHaveBeenCalled();
   });
   it("saves a cross-column position only after the Markdown change succeeds", async () => {
     documents[second.id]!.document.tickets[0]!.status = "TODO";
@@ -208,12 +213,12 @@ describe("all-projects document workflow", () => {
       await act(async () => { element.dispatchEvent(event); });
     }
     await act(async () => button("저장하고 이동").click());
-    expect(api.request.mock.calls.some((call) => call[2]?.method === "PUT")).toBe(false);
+    expect(api.saveOrder).not.toHaveBeenCalled();
     expect(column("DONE").textContent).toContain("Fixture w_first");
     await act(async () => button("저장하고 이동").click());
-    const writes = api.request.mock.calls.filter((call) => call[2]?.method === "PUT");
+    const writes = api.saveOrder.mock.calls;
     expect(writes).toHaveLength(1);
-    expect(JSON.parse(String(writes[0]![2].body)).keys).toEqual([target.dataset.ticketKey, source.dataset.ticketKey]);
+    expect(writes[0]![0].keys).toEqual([target.dataset.ticketKey, source.dataset.ticketKey]);
     expect(column("TODO").textContent).toContain("Fixture w_first");
   });
   it("uses the existing detail editor and persists manual directions with the correct guard", async () => {
@@ -225,8 +230,8 @@ describe("all-projects document workflow", () => {
     const text = instructionInput();
     await enter(text, "확인해 주세요");
     await act(async () => button("문서에 추가").click());
-    expect(api.append).toHaveBeenCalledExactlyOnceWith(first.id, first.id, "TEST-01", {
-      kind: "manual", text: "확인해 주세요", expectedHash: "hash-w_first", expectedMtimeMs: 1,
+    expect(api.append).toHaveBeenCalledExactlyOnceWith(first.id, "d_first", "TEST-01", {
+      kind: "manual", text: "확인해 주세요", expectedHash: "hash-d_first", expectedMtimeMs: 1,
     });
   });
   it.each([
@@ -246,7 +251,7 @@ describe("all-projects document workflow", () => {
       expect(href).toBe(link.getAttribute("href"));
       const target = new URL(href, "http://localhost");
       expect(target.pathname).toBe(`/w/${workspace.id}`);
-      expect(target.searchParams.get("file")).toBe(documents[workspace.id]!.file.relativePath);
+      expect(target.searchParams.get("doc")).toBe(documents[workspace.id]!.file.id);
       const hash = new URLSearchParams(target.hash.slice(1));
       expect(hash.get("ticket")).toBe("TEST-01");
       expect(hash.get("detail")).toBe(mode);
@@ -282,7 +287,7 @@ describe("all-projects document workflow", () => {
       await act(async () => button("프로젝트로 이동").click());
       const target = new URL(api.navigate.mock.lastCall![0].href, "http://localhost");
       expect(target.pathname).toBe(`/w/${workspace.id}`);
-      expect(target.searchParams.get("file")).toBe(documents[workspace.id]!.file.relativePath);
+      expect(target.searchParams.get("doc")).toBe(documents[workspace.id]!.file.id);
       const hash = new URLSearchParams(target.hash.slice(1));
       expect(hash.get("ticket")).toBe("TEST-01");
       expect(hash.get("detail")).toBe(mode);
@@ -351,15 +356,13 @@ describe("all-projects document workflow", () => {
   });
   it("serializes reordering and rolls back on a failed order save", async () => {
     let reject!: (reason: Error) => void;
-    const normal = api.request.getMockImplementation()!;
-    api.request.mockImplementation((url, schema, init) => init?.method === "PUT"
-      ? new Promise((_, fail) => { reject = fail; }) : normal(url, schema, init));
+    api.saveOrder.mockImplementation(() => new Promise((_, fail) => { reject = fail; }));
     await mount();
     const source = column("DONE").querySelector<HTMLElement>("[data-ticket-key]")!;
     const originalKey = source.dataset.ticketKey;
     const down = source.querySelector<HTMLButtonElement>('button[title="아래로 이동"]')!;
     await act(async () => down.click());
-    expect(api.request.mock.calls.filter((call) => call[2]?.method === "PUT")).toHaveLength(1);
+    expect(api.saveOrder).toHaveBeenCalledTimes(1);
     expect([...document.querySelectorAll<HTMLElement>("[data-ticket-key]")].every((element) => !element.draggable)).toBe(true);
     await act(async () => { reject(new Error("write failed")); });
     expect(column("DONE").querySelector<HTMLElement>("[data-ticket-key]")?.dataset.ticketKey).toBe(originalKey);

@@ -15,7 +15,7 @@ const versions = {};
 for (const [name, mode] of [["a", "app"], ["b", "app"], ["recovery", "recovery"], ["retired", "retired"]]) {
   const dir = resolve(process.env.PWA_SMOKE_BUILD_DIR ?? output, name);
   if (!process.env.PWA_SMOKE_BUILD_DIR) {
-    const build = await exec("pnpm", ["--filter", "@alpha-kanban/web", "exec", "vite", "build", "--mode", "browser", "--outDir", dir], {
+    const build = await exec("pnpm", ["--filter", "@alpha-kanban/web", "exec", "vite", "build", "--outDir", dir], {
       cwd: root, env: { ...process.env, AK_PWA_MODE: mode, AK_RELEASE_REVISION: `smoke-${name}` }, maxBuffer: 5 * 1024 * 1024,
     });
     await writeFile(resolve(output, `build-${name}.log`), build.stdout + build.stderr);

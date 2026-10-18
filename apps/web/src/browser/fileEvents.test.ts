@@ -4,7 +4,6 @@ import { documentFixture, projectFixture } from "../allProjectsFixtures";
 import { BrowserFileError, browserRepository } from "./repository";
 import { subscribeFileEvents } from "./fileEvents";
 
-vi.mock("../storageMode", () => ({ IS_BROWSER_LOCAL: true }));
 
 describe("local file observations", () => {
   const file = documentFixture(projectFixture("root/project", "bw_test"), "d_test").file;

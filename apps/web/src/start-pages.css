@@ -4,7 +4,7 @@
   .ak-public-brand svg { width: 22px; height: 22px; color: var(--muted-foreground); }
   .ak-start-navigation { min-height: 64px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ak-space-md); padding: var(--ak-space-sm) var(--ak-space-xxl); border-bottom: 1px solid var(--border); }
   .ak-start-navigation nav, .ak-intro-header nav { display: flex; align-items: center; gap: var(--ak-space-xs); flex-wrap: wrap; }
-  .ak-start-content { display: grid; gap: var(--ak-space-md); padding: var(--ak-space-xl) var(--ak-space-xxl); width: 100%; }
+  .ak-start-content { display: grid; gap: var(--ak-space-md); padding: var(--ak-space-xl) var(--ak-space-xxl); width: 100%; max-width: 1600px; margin-inline: auto; }
   .ak-start-heading { display: grid; gap: var(--ak-space-md); }
   .ak-start-heading-row { display: flex; justify-content: space-between; align-items: center; gap: var(--ak-space-lg); }
   .ak-start-commands { display: flex; gap: var(--ak-space-xs); flex-wrap: wrap; justify-content: flex-end; }

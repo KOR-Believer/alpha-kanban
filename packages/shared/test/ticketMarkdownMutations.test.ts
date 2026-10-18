@@ -8,10 +8,10 @@ import {
   appendUserInstruction,
   parseTicketDocument,
   updateTicketStatusAndProgress,
-} from "../ticketMarkdown";
+} from "../src/ticketMarkdown";
 
 const realTicketDocument = readFileSync(
-  new URL("../../../../../docs/02_alpha_kanban_tickets.md", import.meta.url),
+  new URL("../../../docs/02_alpha_kanban_tickets.md", import.meta.url),
   "utf8",
 );
 
@@ -96,7 +96,7 @@ Depends on:
 
 describe("ticketMarkdown", () => {
   it("keeps the ledger template's explicit no-questions section outside ticket bodies", () => {
-    const template = readFileSync(new URL("../../../../../skills/implementation-ledger/assets/tickets-template.md", import.meta.url), "utf8");
+    const template = readFileSync(new URL("../../../skills/implementation-ledger/assets/tickets-template.md", import.meta.url), "utf8");
     const questionsStart = template.indexOf("## 확인·결정이 필요한 사항");
     const ticketsStart = template.indexOf("## Ticket List");
     expect(questionsStart).toBeGreaterThan(template.indexOf("## Status"));
@@ -298,7 +298,7 @@ Progress: 100%`);
     expect(entries[1]?.raw).toBe("- 2026-10-13: [수동지시] 자동 저장 제외 수동 저장만");
   });
 
-  it("uses the server's local calendar day for appended records", () => {
+  it("uses the local calendar day for appended records", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date(2026, 9, 13, 0, 30));

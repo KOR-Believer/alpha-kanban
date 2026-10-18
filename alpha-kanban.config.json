@@ -1,5 +1,0 @@
-{
-  "workspaceRoots": [".."],
-  "defaultDocRoots": ["docs", "examples"],
-  "codexCommand": "codex"
-}
