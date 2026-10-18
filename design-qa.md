@@ -12,7 +12,7 @@
 - Chrome at 390x844: Start switches lists through tabs; the introduction shows the focused demo ticket. Korean/English checks found no horizontal page overflow. This is a browser viewport check, not a physical phone or OS folder-permission test.
 - Introduction direct entry/reload, Start navigation, browser back/forward, language switching, installation dialog and Escape dismissal were checked. Explicit navigation from introduction stays on Start; fresh-root auto-open on/off is also covered by unit tests.
 - Approved Start and actual Start were compared at 1440x900. The introduction reference is a 1440x2534 full-page image; comparison covered composition and hero content, not a claim of identical full-page pixels.
-- Final Start capture: `output/playwright/actual-pages-20261018/start-desktop.jpg`. Introduction desktop capture: `output/playwright/actual-pages-20261018/intro-desktop.jpg`. Earlier mobile screenshots precede the final small header/control corrections.
+- Desktop captures were reviewed for Start and Introduction. The earlier mobile captures preceded the final small header/control corrections; they do not establish verification of those later changes.
 - Fixed findings: search icon/input padding, narrow introduction header wrapping, mismatched search/select controls, indistinguishable document badges and owner-only development notices. No remaining blocking issue was observed in the checked views. Final Chrome error log was empty; the viewport override was reset.
 
 ## Automated Checks
@@ -23,4 +23,4 @@
 
 ## Result
 
-The implemented UI passed the scoped checks above. No commit, push, merge, deployment or personal skill update was performed. Development status belongs in this report and the tickets, not on product pages.
+The implemented UI passed the scoped checks above. This is a historical record of those checks, not a verification of every later release. Development status belongs in this report and the tickets, not on product pages.

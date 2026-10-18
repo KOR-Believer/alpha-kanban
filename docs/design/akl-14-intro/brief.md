@@ -1,13 +1,13 @@
 # AKL-14 소개 랜딩 시안
 
 작성일: 2026-10-18
-상태: 시안 제작 요구사항. 실제 앱 적용과 디자인 승인은 별도다.
+상태: 과거 시안 제작 요구사항. 승인·적용 결과는 [디자인 검토](README.md), 현재 제품 지침은 [AGENTS.md](../../../AGENTS.md)를 참고한다.
 
 ## 확정한 목적과 경계
 
 - `/`는 프로젝트 시작 화면으로 유지한다. 별도 `/intro`는 Alpha Kanban을 처음 접하는 사람에게 소개하고 외부 공유에 쓰는 페이지다.
 - 같은 앱 안의 두 화면이지 별도 사이트·배포가 아니다. 시작 화면의 최근/다른 프로젝트 목록을 소개에 다시 넣지 않는다.
-- Open Design의 새 프로젝트 alpha-kanban-intro-akl14-20261018 안에서만 시안을 만든다. 실제 앱, 이전 AKL-08 디자인, 개인 전역 스킬, 폴더 권한·데이터·설정을 수정하지 않는다.
+- Open Design의 별도 디자인 프로젝트 안에서만 시안을 만든다. 실제 앱, 이전 AKL-08 디자인, 개인 전역 스킬, 폴더 권한·데이터·설정을 수정하지 않는다.
 - 이번 산출물은 디자인 검토용 HTML과 캡처다. `/intro`의 제품 라우트 구현, 공개 배포, 실제 스킬 설치, AI 실행은 하지 않는다.
 
 ## 방문자와 전달할 내용
@@ -44,10 +44,9 @@ Alpha Kanban은 AI와 사람이 같은 로컬 Markdown을 보며 일하도록 �
 
 ## 제공 자료와 접근 범위
 
-- 제품 스타일 읽기 참고: `/Users/kiseong.park/workspace/alpha-kanban/apps/web/src/styles.css`
-- 제품 보드 읽기 참고: `/Users/kiseong.park/workspace/alpha-kanban/apps/web/src/AllProjectsBoard.tsx`, `/Users/kiseong.park/workspace/alpha-kanban/apps/web/src/components/KanbanBoard.tsx` (실제 위치를 확인하고 존재하는 파일만 참고)
-- 이전 시작 시안 읽기 참고: `/Users/kiseong.park/Library/Application Support/Open Design/namespaces/release-stable/data/projects/alpha-kanban-start-akl08-20261018`
-- 시작 미리보기: `http://127.0.0.1:60065/api/projects/alpha-kanban-start-akl08-20261018/raw/index.html`
+- 제품 스타일 읽기 참고: `apps/web/src/styles.css`
+- 제품 보드 읽기 참고: `apps/web/src/AllProjectsBoard.tsx`, `apps/web/src/components/IntroDemoBoard.tsx`
+- 이전 시작 시안의 요구사항·검토 결과: [시작 화면 디자인 기록](../akl-08-start/README.md)
 - 공개 출처 표기: `https://github.com/KOR-Believer/alpha-kanban`. 현재 공개 상태·태그가 확인되지 않은 하위 설치 주소는 연결하지 않는다.
 - 이 자료 외 개인 폴더, AI 전역 설정, 프로젝트 데이터 파일 및 `.alpha-kanban`은 읽거나 복사하지 않는다.
 

@@ -15,7 +15,7 @@
 - `docs/03_alpha_kanban_multi_workspace_plan.md`
 - `docs/04_alpha_kanban_multi_workspace_tickets.md`
 - `AGENTS.md`
-- `/Users/kiseong.park/Downloads/index.html` 참고 시안
+- 기존 전역 탐색 시안의 구조 참고
 
 이 문서는 Alpha Kanban app shell의 전역 navigation, 문서 탐색 sidebar, 현재 문서 header 역할을 분리하기 위한 UX/구현 계획이다. 참고 시안은 구조 아이디어만 추출하고 그대로 복제하지 않는다.
 

@@ -90,9 +90,9 @@ alpha-kanban/
   apps/web
   .alpha-kanban/state.json
 
-/Users/kiseong.park/workspace/
+/workspace/
   alpha-kanban/       # target workspace로도 선택 가능
-  sparkone/
+  example-project/
   other-project/
 ```
 
@@ -104,7 +104,7 @@ alpha-kanban/
 
 ```json
 {
-  "workspaceRoots": ["/Users/kiseong.park/workspace"],
+  "workspaceRoots": ["/workspace"],
   "defaultDocRoots": ["docs"],
   "codexCommand": "codex"
 }
@@ -119,8 +119,8 @@ alpha-kanban/
   "recentWorkspaces": [
     {
       "id": "hash-or-stable-id",
-      "root": "/Users/kiseong.park/workspace/sparkone",
-      "label": "sparkone",
+      "root": "/workspace/example-project",
+      "label": "example-project",
       "lastOpenedAt": "2026-06-22T00:00:00.000Z"
     }
   ],
@@ -128,7 +128,7 @@ alpha-kanban/
   "documents": {
     "hash-or-stable-id::docs/02_tickets.md": {
       "codexSessionId": "thread-id",
-      "lastTicketId": "SPK-04"
+      "lastTicketId": "DEMO-04"
     }
   }
 }

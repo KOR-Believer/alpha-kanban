@@ -27,7 +27,7 @@
 
 ## 운영 원칙
 
-- 모든 작업은 `/Users/kiseong.park/workspace/alpha-kanban` repository를 실행 컨텍스트로 둔다.
+- 모든 작업은 `alpha-kanban` repository를 실행 컨텍스트로 둔다.
 - local-only 도구이므로 server는 기본값으로 `127.0.0.1`에만 bind한다.
 - 파일 접근은 config allowlist 내부로 제한한다.
 - Codex 실행은 shell string이 아니라 argument array 기반 process spawn만 사용한다.
@@ -130,7 +130,7 @@ Depends on:
 
 - React/Vite + Express를 기본 구조로 결정한다.
 - TanStack Router/Query는 프론트엔드 개발 경험을 위해 채택한다.
-- `/Users/kiseong.park/workspace/alpha-kanban`을 대상 repository로 확정한다.
+- `alpha-kanban`을 대상 repository로 확정한다.
 - `docs/01_alpha_kanban_plan.md`, `docs/02_alpha_kanban_tickets.md`에 구현 방향과 티켓 경계를 기록한다.
 
 제외 범위:
@@ -149,9 +149,9 @@ Depends on:
 
 검증:
 
-- [x] `/Users/kiseong.park/workspace/alpha-kanban` repository 상태를 확인한다.
+- [x] `alpha-kanban` repository 상태를 확인한다.
 - [x] `plan-ticketing` canonical plan/ticket pattern을 확인한다.
-- [x] `sparkone/apps/sparkone-franchise-admin`의 TanStack Start 사용 사실을 확인한다.
+- [x] `참고용 관리 앱`의 TanStack Start 사용 사실을 확인한다.
 
 진행 메모:
 

@@ -1,9 +1,11 @@
 # PWA Operations and Preservation
 
+For hosting configuration and release checks, see [Deployment](deployment.md). Local setup and standard build commands are in [Contributing](../CONTRIBUTING.md).
+
 ## Boundaries
 
 - Production origin: `https://kanban.giveit2.me`; worker URL `/sw.js`; manifest id/start/scope `/`.
-- No DNS or public deployment was authorized with this implementation. Verify the actual Cloudflare response headers and installation before promoting it.
+- Verify actual production response headers and installation behavior for each release; local preview checks do not establish deployment success.
 - Chrome desktop is the target. A standalone PWA window does not add Node privileges, filesystem-wide access, AI execution or permanent folder watching.
 - App build ID is a content hash plus an optional CI `AK_RELEASE_REVISION`. Skill bundle hash is separately reported in release metadata. Semantic skill/Markdown compatibility remains owned by AKL-10..13; null is unknown, not a guessed version.
 
@@ -40,7 +42,7 @@ a later tombstone. Retain the origin/worker URL inventory below across deploymen
 
 | Origin | Worker URL | State |
 | --- | --- | --- |
-| `https://kanban.giveit2.me` | `/sw.js` | Planned production; deployment not performed |
+| `https://kanban.giveit2.me` | `/sw.js` | Public application origin; validate each release |
 | Isolated localhost origin per `test:pwa` run | `/sw.js` | Test profile only; browser closed after run |
 
 ## Preservation Contract

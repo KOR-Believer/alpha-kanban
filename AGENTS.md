@@ -1,5 +1,11 @@
 # Agent Notes
 
+## Public Documentation
+
+- Keep both READMEs focused on implementation-ledger installation, usage, and updates, with the hosted web viewer as an optional companion. Put local setup/build/test commands in `CONTRIBUTING.md` and operator deployment procedures in `docs/deployment.md`.
+- Use `https://kanban.giveit2.me` for public application links; `/` remains the PWA workspace and `/intro` the introduction and installation guide.
+- Use repository-relative paths and generic examples. Do not commit personal machine paths, private project names, design-session identifiers, temporary preview URLs, or links to ignored captures. Preserve meaningful decisions, verification outcomes, and limitations without tool-call diaries or transient process state.
+
 ## Browser Smoke
 
 - Prefer the Chrome plugin first for visual smoke checks, layout review, and cursor/mouse feedback.

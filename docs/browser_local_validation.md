@@ -2,7 +2,7 @@
 
 ## Scope
 
-- Branch: `kiseong/browser-local`, based on PR #1 commit `0d48dc9`.
+- Baseline: browser-local implementation based on PR #1 commit `0d48dc9`.
 - Desktop Chrome and Cloudflare Pages static output; no PR merge, push, hosting deployment or DNS changes.
 - Existing Node mode retained. Claude skill port/testing is a separate TODO.
 

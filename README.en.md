@@ -2,210 +2,102 @@
 
 [한국어](README.md) · **English**
 
-A kanban view of the plans and tickets you create with AI, right in your project folder.
+**Keep a project record of what you agree with AI, implement, and verify.**
 
-[Open app](https://alpha-kanban.pages.dev/) · [Introduction and guide](https://alpha-kanban.pages.dev/intro)
+The core is the [implementation-ledger skill](skills/implementation-ledger/SKILL.md). It helps AI record scope, acceptance criteria, progress, and verification in local Markdown so you can review the work and take part in decisions. The skill supports the workflow from planning through implementation on its own. The web app is an optional viewer for those same documents and their progress.
 
-Alpha Kanban is a web app for reading local Markdown plans, tickets, and inventories. Keep the conversation in your AI tool, and use the board to review documents and follow progress. When useful, update a ticket's status or leave an instruction directly in its Markdown file.
+[Introduction and installation](https://kanban.giveit2.me/intro) · [Open web viewer](https://kanban.giveit2.me/)
 
-## Features
+## 1. Install the skill
 
-- **Connect projects:** Open one project or register a workspace containing several projects.
-- **Browse documents:** Group plans, tickets, and inventories; search and sort documents; hide plain Markdown or completed document sets.
-- **Project and all-project boards:** Focus on one ticket document or review tickets across connected projects.
-- **Ticket details:** Read scope, acceptance criteria, user instructions, and progress notes. Switch between side, center, and full views, and resize the detail window.
-- **Original Markdown:** Switch a ticket document from the board to its complete Markdown view.
-- **Optional editing:** Save status, progress, and manual instructions to the original file. Review changes before confirming a drag-and-drop move.
-- **Installation and offline access:** Install the PWA in its own window and, once offline preparation finishes, read and edit local documents without a connection.
-- **Korean and English:** Korean is the default; select English in the top bar to switch. Document content and user-written text stay unchanged.
-
-## Get Started
-
-Use desktop Chrome over HTTPS or localhost. Using the app does not require Node.js or an account.
-
-1. Choose **Open project** and select the folder you work in. You do not need to register its parent first.
-2. To manage several projects, choose **Register workspace** and select their common parent folder. Its immediate subfolders appear as projects.
-3. Open a project and select a document in the sidebar. Projects without plans, tickets, or inventories open the usage guide first. Plain Markdown remains available through an explicit sidebar selection.
-
-For example, registering `workspace` in this layout adds `reading-journal` and `design-system` as projects:
-
-```text
-workspace/
-  reading-journal/
-    docs/
-      01_reading_plan.md
-      01_reading_tickets.md
-  design-system/
-```
-
-**New project** creates a project folder inside a registered workspace.
-
-Choose **Help → Take a quick tour** to explore the current screen's folder connections and board navigation. An invitation appears on your first visit; skip it or replay the tour from Help whenever you need it.
-
-## What Is implementation-ledger?
-
-[implementation-ledger](skills/implementation-ledger/SKILL.md) is a skill that helps your AI record **what you agreed to build, what has been implemented, and what still needs checking** in your project's Markdown files. A skill bundles reusable instructions and document templates; install it in Codex to use it while working.
-
-- **Plans:** Describe goals, scope, key decisions, and questions that still need your input.
-- **Tickets:** Divide implementation into reviewable tasks, each with acceptance criteria, status, progress, and verification results.
-- **Inventories:** Keep research findings or reusable evidence in a separate document when the work needs one.
-
-The skill does more than format documents. It distinguishes discussion, document writing, and implementation requests, and tells the AI to check unresolved questions that affect the current implementation. After implementation, it guides the AI to update tickets so you can review the results.
-
-**The skill guides document creation and maintenance in your AI tool; Alpha Kanban lets you read those documents and follow progress.** Keep the conversation and development in Codex, and connect the same project folder to Alpha Kanban. Installing the web app and installing the skill are separate steps.
-
-## Install the Skill
-
-### Ask Codex to Install It
-
-Send the request below to a Codex chat with access to your local files. **You do not need to clone Alpha Kanban, run the web app locally, or install `pnpm`.** Give Codex the skill's GitHub location. Installation needs an internet connection to retrieve the files.
+Send this request to a **Codex chat** that can work with your local project files. You do not need to download this repository or run the web app locally. Installation requires access to GitHub.
 
 ```text
 Use $skill-installer to install implementation-ledger from this GitHub path:
 
 https://github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger
 
-Install the entire folder, including SKILL.md, references, assets, scripts, and agents.
-Check which personal skill location my Codex environment recognizes and use it.
-If a skill with the same name is already installed, compare the files and explain the changes first.
-Back up the existing installation and preserve personal edits. Ask me before overwriting it.
-After installation, report the location and whether Codex recognizes the skill.
-Do not change any project documents or code.
+Install the entire folder, including references, assets, scripts, and agents, not only SKILL.md.
+Find and use the personal skill location recognized by my Codex environment.
+If a skill with the same name is already installed, compare it and explain the changes first.
+Back up the existing installation and preserve my customizations. Ask before overwriting it.
+Report the installation location and whether Codex recognizes it. Do not change project documents or code.
 ```
 
-Codex's built-in `$skill-installer` can install skills from GitHub repositories. See the [official Codex skill guide](https://learn.chatgpt.com/docs/build-skills#install-curated-skills-for-local-use) for installation details.
+After installation, check that you can select `$implementation-ledger`. If it does not appear, reopen Codex and ask it to check that `SKILL.md`, references, and templates were installed together.
 
-In the web app, **Help → Create plans and tickets with AI → Review and copy install request** also provides a request you can send to Codex. Inside a project, installation guidance is available from the sidebar's **Usage guide**. The website provides the request; Codex performs the installation.
+The [skill guide on the website](https://kanban.giveit2.me/intro#skill) also provides the installation request. The website provides guidance; Codex performs the installation.
 
-### Check the Installation and Start a Conversation
+## 2. Work with AI
 
-After installation, select `$implementation-ledger` in Codex and make a request. If the skill does not appear, reopen Codex and check again. You can start with a discussion that leaves your files unchanged:
+Start by discussing what you want to build.
 
 ```text
 Use $implementation-ledger.
-I want to build a reading journal app. Let's brainstorm features in discussion mode first.
-Don't write documents or code yet.
+I want to build a reading journal app. Let's discuss the features and scope first.
+Do not write documents or code yet.
 ```
 
-If Codex cannot find the skill, ask it to check that `SKILL.md` is directly inside the installed skill folder and that its references and templates were installed too. To update, use the installation request above to compare the existing copy and review personal changes before replacing it.
+Once you have a direction, ask for a work record.
 
-## Work With AI
+```text
+Use $implementation-ledger to draft tickets from what we have agreed.
+Add a plan if multiple tickets need shared design decisions.
+Separate scope and acceptance criteria from questions I need to answer or decide.
+Do not implement yet.
+```
 
-You can start before you have any documents. The important part is to read the AI's draft yourself, settle decisions that affect the implementation, and reflect those decisions in the documents before requesting code.
+Read the draft and check the features, exclusions, and acceptance criteria. Discuss questions that affect the current implementation, have AI update the documents with your decisions, then request development.
 
-1. **Explore the idea.** “I want to build a reading journal app. Let's brainstorm in discussion mode. Don't write documents or code yet.”
-2. **Request a plan and ticket draft.** “Use `$implementation-ledger` to draft a plan and tickets from our conversation. Separate agreed requirements from open questions.”
-3. **Read the draft yourself.** Check the features, exclusions, and acceptance criteria against what you intended.
-4. **Discuss relevant open questions.** Work through questions that affect this implementation with your AI. Questions about later work can remain open.
-5. **Update the documents.** “Reflect our decisions in the plan and ticket scope and acceptance criteria. Resolve the answered questions, but don't implement yet.”
-6. **Review the final documents.** Check that your answers made it into the actual files. Return to the conversation if anything remains unclear.
-7. **Request implementation in order.** “Implement the reviewed tickets in dependency order. Verify the acceptance criteria and record the results in the documents.”
+```text
+Implement the reviewed tickets in dependency order.
+First read the latest user directions and relevant open questions.
+Verify the acceptance criteria and record the results and remaining work in the tickets.
+```
 
-You can do all the work in your AI chat and use Alpha Kanban only for reading. Moving tickets and leaving instructions on the board are optional.
+You can return to the same files to continue later. Document creation and implementation are separate requests, leaving room to review and adjust the scope.
 
-## Documents and Boards
+### What gets recorded?
 
-Give related documents the same base name with these suffixes:
-
-| File | Contents |
+| Example document | Purpose |
 | --- | --- |
-| `01_reading_plan.md` | Goals, scope, design, and open questions |
-| `01_reading_tickets.md` | Ticket scope, status, acceptance criteria, and records |
-| `01_reading_inventory.md` | Research findings and reference material |
+| `01_reading_tickets.md` | Scope, acceptance criteria, status, progress, user directions, and verification results |
+| `01_reading_plan.md` | Goals, design, and decisions shared by several tasks |
+| `01_reading_inventory.md` | Research and evidence worth referring to again |
 
-You do not need all three files for every task. Use the documents that the work needs. Other `.md` files can also be read from the document list.
+Usually start with tickets; add a plan or inventory when needed. Related documents share a common filename prefix. See the [document format](skills/implementation-ledger/references/ledger-format.md) and [sample tickets](examples/sample_tickets.md).
 
-- **Project board:** Review the tickets in the selected document.
-- **All tickets:** Search tickets across connected projects and filter by project.
-- **Document filters:** Hide plain Markdown or sets whose tickets are all complete.
-- **View preferences:** Sorting, filters, detail dimensions, and card order on the all-projects board are saved in the browser. They do not change document content.
+## 3. Update the skill
 
-See the [Markdown format reference](skills/implementation-ledger/references/ledger-format.md) and [sample tickets](examples/sample_tickets.md) for the document structure.
+Return to the [installation guide](https://kanban.giveit2.me/intro#skill) to find the official skill source. Use the installation request above to compare it with your existing copy. Review the changes, then update with a backup and your customizations preserved.
 
-### Edit From the Board
+**Web app updates and personal skill updates are separate.** Reopening the website or updating its PWA does not update your installed skill. Ask Codex to check the location and contents of your installation.
 
-Enable writing through **Local folders → Allow editing**.
+## Optional: view documents and progress on the web
 
-- Status and progress changes are saved with a reason in the same Markdown file. Leaving the reason empty uses the default text displayed in the input.
-- Dragging a card to another status opens a confirmation dialog. Canceling leaves the file and card unchanged; the card moves only after a successful save.
-- The manual instruction input appends a record prefixed with `[수동지시]` (manual instruction) to the `사용자 지시` (user instructions) section.
-- Reopening a completed ticket preserves its existing checklists and progress notes.
-- After editing a document, ask your AI tool to reread the latest file. Saving in the board does not launch AI work.
+Open the [web viewer](https://kanban.giveit2.me/) in desktop Chrome and choose **Open project** to connect the folder you use with AI. No account or local web server is required.
 
-If another tool changes the file, review the latest document before saving. Avoid editing the same file simultaneously in your AI tool and browser.
+- **Project board:** Read ticket status, scope, acceptance criteria, and progress notes.
+- **All tickets:** Review work across connected projects. You can register their shared parent folder as a workspace.
+- **Document views:** Read, search, and sort plans, tickets, inventories, and ordinary Markdown.
+- **Optional editing:** Grant write access to save status, progress, reasons, and manual directions to the original Markdown. Dragging a ticket also requires save confirmation.
 
-## Data and Permissions
+You can keep all conversation and development in your AI chat and use the web app only for reading. After leaving a direction on the board, ask AI to reread the latest file. Saving does not run AI. Avoid editing the same file in AI and the browser at the same time.
 
-Documents are read from the local folders you select. Confirmed edits are written to the original files. Alpha Kanban does not upload your project Markdown.
+For guidance, use **Help → Take a quick tour** or **Create plans and tickets with AI** in the app.
 
-Folder connections, recent projects, view preferences, and save-recovery records are kept in this browser for this site address.
+### Local data and PWA
 
-- Different domains, ports, and browser profiles have separate connections and settings.
-- Clearing site data means reconnecting folders and configuring preferences again. It does not delete the original files on disk.
-- **Disconnect folder** removes the app's connection, not the actual folder or documents.
-- If access expires, use **Reconnect folder** to grant access again.
-- If a save cannot be verified, open **Local folders → Recovery records** to inspect the original and intended copies. Check the actual file before submitting the same instruction again.
+Documents are read from the local folder you choose; confirmed edits are saved to the original files. Alpha Kanban does not upload project Markdown. Folder connections, view preferences, and save-recovery records belong to that browser and site origin.
 
-## Install the App and Work Offline
+- Disconnecting a folder does not delete its files. Reconnect it if permission expires.
+- A different address or browser profile needs its own connections and settings. Clearing site data also removes saved connections, settings, and recovery records.
+- If a save result is uncertain, inspect **Local folders → Recovery records** and the actual file before saving again.
+- Use **App installation and updates** to install the PWA. Once **Ready to use offline** appears, you can read and edit local files already downloaded to your device offline. External AI tools and GitHub need their own connections.
+- Before an app update, save or discard drafts in all app windows. If the app will not open, use [app repair](https://kanban.giveit2.me/repair.html) while online.
 
-Open **App installation and updates** in the top bar and choose **Install app** when Chrome offers it. Installation opens Alpha Kanban in a separate window; it does not grant folder permissions.
+`/` is the project workspace; `/intro` is the introduction and installation guide. The PWA also starts at `/`.
 
-After **Ready to use offline** appears, you can reopen the app and read or edit local documents without an internet connection. Download files in cloud-synced folders to your device first. External AI tools, GitHub links, and remote images need their own network access.
+## Contributing
 
-- **Check for updates:** Find and prepare new app files.
-- **Apply update:** Switch versions after checking for unfinished inputs and saves. Save or discard unfinished changes in other app windows first.
-- **Repair app:** Prepare app files again when the app is not working correctly. Folder connections, preferences, and document recovery records are preserved. Connect to the internet and close other app windows before proceeding. If the app will not open, visit `/repair.html` on the same site directly.
-
-## Run Locally
-
-Recommended development environment: Node.js 24 and pnpm 11.3.0. From the repository, run:
-
-```bash
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-The default address is [http://127.0.0.1:5187](http://127.0.0.1:5187). If the port is occupied, use the address printed in your terminal.
-
-To try installation, offline access, and updates, serve the built app:
-
-```bash
-pnpm build
-pnpm preview
-```
-
-The default address is [http://127.0.0.1:4187](http://127.0.0.1:4187). Development mode does not register a service worker. The two addresses use different ports, so each keeps its own connections and settings.
-
-### Static Hosting
-
-Use these settings on Cloudflare Pages:
-
-| Setting | Value |
-| --- | --- |
-| Build command | `pnpm build` |
-| Output directory | `apps/web/dist-browser` |
-
-Serve over HTTPS with SPA routing for `/`, `/intro`, `/all`, and `/w/:id`. Cloudflare Pages provides its [default SPA handling](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering) when the output root has no `404.html`. Deploy the generated service worker, repair files, and `_headers` with the app.
-
-Use a stable site address for installation and folder connections. See the [PWA operations guide](docs/pwa_operations.md) for service-worker updates, recovery, and retirement.
-
-### Checks
-
-```bash
-pnpm --filter @alpha-kanban/web typecheck
-pnpm --filter @alpha-kanban/shared test
-pnpm --filter @alpha-kanban/web test
-pnpm build
-```
-
-Browser checks use Chrome:
-
-```bash
-# With the development app running on port 5187
-pnpm test:tours
-
-# Installation, offline access, updates, and recovery in isolated Chrome profiles
-pnpm test:pwa
-```
-
-[한국어 README](README.md)
+For local development, builds, and validation of the skill and web app, see the [contribution guide](CONTRIBUTING.md).

@@ -130,7 +130,7 @@ Depends on:
 
 현재 문제:
 
-- 현재 앱은 `/Users/kiseong.park/workspace/alpha-kanban`의 `docs`와 `examples`를 바로 리스팅한다.
+- 현재 앱은 `alpha-kanban`의 `docs`와 `examples`를 바로 리스팅한다.
 - 사용자가 원하는 실제 운영 흐름은 workspace/project를 고른 뒤 해당 project의 docs를 보고 Codex 작업을 지시하는 것이다.
 - 기존 `workspaceRoots` 개념은 config에 있지만 target project 선택과 Codex cwd routing에 아직 사용되지 않는다.
 
@@ -500,7 +500,7 @@ Depends on:
 진행 메모:
 
 - 2026-06-23: `apps/web/src/App.tsx`의 project switcher에 Open path form을 추가하고, root 기반 workspace select 성공 시 returned workspace id로 board scope를 전환하도록 구현했다.
-- 2026-06-23: `alpha-kanban.config.json`을 `workspaceRoots: [".."]`, `defaultDocRoots: ["docs", "examples"]`로 정리해 `/Users/kiseong.park/workspace` 아래 project를 dogfooding 대상으로 열 수 있게 했다.
+- 2026-06-23: `alpha-kanban.config.json`을 `workspaceRoots: [".."]`, `defaultDocRoots: ["docs", "examples"]`로 정리해 `/workspace` 아래 project를 dogfooding 대상으로 열 수 있게 했다.
 - 2026-06-23: 검증 완료: `pnpm typecheck`, `pnpm test`, `pnpm build`, Playwright desktop/mobile smoke. `/tmp` 입력 시 `WORKSPACE_OUTSIDE_ALLOWLIST` 표시, allowlist 내부 신규 path 선택 및 recent 등록, 기존 `alpha-kanban` 재선택, mobile `390x844` 레이아웃을 확인했다.
 
 ### AKW-13. Server-backed folder picker와 workspaceRoots 설정 UX 설계/구현
@@ -2226,7 +2226,7 @@ Depends on:
 
 - 2026-06-23: plan-ticketing skill은 plan/ticket/inventory를 생성하지만 UI는 티켓 문서에 특화되어 있으므로, 인벤토리와 플랜도 살펴볼 UX가 필요하다.
 - 2026-06-23: 파일 내부 본문에는 연관 파일 나열 방식이 규격화되어 있지 않고, 절대주소/상대주소/파일명만 언급되는 경우가 섞일 수 있다.
-- 2026-06-23: `~/workspace/sparkone/docs`가 실제로 가장 많이 사용한 representative repo이므로 그 구조를 기준으로 판단한다.
+- 2026-06-23: 주로 사용하던 참고 프로젝트의 docs 구조를 기준으로 판단한다.
 - 2026-06-23: `{NN}_{slug}_`는 skill에 명시된 생성 규칙이지만, 번호 자체는 관계의 강한 기준으로 보지 않는다.
 - 2026-06-23: plan을 선택하면 Kanban이 아니라 다른 view mode가 필요하다.
 - 2026-06-23: AKW-28을 먼저 시작한다.

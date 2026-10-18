@@ -17,7 +17,7 @@
 
 참고 repository:
 
-- `sparkone/apps/sparkone-franchise-admin`: TanStack Start, TanStack Router/Query, admin UI 구성 참고
+- `참고용 관리 앱`: TanStack Start, TanStack Router/Query, admin UI 구성 참고
 
 이 문서는 구현 전 합의를 위한 초안이다. 코드 변경은 별도 ticket 단위로 분리한다.
 
@@ -42,15 +42,15 @@
 
 ### Repository
 
-- `/Users/kiseong.park/workspace/alpha-kanban` 경로에 Git repository가 초기화되어 있다.
+- `alpha-kanban` 경로에 Git repository가 초기화되어 있다.
 - 현재 추적 전 파일은 `README.md`, `.gitignore`뿐이며, `package.json`, `apps/`, `packages/`, `src/` 구조는 아직 없다.
 - `README.md`에는 local-only kanban workspace, Markdown ticket browsing, Codex CLI 실행 의도가 기록되어 있다.
 
 ### 스택 결정
 
 - React/Vite + Express를 기본 스택으로 선택한다.
-- TanStack Start는 `sparkone-franchise-admin`과 유사한 full-stack admin app에는 적합하지만, 이 프로젝트의 핵심은 SSR보다 로컬 파일/프로세스 제어이므로 Express가 더 직접적이다.
-- 프론트엔드 라우팅과 data fetching은 TanStack Router/Query를 사용해 `franchise-admin`과 유사한 개발 경험을 일부 유지한다.
+- TanStack Start는 `참고용 관리 앱`과 유사한 full-stack admin app에는 적합하지만, 이 프로젝트의 핵심은 SSR보다 로컬 파일/프로세스 제어이므로 Express가 더 직접적이다.
+- 프론트엔드 라우팅과 data fetching은 TanStack Router/Query를 사용해 참고용 관리 앱과 유사한 개발 경험을 일부 유지한다.
 
 ### Markdown 입력 형식
 
