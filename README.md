@@ -4,6 +4,8 @@
 
 AI와 함께 만든 계획과 티켓을, 내 프로젝트 폴더에서 바로 보는 칸반.
 
+[앱 열기](https://alpha-kanban.pages.dev/) · [소개와 사용 안내](https://alpha-kanban.pages.dev/intro)
+
 Alpha Kanban은 로컬 Markdown을 읽어 계획, 티켓, 인벤토리를 한곳에 보여주는 웹 앱입니다. AI와의 대화는 사용하는 AI 도구에서 이어가고, 여기서는 문서를 읽고 진행 상황을 확인하세요. 필요하면 보드에서 상태를 바꾸거나 지시를 남길 수도 있습니다.
 
 ## 주요 기능

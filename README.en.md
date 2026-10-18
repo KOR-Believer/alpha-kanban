@@ -4,6 +4,8 @@
 
 A kanban view of the plans and tickets you create with AI, right in your project folder.
 
+[Open app](https://alpha-kanban.pages.dev/) · [Introduction and guide](https://alpha-kanban.pages.dev/intro)
+
 Alpha Kanban is a web app for reading local Markdown plans, tickets, and inventories. Keep the conversation in your AI tool, and use the board to review documents and follow progress. When useful, update a ticket's status or leave an instruction directly in its Markdown file.
 
 ## Features
