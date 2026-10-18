@@ -36,6 +36,11 @@ describe("PWA asset and data contracts", () => {
     for (const path of ["/sw.js", "/release.json", "/offline-assets.json", "/repair.html", "/repair.js"]) expect(headers).toContain(`${path}\n  Cache-Control: no-store`);
   });
 
+  it("disables recovery-page caching after Cloudflare removes the HTML extension", () => {
+    const headers = readFileSync(new URL("../../public-browser/_headers", import.meta.url), "utf8");
+    for (const path of ["/repair.html", "/repair"]) expect(headers).toContain(`${path}\n  Cache-Control: no-store`);
+  });
+
   it("does not retire caches or registration while another worker is installing assets", async () => {
     const source = readFileSync(new URL("../../pwa-rescue.js", import.meta.url), "utf8");
     const events = new Map<string, (event: { waitUntil: (work: Promise<void>) => void }) => void>();

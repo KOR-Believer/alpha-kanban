@@ -22,6 +22,8 @@
   Cache-Control: no-cache
 /repair.html
   Cache-Control: no-store
+/repair
+  Cache-Control: no-store
 /repair.js
   Cache-Control: no-store
 /repair.css
