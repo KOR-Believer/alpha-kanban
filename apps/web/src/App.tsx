@@ -1,3 +1,6 @@
+import { t, locale, useTranslation } from "@/i18n";
+import { LanguageSelector } from "@/components/LanguageSelector";
+import { errorSummary, errorDetails } from "@/i18n/errors";
 import {
   useCallback,
   useEffect,
@@ -6,6 +9,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
@@ -19,6 +23,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   APP_NAME,
+  TICKET_PROGRESS_BY_STATUS,
   apiErrorResponseSchema,
   cancelCodexRunResponseSchema,
   codexDocumentRunSummaryResponseSchema,
@@ -73,6 +78,7 @@ import {
   type TicketChecklistItem,
   type TicketDocumentResponse,
   type TicketItem,
+  type TicketInstructionKind,
   type TicketProgress,
   type TicketStatus,
   type WorkspaceDirectoryEntry,
@@ -99,8 +105,6 @@ import {
   LayoutGrid,
   ListChecks,
   Loader2,
-  Maximize2,
-  PanelRight,
   Play,
   RefreshCcw,
   Save,
@@ -117,6 +121,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -137,7 +142,6 @@ import {
   buildAppRoute,
   parseAppRouteState,
   type AppRouteState,
-  type TicketDetailMode,
   type TicketDocumentViewMode,
 } from "./appRoute";
 import {
@@ -149,8 +153,15 @@ import {
   sortDocumentSets,
   type DocumentSetSortPreference,
 } from "./documentSetSorting";
+import { IN_APP_CHAT_ENABLED } from "./features";
+import { TicketStatusFields, type SaveTicketStatus, type TicketWriteGuard } from "@/components/tickets/TicketStatusFields";
+import { TicketMoveDialog, prepareTicketMove, type TicketMove } from "@/components/tickets/TicketMoveDialog";
+import {
+  useTicketDetailPresentation, type TicketDetailPresentation,
+} from "./components/tickets/useTicketDetailPresentation";
+import { TicketDetailFrame } from "./components/tickets/TicketDetailFrame";
 
-const BOARD_STATUSES: TicketStatus[] = [
+export const BOARD_STATUSES: TicketStatus[] = [
   "TODO",
   "READY",
   "IN_PROGRESS",
@@ -158,7 +169,6 @@ const BOARD_STATUSES: TicketStatus[] = [
   "DONE",
   "DEFERRED",
 ];
-const PROGRESS_VALUES: TicketProgress[] = [0, 25, 50, 75, 100];
 const MARKDOWN_HEADING_HIGHLIGHT_CLASS = "ak-markdown-heading-highlight";
 const SIDEBAR_WIDTH_STORAGE_KEY = "alpha-kanban.sidebarWidth";
 const DOCUMENT_SET_SORT_STORAGE_KEY = "alpha-kanban.documentSetSort";
@@ -166,11 +176,6 @@ const AUTO_OPEN_LAST_WORKSPACE_STORAGE_KEY = "alpha-kanban.autoOpenLastWorkspace
 const DEFAULT_SIDEBAR_WIDTH = 340;
 const MIN_SIDEBAR_WIDTH = 280;
 const MAX_SIDEBAR_WIDTH = 560;
-const TICKET_DETAIL_MODE_STORAGE_KEY = "alpha-kanban.ticketDetailMode";
-const TICKET_DETAIL_WIDTH_STORAGE_KEY = "alpha-kanban.ticketDetailWidth";
-const DEFAULT_TICKET_DETAIL_WIDTH = 720;
-const MIN_TICKET_DETAIL_WIDTH = 520;
-const MAX_TICKET_DETAIL_WIDTH = 1040;
 const SCOPE_MENTION_NODE_TYPE = "scopeMention";
 const CLI_DEFAULT_SELECT_VALUE = "__cli_default__";
 const MODEL_DEFAULT_SELECT_VALUE = "__model_default__";
@@ -190,7 +195,7 @@ type ParseableSchema<T> = {
   parse: (value: unknown) => T;
 };
 
-class ClientApiError extends Error {
+export class ClientApiError extends Error {
   readonly code: string;
   readonly status: number;
 
@@ -286,13 +291,6 @@ function clampSidebarWidth(width: number): number {
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)));
 }
 
-function clampTicketDetailWidth(width: number): number {
-  return Math.min(
-    MAX_TICKET_DETAIL_WIDTH,
-    Math.max(MIN_TICKET_DETAIL_WIDTH, Math.round(width)),
-  );
-}
-
 function readStoredSidebarWidth(): number {
   if (typeof window === "undefined") {
     return DEFAULT_SIDEBAR_WIDTH;
@@ -303,34 +301,6 @@ function readStoredSidebarWidth(): number {
     return Number.isFinite(parsed) ? clampSidebarWidth(parsed) : DEFAULT_SIDEBAR_WIDTH;
   } catch {
     return DEFAULT_SIDEBAR_WIDTH;
-  }
-}
-
-function readStoredTicketDetailMode(): TicketDetailMode {
-  if (typeof window === "undefined") {
-    return "side";
-  }
-
-  try {
-    const stored = window.localStorage.getItem(TICKET_DETAIL_MODE_STORAGE_KEY);
-    return stored === "modal" || stored === "side" ? stored : "side";
-  } catch {
-    return "side";
-  }
-}
-
-function readStoredTicketDetailWidth(): number {
-  if (typeof window === "undefined") {
-    return DEFAULT_TICKET_DETAIL_WIDTH;
-  }
-
-  try {
-    const parsed = Number(window.localStorage.getItem(TICKET_DETAIL_WIDTH_STORAGE_KEY));
-    return Number.isFinite(parsed)
-      ? clampTicketDetailWidth(parsed)
-      : DEFAULT_TICKET_DETAIL_WIDTH;
-  } catch {
-    return DEFAULT_TICKET_DETAIL_WIDTH;
   }
 }
 
@@ -414,7 +384,7 @@ const workspaceRootsSettingsKey = ["workspace-roots-settings"] as const;
 const codexModelsKey = ["codex-models"] as const;
 const codexRunDefaultsKey = ["codex-run-defaults"] as const;
 
-async function requestJson<T>(
+export async function requestJson<T>(
   url: string,
   schema: ParseableSchema<T>,
   options?: RequestInit,
@@ -445,7 +415,7 @@ async function fetchHealth() {
   return requestJson("/api/health", healthResponseSchema);
 }
 
-async function fetchWorkspaces() {
+export async function fetchWorkspaces() {
   return requestJson("/api/workspaces", workspacesResponseSchema);
 }
 
@@ -525,7 +495,7 @@ async function fetchMarkdownDocument(workspaceId: string, fileId: string) {
   );
 }
 
-async function fetchTicketDocument(workspaceId: string, fileId: string) {
+export async function fetchTicketDocument(workspaceId: string, fileId: string) {
   return requestJson(
     `/api/workspaces/${workspaceId}/files/${fileId}/tickets`,
     ticketDocumentResponseSchema,
@@ -596,7 +566,7 @@ async function appendWorkspaceChatMessage(workspaceId: string, content: string) 
   );
 }
 
-async function patchTicket(
+export async function patchTicket(
   workspaceId: string,
   fileId: string,
   ticketId: string,
@@ -605,6 +575,7 @@ async function patchTicket(
     expectedMtimeMs?: number;
     progress?: TicketProgress;
     status?: TicketStatus;
+    reason?: string;
   },
 ) {
   return requestJson(
@@ -614,6 +585,24 @@ async function patchTicket(
       body: JSON.stringify(body),
       method: "PATCH",
     },
+  );
+}
+
+export async function appendTicketInstruction(
+  workspaceId: string,
+  fileId: string,
+  ticketId: string,
+  body: {
+    kind: TicketInstructionKind;
+    text: string;
+    expectedHash: string;
+    expectedMtimeMs: number;
+  },
+) {
+  return requestJson(
+    `/api/workspaces/${workspaceId}/files/${fileId}/tickets/${ticketId}/instructions`,
+    ticketDocumentResponseSchema,
+    { body: JSON.stringify(body), method: "POST" },
   );
 }
 
@@ -707,6 +696,7 @@ async function markCodexRunRead(runId: string) {
 }
 
 export function App() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const appShellRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -739,11 +729,8 @@ export function App() {
   );
   const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
-  const [ticketDetailMode, setTicketDetailMode] = useState<TicketDetailMode>(
-    () => initialRouteRef.current.detailMode ?? readStoredTicketDetailMode(),
-  );
-  const [ticketDetailWidth, setTicketDetailWidth] = useState(readStoredTicketDetailWidth);
-  const [isTicketDetailResizing, setIsTicketDetailResizing] = useState(false);
+  const ticketPresentation = useTicketDetailPresentation(initialRouteRef.current.detailMode);
+  const { mode: ticketDetailMode, setMode: setTicketDetailMode } = ticketPresentation;
   const [isWorkspaceChatOpen, setIsWorkspaceChatOpen] = useState(false);
   const [externalFileChange, setExternalFileChange] =
     useState<MarkdownFileChangeEvent | null>(null);
@@ -763,11 +750,13 @@ export function App() {
     refetchInterval: 30_000,
   });
   const codexModelsQuery = useQuery({
+    enabled: IN_APP_CHAT_ENABLED,
     queryKey: codexModelsKey,
     queryFn: fetchCodexModels,
     staleTime: 60_000,
   });
   const codexRunDefaultsQuery = useQuery({
+    enabled: IN_APP_CHAT_ENABLED,
     queryKey: codexRunDefaultsKey,
     queryFn: fetchCodexRunDefaults,
   });
@@ -846,7 +835,7 @@ export function App() {
     queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
   });
   const codexRunSummaryQuery = useQuery({
-    enabled: Boolean(canLoadWorkspace && resolvedSelectedFileId && isTicketsDocument),
+    enabled: Boolean(IN_APP_CHAT_ENABLED && canLoadWorkspace && resolvedSelectedFileId && isTicketsDocument),
     queryFn: () => fetchCodexRunSummary(selectedWorkspaceId ?? "", resolvedSelectedFileId ?? ""),
     queryKey: codexRunSummaryKey(selectedWorkspaceId, resolvedSelectedFileId),
     refetchInterval: 5_000,
@@ -873,6 +862,10 @@ export function App() {
   const runSummaryByTicket = useMemo(() => {
     const summaries = new Map<string, CodexRunSummary>();
 
+    if (!IN_APP_CHAT_ENABLED) {
+      return summaries;
+    }
+
     for (const runSummary of codexRunSummaryQuery.data?.runs ?? []) {
       if (shouldShowRunOnTicketCard(runSummary)) {
         summaries.set(runSummary.ticketId, runSummary);
@@ -894,9 +887,6 @@ export function App() {
   const resizeSidebarFromClientX = useCallback((clientX: number) => {
     const shellLeft = appShellRef.current?.getBoundingClientRect().left ?? 0;
     setSidebarWidth(clampSidebarWidth(clientX - shellLeft));
-  }, []);
-  const resizeTicketDetailFromClientX = useCallback((clientX: number) => {
-    setTicketDetailWidth(clampTicketDetailWidth(window.innerWidth - clientX));
   }, []);
   const updateDocumentSetSortPreference = useCallback(
     (preference: DocumentSetSortPreference) => {
@@ -1186,22 +1176,6 @@ export function App() {
   }, [autoOpenLastWorkspace]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(TICKET_DETAIL_MODE_STORAGE_KEY, ticketDetailMode);
-    } catch {
-      // Ignore storage failures; the detail presentation still works for this session.
-    }
-  }, [ticketDetailMode]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(TICKET_DETAIL_WIDTH_STORAGE_KEY, String(ticketDetailWidth));
-    } catch {
-      // Ignore storage failures; the resize affordance still works for this session.
-    }
-  }, [ticketDetailWidth]);
-
-  useEffect(() => {
     if (!isSidebarResizing) {
       return;
     }
@@ -1232,38 +1206,6 @@ export function App() {
       window.removeEventListener("pointercancel", finishResize);
     };
   }, [isSidebarResizing, resizeSidebarFromClientX]);
-
-  useEffect(() => {
-    if (!isTicketDetailResizing || ticketDetailMode !== "side") {
-      return;
-    }
-
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    function handlePointerMove(event: PointerEvent): void {
-      event.preventDefault();
-      resizeTicketDetailFromClientX(event.clientX);
-    }
-
-    function finishResize(): void {
-      setIsTicketDetailResizing(false);
-    }
-
-    window.addEventListener("pointermove", handlePointerMove, { passive: false });
-    window.addEventListener("pointerup", finishResize);
-    window.addEventListener("pointercancel", finishResize);
-
-    return () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", finishResize);
-      window.removeEventListener("pointercancel", finishResize);
-    };
-  }, [isTicketDetailResizing, resizeTicketDetailFromClientX, ticketDetailMode]);
 
   async function replaceDocument(data: TicketDocumentResponse): Promise<void> {
     queryClient.setQueryData(ticketDocumentKey(selectedWorkspaceId, resolvedSelectedFileId), data);
@@ -1360,6 +1302,8 @@ export function App() {
     ticketId: string,
     status: TicketStatus,
     progress: TicketProgress,
+    reason: string,
+    guard?: TicketWriteGuard,
   ): Promise<void> {
     if (!selectedWorkspaceId || !resolvedSelectedFileId || !ticketQuery.data) {
       return;
@@ -1369,6 +1313,25 @@ export function App() {
       await patchTicket(selectedWorkspaceId, resolvedSelectedFileId, ticketId, {
         status,
         progress,
+        reason,
+        expectedHash: guard?.expectedHash ?? ticketQuery.data.file.hash,
+        expectedMtimeMs: guard?.expectedMtimeMs ?? ticketQuery.data.file.mtimeMs,
+      }),
+    );
+  }
+
+  async function handleAppendTicketInstruction(
+    ticketId: string,
+    kind: TicketInstructionKind,
+    text: string,
+  ): Promise<void> {
+    if (!selectedWorkspaceId || !resolvedSelectedFileId || !ticketQuery.data) {
+      return;
+    }
+    await replaceDocument(
+      await appendTicketInstruction(selectedWorkspaceId, resolvedSelectedFileId, ticketId, {
+        kind,
+        text,
         expectedHash: ticketQuery.data.file.hash,
         expectedMtimeMs: ticketQuery.data.file.mtimeMs,
       }),
@@ -1422,6 +1385,11 @@ export function App() {
           />
 
           <div className="flex shrink-0 items-center justify-end gap-2">
+            <LanguageSelector />
+            <Button onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
+              <LayoutGrid aria-hidden="true" />
+              {t("All tickets")}
+            </Button>
             <HealthPill status={healthQuery.status} />
           </div>
         </header>
@@ -1433,7 +1401,7 @@ export function App() {
         >
           <aside
             className="flex min-h-0 flex-col overflow-hidden border-r border-[var(--ak-hairline)] bg-[var(--ak-surface)] max-[860px]:max-h-[68dvh] max-[860px]:border-b max-[860px]:border-r-0"
-            aria-label="Workspace files"
+            aria-label={t("Workspace files")}
           >
             <div className="border-b border-[var(--ak-hairline)] p-3">
               <DocumentListHeader
@@ -1446,14 +1414,14 @@ export function App() {
             <div className="ak-scroll-area min-h-0 flex-1 overflow-y-auto">
               <div className="ak-scroll-content grid gap-1">
                 {selectedWorkspace && !selectedWorkspace.isAvailable ? (
-                  <SidebarState label="Project unavailable" tone="error" />
+                  <SidebarState label={t("Project unavailable")} tone="error" />
                 ) : null}
-                {documentSetsQuery.isLoading ? <SidebarState label="Loading documents" /> : null}
+                {documentSetsQuery.isLoading ? <SidebarState label={t("Loading documents")} /> : null}
                 {documentSetsQuery.isError ? (
-                  <SidebarState label="Could not load documents" tone="error" />
+                  <SidebarState label={t("Could not load documents")} tone="error" />
                 ) : null}
                 {documentSetsQuery.isSuccess && sortedDocumentSets.length === 0 ? (
-                  <SidebarState label="No documents" />
+                  <SidebarState label={t("No documents")} />
                 ) : null}
                 <DocumentSetNavigator
                   documentSets={sortedDocumentSets}
@@ -1489,15 +1457,15 @@ export function App() {
             <header className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-3 max-[720px]:flex-col max-[720px]:items-start">
               <div className="min-w-0">
                 <p className="ak-muted-label truncate">
-                  {selectedWorkspace?.root ?? "Project unavailable"}
+                  {selectedWorkspace?.root ?? t("Project unavailable")}
                 </p>
                 <h2 id="workspace-title" className="ak-title mt-1 truncate text-lg">
                   {selectedWorkspace
                     ? ticketQuery.data?.document.title ??
                       markdownQuery.data?.outline[0]?.title ??
                       selectedFile?.workspaceRelativePath ??
-                      "Document workspace"
-                    : "Project unavailable"}
+                      t("Document workspace")
+                    : t("Project unavailable")}
                 </h2>
                 {selectedFile ? (
                   <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
@@ -1524,7 +1492,7 @@ export function App() {
                       : markdownQuery.isLoading
                   }
                   markdownDocument={markdownQuery.data}
-                  runSummary={codexRunSummaryQuery.data}
+                  runSummary={IN_APP_CHAT_ENABLED ? codexRunSummaryQuery.data : undefined}
                   selectedDocumentSet={selectedDocumentSet}
                   ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
                 />
@@ -1541,7 +1509,6 @@ export function App() {
                 markdownIsError={markdownQuery.isError}
                 markdownIsLoading={markdownQuery.isLoading}
                 hasDocumentSets={sortedDocumentSets.length > 0}
-                onOpenWorkspaceChat={() => setIsWorkspaceChatOpen(true)}
                 onFileSelect={(file) => {
                   setSelectedFileId(file.id);
                   setPreferredFilePath(file.workspaceRelativePath);
@@ -1550,6 +1517,8 @@ export function App() {
                   }
                 }}
                 onTicketSelect={setSelectedTicketId}
+                onTicketStatusChange={handlePatchTicket}
+                ticketDocument={ticketQuery.data}
                 runSummaryByTicket={runSummaryByTicket}
                 selectedDocumentSet={selectedDocumentSet}
                 selectedFile={selectedFile}
@@ -1569,32 +1538,29 @@ export function App() {
         </div>
       </main>
 
-      {canLoadWorkspace ? (
+      {IN_APP_CHAT_ENABLED && canLoadWorkspace ? (
         <Button
           className="fixed bottom-6 right-6 z-40 h-11 rounded-full px-4 shadow-[0_14px_40px_color-mix(in_oklch,var(--foreground),transparent_84%)] max-[720px]:bottom-5 max-[720px]:right-5"
           onClick={() => setIsWorkspaceChatOpen(true)}
-          title={`Workspace chat for ${selectedWorkspace?.root ?? "selected project"}`}
+          title={t("Workspace chat for {{project}}", { project: selectedWorkspace?.root ?? t("selected project") })}
           type="button"
         >
           <Bot className="size-4" aria-hidden="true" />
-          Workspace Chat
+          {t("Workspace Chat")}
         </Button>
       ) : null}
 
       {selectedTicket && resolvedSelectedFileId && ticketQuery.data ? (
         <TicketDetailDrawer
+          key={`${selectedWorkspaceId}:${resolvedSelectedFileId}:${selectedTicket.id}`}
           availableTickets={ticketQuery.data.document.tickets}
           documentHash={ticketQuery.data.file.hash}
           documentMtimeMs={ticketQuery.data.file.mtimeMs}
-          codexDisabledReason={selectedWorkspaceId ? undefined : "Select a workspace before running Codex."}
+          codexDisabledReason={selectedWorkspaceId ? undefined : t("Select a workspace before running Codex.")}
           fileId={resolvedSelectedFileId}
-          isResizing={isTicketDetailResizing}
-          mode={ticketDetailMode}
-          onChangeMode={(mode) => {
-            setTicketDetailMode(mode);
-            setIsTicketDetailResizing(false);
-          }}
+          presentation={ticketPresentation}
           onClose={() => setSelectedTicketId(undefined)}
+          onAppendInstruction={handleAppendTicketInstruction}
           onPatchTicket={handlePatchTicket}
           onReload={() => ticketQuery.refetch()}
           externalFileChange={externalFileChange}
@@ -1606,17 +1572,8 @@ export function App() {
           }}
           onRunStatusChange={refetchRunSummary}
           onRunRead={refetchRunSummary}
-          onResizeNudge={(delta) =>
-            setTicketDetailWidth((width) => clampTicketDetailWidth(width + delta))
-          }
-          onResizeReset={() => setTicketDetailWidth(DEFAULT_TICKET_DETAIL_WIDTH)}
-          onResizeStart={(clientX) => {
-            resizeTicketDetailFromClientX(clientX);
-            setIsTicketDetailResizing(true);
-          }}
           ticket={selectedTicket}
           ticketRunSummary={selectedTicketRunSummary}
-          width={ticketDetailWidth}
           workspaceId={selectedWorkspaceId}
           documentRunSummary={codexRunSummaryQuery.data}
           codexModels={codexModelsQuery.data}
@@ -1629,7 +1586,7 @@ export function App() {
         />
       ) : null}
 
-      <WorkspaceChatDialog
+      {IN_APP_CHAT_ENABLED ? <WorkspaceChatDialog
         availableTickets={ticketQuery.data?.document.tickets ?? []}
         codexModels={codexModelsQuery.data}
         codexRunDefaults={codexRunDefaultsQuery.data?.defaults}
@@ -1644,7 +1601,7 @@ export function App() {
         selectedFile={selectedFile}
         selectedWorkspace={selectedWorkspace}
         workspaceId={selectedWorkspaceId}
-      />
+      /> : null}
     </>
   );
 }
@@ -1664,6 +1621,7 @@ function SidebarResizeHandle({
   onReset: () => void;
   width: number;
 }) {
+  const { t } = useTranslation();
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
     if (event.key === "ArrowLeft") {
       event.preventDefault();
@@ -1697,7 +1655,7 @@ function SidebarResizeHandle({
 
   return (
     <button
-      aria-label="Resize sidebar"
+      aria-label={t("Resize sidebar")}
       aria-orientation="vertical"
       aria-valuemax={MAX_SIDEBAR_WIDTH}
       aria-valuemin={MIN_SIDEBAR_WIDTH}
@@ -1715,85 +1673,7 @@ function SidebarResizeHandle({
         onPointerDown(event.clientX);
       }}
       role="separator"
-      title="Drag to resize. Double-click to reset."
-      type="button"
-    >
-      <span
-        className={[
-          "absolute left-1/2 top-1/2 h-12 w-px -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ak-ink-faint)] transition-colors group-hover:bg-[var(--ak-ink-muted)]",
-          isDragging ? "bg-[var(--ak-ink-muted)]" : "",
-        ].join(" ")}
-        aria-hidden="true"
-      />
-    </button>
-  );
-}
-
-function TicketDetailResizeHandle({
-  isDragging,
-  onChangeWidth,
-  onNudge,
-  onPointerDown,
-  onReset,
-  width,
-}: {
-  isDragging: boolean;
-  onChangeWidth: (width: number) => void;
-  onNudge: (delta: number) => void;
-  onPointerDown: (clientX: number) => void;
-  onReset: () => void;
-  width: number;
-}) {
-  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      onNudge(24);
-      return;
-    }
-
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      onNudge(-24);
-      return;
-    }
-
-    if (event.key === "Home") {
-      event.preventDefault();
-      onChangeWidth(MIN_TICKET_DETAIL_WIDTH);
-      return;
-    }
-
-    if (event.key === "End") {
-      event.preventDefault();
-      onChangeWidth(MAX_TICKET_DETAIL_WIDTH);
-      return;
-    }
-
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onReset();
-    }
-  }
-
-  return (
-    <button
-      aria-label="Resize ticket detail panel"
-      aria-orientation="vertical"
-      aria-valuemax={MAX_TICKET_DETAIL_WIDTH}
-      aria-valuemin={MIN_TICKET_DETAIL_WIDTH}
-      aria-valuenow={width}
-      className={[
-        "ak-focus-ring group absolute inset-y-0 left-0 z-10 w-3 -translate-x-1/2 cursor-col-resize transition-colors max-[720px]:hidden",
-        isDragging ? "bg-[var(--ak-surface-active)]" : "hover:bg-[var(--ak-surface-hover)]",
-      ].join(" ")}
-      onDoubleClick={onReset}
-      onKeyDown={handleKeyDown}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        onPointerDown(event.clientX);
-      }}
-      role="separator"
-      title="Drag to resize. Double-click to reset."
+      title={t("Drag to resize. Double-click to reset.")}
       type="button"
     >
       <span
@@ -1816,14 +1696,15 @@ function DocumentListHeader({
   onPreferenceChange: (preference: DocumentSetSortPreference) => void;
   preference: DocumentSetSortPreference;
 }) {
-  const directionLabel = preference.direction === "asc" ? "Ascending" : "Descending";
+  const { t } = useTranslation();
+  const directionLabel = t(preference.direction === "asc" ? "Ascending" : "Descending");
   const DirectionIcon = preference.direction === "asc" ? ArrowUp : ArrowDown;
 
   return (
     <div className="grid gap-2">
       <div className="ak-control flex h-9 items-center gap-2 px-3 text-sm text-[var(--ak-ink-muted)]">
         <Search className="size-4" aria-hidden="true" />
-        <span>Documents</span>
+        <span>{t("Documents")}</span>
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <Select
@@ -1841,22 +1722,22 @@ function DocumentListHeader({
           value={preference.mode}
         >
           <SelectTrigger
-            aria-label="Document sort"
+            aria-label={t("Document sort")}
             className="h-8 min-w-0 flex-1 px-2.5 text-xs"
-            title="Document list sort"
+            title={t("Document list sort")}
           >
-            <SelectValue placeholder="Document order" />
+            <SelectValue placeholder={t("Document order")} />
           </SelectTrigger>
           <SelectContent className="min-w-52">
             {DOCUMENT_SET_SORT_OPTIONS.map((option) => (
-              <SelectItem key={option.mode} title={option.title} value={option.mode}>
-                {option.label}
+              <SelectItem key={option.mode} title={t(option.title)} value={option.mode}>
+                {t(option.label)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Button
-          aria-label={`Sort ${directionLabel.toLowerCase()}`}
+          aria-label={t("Sort {{direction}}", { direction: directionLabel })}
           disabled={disabled}
           onClick={() =>
             onPreferenceChange({
@@ -1865,7 +1746,7 @@ function DocumentListHeader({
             })
           }
           size="iconSm"
-          title={`${directionLabel}. Click to toggle sort direction.`}
+          title={t("{{direction}}. Click to toggle sort direction.", { direction: directionLabel })}
           type="button"
           variant="outline"
         >
@@ -1885,8 +1766,9 @@ function DocumentSetNavigator({
   onSelectFile: (file: MarkdownFileSummary) => void;
   selectedFileId?: string;
 }) {
+  const { t } = useTranslation();
   return (
-    <nav className="grid gap-1" aria-label="Documents">
+    <nav className="grid gap-1" aria-label={t("Documents")}>
       {documentSets.map((documentSet) => (
         <DocumentSetRow
           documentSet={documentSet}
@@ -1908,6 +1790,7 @@ function DocumentSetRow({
   onSelectFile: (file: MarkdownFileSummary) => void;
   selectedFileId?: string;
 }) {
+  const { t } = useTranslation();
   const isSelected = documentSet.documents.some((file) => file.id === selectedFileId);
 
   return (
@@ -1927,7 +1810,7 @@ function DocumentSetRow({
             </span>
             <span className="flex shrink-0 items-center gap-1">
               {documentSet.documents.length === 1 ? (
-                <Badge variant="outline">standalone</Badge>
+                <Badge variant="outline">{t("standalone")}</Badge>
               ) : null}
               {documentSet.ticketProgress?.totalTickets !== undefined ? (
                 <Badge variant="muted">
@@ -1938,7 +1821,7 @@ function DocumentSetRow({
             </span>
           </div>
           <span className="ak-body-muted block truncate text-xs">
-            {documentSet.directory || "docs root"}
+            {documentSet.directory || t("docs root")}
           </span>
         </div>
       </div>
@@ -1965,6 +1848,7 @@ function DocumentTypeButton({
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  useTranslation();
   const Icon = documentTypeIcon(file.type);
 
   return (
@@ -2006,6 +1890,7 @@ function ProjectSwitcher({
   selectedWorkspaceId?: string;
   workspaces: WorkspaceSummary[];
 }) {
+  const { t } = useTranslation();
   const [pathDraft, setPathDraft] = useState("");
   const [browseRoot, setBrowseRoot] = useState<string | undefined>();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
@@ -2056,19 +1941,19 @@ function ProjectSwitcher({
   }
 
   return (
-    <div className="min-w-0 flex-1" aria-label="Projects">
+    <div className="min-w-0 flex-1" aria-label={t("Projects")}>
       <button
         className="ak-row flex h-10 w-full min-w-0 items-center gap-3 px-3 text-left transition-colors hover:bg-[var(--ak-surface-hover)]"
         onClick={() => setIsSwitcherOpen(true)}
-        title={selectedWorkspace?.root ?? "Select a project"}
+        title={selectedWorkspace?.root ?? t("Select a project")}
         type="button"
       >
         <span className="grid min-w-0 flex-1 gap-0.5">
           <span className="truncate text-sm font-semibold text-[var(--ak-ink)]">
-            {selectedWorkspace?.label ?? "Select project"}
+            {selectedWorkspace?.label ?? t("Select project")}
           </span>
           <span className="ak-body-muted truncate text-xs">
-            {selectedWorkspace?.root ?? "Open recent or browse a workspace"}
+            {selectedWorkspace?.root ?? t("Open recent or browse a workspace")}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
@@ -2076,9 +1961,9 @@ function ProjectSwitcher({
             <Badge variant={selectedWorkspace.isAvailable ? "muted" : "warning"}>
               {selectedWorkspace.isAvailable
                 ? selectedWorkspace.hasDocs
-                  ? "docs"
-                  : "empty"
-                : "missing"}
+                  ? t("docs")
+                  : t("empty")
+                : t("missing")}
             </Badge>
           ) : null}
           {isLoading ? (
@@ -2092,9 +1977,9 @@ function ProjectSwitcher({
       <Dialog onOpenChange={setIsSwitcherOpen} open={isSwitcherOpen}>
         <DialogContent className="h-[min(760px,calc(100vh-2rem))] grid-rows-[auto_auto_auto_minmax(0,1fr)]">
           <DialogHeader className="pr-12">
-            <DialogTitle>Switch project</DialogTitle>
+            <DialogTitle>{t("Switch project")}</DialogTitle>
             <DialogDescription>
-              Select a workspace or open a folder inside the configured roots.
+              {t("Select a workspace or open a folder inside the configured roots.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -2108,10 +1993,10 @@ function ProjectSwitcher({
                 />
                 <span className="grid gap-1">
                   <span className="font-medium text-[var(--ak-ink)]">
-                    Open last project on startup
+                    {t("Open last project on startup")}
                   </span>
                   <span className="text-xs leading-5 text-[var(--ak-ink-muted)]">
-                    Changes apply on the next root URL load. Use Start page to leave the current project now.
+                    {t("Changes apply on the next root URL load. Use Start page to leave the current project now.")}
                   </span>
                 </span>
               </label>
@@ -2127,7 +2012,7 @@ function ProjectSwitcher({
                     variant="outline"
                   >
                     <House className="size-3" aria-hidden="true" />
-                    Start page
+                    {t("Start page")}
                   </Button>
                 </div>
               ) : null}
@@ -2140,7 +2025,7 @@ function ProjectSwitcher({
                 className="ak-muted-label"
                 htmlFor="workspace-root-input"
               >
-                Open path
+                {t("Open path")}
               </label>
               <Button
                 onClick={() => {
@@ -2152,7 +2037,7 @@ function ProjectSwitcher({
                 variant="ghost"
               >
                 <Folder className="size-3" aria-hidden="true" />
-                Browse
+                {t("Browse")}
               </Button>
             </div>
             <div className="flex min-w-0 gap-2">
@@ -2180,7 +2065,7 @@ function ProjectSwitcher({
                 ) : (
                   <FolderKanban className="size-3" aria-hidden="true" />
                 )}
-                Open
+                {t("Open")}
               </Button>
             </div>
             {error ? (
@@ -2197,7 +2082,7 @@ function ProjectSwitcher({
             <div className="grid gap-4 pr-3">
               {selectedWorkspace ? (
                 <div className="grid gap-1">
-                  <p className="ak-muted-label px-3">Current</p>
+                  <p className="ak-muted-label px-3">{t("Current")}</p>
                   <WorkspaceButton
                     isSelected
                     onSelect={async () => setIsSwitcherOpen(false)}
@@ -2207,7 +2092,7 @@ function ProjectSwitcher({
               ) : null}
               {recentWorkspaces.length > 0 ? (
                 <WorkspaceGroup
-                  label="Recent"
+                  label={t("Recent")}
                   onSelect={async (workspaceId) => {
                     await onSelect(workspaceId);
                     setIsSwitcherOpen(false);
@@ -2217,7 +2102,7 @@ function ProjectSwitcher({
                 />
               ) : null}
               <WorkspaceGroup
-                label={recentWorkspaces.length > 0 ? "Discovered" : "Available"}
+                label={recentWorkspaces.length > 0 ? t("Discovered") : t("Available")}
                 onSelect={async (workspaceId) => {
                   await onSelect(workspaceId);
                   setIsSwitcherOpen(false);
@@ -2226,7 +2111,7 @@ function ProjectSwitcher({
                 workspaces={discoveredWorkspaces}
               />
               {!isLoading && workspaces.length === 0 ? (
-                <p className="ak-body-muted px-3 py-3 text-sm">No projects found</p>
+                <p className="ak-body-muted px-3 py-3 text-sm">{t("No projects found")}</p>
               ) : null}
             </div>
           </div>
@@ -2269,21 +2154,22 @@ function FolderPickerDialog({
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
+  const { t } = useTranslation();
   const currentDirectory = data?.directory;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="h-[min(720px,calc(100vh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader className="pr-12">
-          <DialogTitle>Select workspace folder</DialogTitle>
+          <DialogTitle>{t("Select workspace folder")}</DialogTitle>
           <DialogDescription className="sr-only">
-            Select a folder inside the configured workspace roots.
+            {t("Select a folder inside the configured workspace roots.")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 grid-cols-[190px_minmax(0,1fr)] border-y border-[var(--ak-hairline)] max-[720px]:grid-cols-1">
           <aside className="min-h-0 border-r border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] p-3 max-[720px]:border-b max-[720px]:border-r-0">
-            <p className="ak-muted-label mb-2 px-1">Roots</p>
+            <p className="ak-muted-label mb-2 px-1">{t("Roots")}</p>
             <div className="grid gap-1 max-[720px]:grid-cols-2">
               {data?.roots.map((root) => (
                 <DirectoryRootButton
@@ -2294,7 +2180,7 @@ function FolderPickerDialog({
                 />
               ))}
               {!isLoading && data?.roots.length === 0 ? (
-                <p className="ak-body-muted px-2 py-3 text-sm">No roots configured</p>
+                <p className="ak-body-muted px-2 py-3 text-sm">{t("No roots configured")}</p>
               ) : null}
             </div>
           </aside>
@@ -2303,7 +2189,7 @@ function FolderPickerDialog({
             <div className="grid gap-3 border-b border-[var(--ak-hairline)] p-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Button
-                  aria-label="Parent folder"
+                  aria-label={t("Parent folder")}
                   disabled={!currentDirectory?.parentPath || isLoading}
                   onClick={() => onBrowse(currentDirectory?.parentPath)}
                   size="icon"
@@ -2314,16 +2200,16 @@ function FolderPickerDialog({
                 </Button>
                 <div className="ak-control flex h-9 min-w-0 flex-1 items-center gap-2 px-3 text-sm">
                   <Folder className="size-4 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-                  <span className="truncate">{currentDirectory?.path ?? "Loading"}</span>
+                  <span className="truncate">{currentDirectory?.path ?? t("Loading")}</span>
                 </div>
               </div>
               {currentDirectory ? (
                 <div className="flex flex-wrap items-center gap-1">
                   <Badge variant={currentDirectory.hasDocs ? "muted" : "outline"}>
-                    {currentDirectory.hasDocs ? "docs" : "empty"}
+                    {currentDirectory.hasDocs ? t("docs") : t("empty")}
                   </Badge>
                   {currentDirectory.isWorkspaceCandidate ? (
-                    <Badge variant="success">project</Badge>
+                    <Badge variant="success">{t("project")}</Badge>
                   ) : null}
                 </div>
               ) : null}
@@ -2331,14 +2217,14 @@ function FolderPickerDialog({
 
             <div className="ak-scroll-area min-h-0 overflow-auto">
               <div className="grid min-w-[700px] grid-cols-[minmax(190px,1.25fr)_150px_minmax(300px,2fr)] border-b border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] px-3 py-2 ak-muted-label">
-                <span>Name</span>
-                <span>Type</span>
-                <span>Path</span>
+                <span>{t("Name")}</span>
+                <span>{t("Type")}</span>
+                <span>{t("Path")}</span>
               </div>
               {isLoading ? (
                 <div className="ak-body-muted flex items-center gap-2 px-4 py-5 text-sm">
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  Loading folders
+                  {t("Loading folders")}
                 </div>
               ) : null}
               {error ? (
@@ -2355,7 +2241,7 @@ function FolderPickerDialog({
               ))}
               {!isLoading && currentDirectory?.children.length === 0 ? (
                 <p className="ak-panel-muted m-3 border-dashed px-3 py-8 text-center text-sm text-[var(--ak-ink-muted)]">
-                  Empty folder
+                  {t("Empty folder")}
                 </p>
               ) : null}
             </div>
@@ -2364,7 +2250,7 @@ function FolderPickerDialog({
 
         <DialogFooter className="max-[720px]:flex-col max-[720px]:items-stretch">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={!currentDirectory?.path || isOpening}
@@ -2376,7 +2262,7 @@ function FolderPickerDialog({
             ) : (
               <FolderKanban className="size-4" aria-hidden="true" />
             )}
-            Select Folder
+            {t("Select Folder")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2425,6 +2311,7 @@ function DirectoryEntryButton({
   entry: WorkspaceDirectoryEntry;
   onBrowse: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       className="grid min-h-11 min-w-[700px] grid-cols-[minmax(190px,1.25fr)_150px_minmax(300px,2fr)] items-center border-b border-[var(--ak-hairline)] px-3 text-left text-sm transition-colors hover:bg-[var(--ak-surface-hover)]"
@@ -2436,9 +2323,9 @@ function DirectoryEntryButton({
         <span className="truncate font-medium text-[var(--ak-ink)]">{entry.name}</span>
       </span>
       <span className="flex min-w-0 gap-1 overflow-hidden">
-        {entry.isWorkspaceCandidate ? <Badge variant="success">project</Badge> : null}
+        {entry.isWorkspaceCandidate ? <Badge variant="success">{t("project")}</Badge> : null}
         <Badge variant={entry.hasDocs ? "muted" : "outline"}>
-          {entry.hasDocs ? "docs" : "empty"}
+          {entry.hasDocs ? t("docs") : t("empty")}
         </Badge>
       </span>
       <span className="ak-body-muted truncate text-xs">{entry.path}</span>
@@ -2491,6 +2378,7 @@ function WorkspaceButton({
   onSelect: () => Promise<void>;
   workspace: WorkspaceSummary;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       className={[
@@ -2508,7 +2396,7 @@ function WorkspaceButton({
           {workspace.label}
         </span>
         <Badge variant={workspace.isAvailable ? "muted" : "warning"}>
-          {workspace.isAvailable ? (workspace.hasDocs ? "docs" : "empty") : "missing"}
+          {workspace.isAvailable ? (workspace.hasDocs ? t("docs") : t("empty")) : t("missing")}
         </Badge>
       </span>
       <span className="ak-body-muted break-all text-xs leading-4">{workspace.root}</span>
@@ -2532,8 +2420,9 @@ function SidebarState({ label, tone = "muted" }: { label: string; tone?: "error"
 }
 
 function HealthPill({ status }: { status: "error" | "pending" | "success" }) {
+  const { t } = useTranslation();
   const label =
-    status === "success" ? "API online" : status === "error" ? "API unavailable" : "Checking API";
+    t(status === "success" ? "API online" : status === "error" ? "API unavailable" : "Checking API");
 
   return (
     <div className="ak-control inline-flex w-full items-center gap-2 px-3 py-2 text-xs font-medium">
@@ -2560,9 +2449,10 @@ function TicketDocumentViewToggle({
   mode: TicketDocumentViewMode;
   onChange: (mode: TicketDocumentViewMode) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
-      aria-label="Ticket document view"
+      aria-label={t("Ticket document view")}
       className="inline-flex items-center gap-0.5 rounded-[var(--ak-radius-lg)] border border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] p-0.5"
       role="group"
     >
@@ -2571,24 +2461,24 @@ function TicketDocumentViewToggle({
         className="rounded-[var(--ak-radius-md)]"
         onClick={() => onChange("board")}
         size="xs"
-        title="Show ticket board"
+        title={t("Show ticket board")}
         type="button"
         variant={mode === "board" ? "secondary" : "ghost"}
       >
         <LayoutGrid aria-hidden="true" className="size-3.5" />
-        Board
+        {t("Board")}
       </Button>
       <Button
         aria-pressed={mode === "markdown"}
         className="rounded-[var(--ak-radius-md)]"
         onClick={() => onChange("markdown")}
         size="xs"
-        title="Show raw Markdown document"
+        title={t("Show raw Markdown document")}
         type="button"
         variant={mode === "markdown" ? "secondary" : "ghost"}
       >
         <FileText aria-hidden="true" className="size-3.5" />
-        Markdown
+        {t("Markdown")}
       </Button>
     </div>
   );
@@ -2611,11 +2501,12 @@ function DocumentSummary({
   selectedDocumentSet?: DocumentSetSummary;
   ticketCount: number;
 }) {
+  const { t } = useTranslation();
   if (isLoading) {
     return (
       <Badge variant="muted">
         <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
-        Loading
+        {t("Loading")}
       </Badge>
     );
   }
@@ -2623,7 +2514,7 @@ function DocumentSummary({
   const displayFile = file ?? markdownDocument?.file ?? fallbackFile;
 
   if (!displayFile) {
-    return <Badge variant="muted">No document</Badge>;
+    return <Badge variant="muted">{t("No document")}</Badge>;
   }
 
   return (
@@ -2631,15 +2522,14 @@ function DocumentSummary({
       {runSummary ? <DocumentRunSignalBadge runSummary={runSummary} /> : null}
       <DocumentTypeBadge type={displayFile.type} />
       {displayFile.type === "tickets" ? (
-        <Badge variant="outline">{ticketCount} tickets</Badge>
+        <Badge variant="outline">{t("{{count}} tickets", { count: ticketCount })}</Badge>
       ) : null}
       {selectedDocumentSet?.ticketProgress?.totalTickets !== undefined ? (
         <Badge variant="outline">
-          {selectedDocumentSet.ticketProgress.doneTickets ?? 0}/
-          {selectedDocumentSet.ticketProgress.totalTickets} tickets
+          {t("{{done}} / {{total}} tickets", { done: selectedDocumentSet.ticketProgress.doneTickets ?? 0, total: selectedDocumentSet.ticketProgress.totalTickets })}
         </Badge>
       ) : null}
-      <Badge variant="muted">{new Date(displayFile.mtimeMs).toLocaleDateString()}</Badge>
+      <Badge variant="muted">{new Date(displayFile.mtimeMs).toLocaleDateString(locale())}</Badge>
     </div>
   );
 }
@@ -2654,14 +2544,15 @@ function DocumentContent({
   markdownIsError,
   markdownIsLoading,
   onFileSelect,
-  onOpenWorkspaceChat,
   onTicketSelect,
+  onTicketStatusChange,
   runSummaryByTicket,
   selectedDocumentSet,
   selectedFile,
   selectedFileId,
   selectedWorkspace,
   ticketError,
+  ticketDocument,
   ticketIsError,
   ticketIsLoading,
   ticketViewMode,
@@ -2679,14 +2570,15 @@ function DocumentContent({
   markdownIsError: boolean;
   markdownIsLoading: boolean;
   onFileSelect: (file: MarkdownFileSummary) => void;
-  onOpenWorkspaceChat: () => void;
   onTicketSelect: (ticketId: string) => void;
+  onTicketStatusChange: SaveTicketStatus;
   runSummaryByTicket: Map<string, CodexRunSummary>;
   selectedDocumentSet?: DocumentSetSummary;
   selectedFile?: MarkdownFileSummary;
   selectedFileId?: string;
   selectedWorkspace?: WorkspaceSummary;
   ticketError: Error | null;
+  ticketDocument?: TicketDocumentResponse;
   ticketIsError: boolean;
   ticketIsLoading: boolean;
   ticketViewMode: TicketDocumentViewMode;
@@ -2695,16 +2587,17 @@ function DocumentContent({
   workspacesError: boolean;
   workspacesIsLoading: boolean;
 }) {
+  const { t } = useTranslation();
   if (workspacesIsLoading || documentSetsIsLoading) {
-    return <BoardState isLoading title="Loading documents" />;
+    return <BoardState isLoading title={t("Loading documents")} />;
   }
 
   if (workspacesError) {
     return (
       <BoardState
         icon="error"
-        title="Could not load projects"
-        description={workspaceError?.message ?? "Unknown API error"}
+        title={t("Could not load projects")}
+        description={workspaceError ? formatClientError(workspaceError) : t("Unknown API error")}
       />
     );
   }
@@ -2713,8 +2606,8 @@ function DocumentContent({
     return (
       <BoardState
         icon="error"
-        title="Could not load documents"
-        description={documentSetsError?.message ?? "Unknown API error"}
+        title={t("Could not load documents")}
+        description={documentSetsError ? formatClientError(documentSetsError) : t("Unknown API error")}
       />
     );
   }
@@ -2723,8 +2616,8 @@ function DocumentContent({
     return (
       <BoardState
         icon="error"
-        title="Project unavailable"
-        description="Select another available project from the project switcher."
+        title={t("Project unavailable")}
+        description={t("Select another available project from the project switcher.")}
       />
     );
   }
@@ -2733,28 +2626,22 @@ function DocumentContent({
     if (!hasDocumentSets) {
       return (
         <BoardState
-          title="Start with Workspace Chat"
-          description="This project has no Alpha Kanban documents yet. Describe what you want to build, fix, or investigate, then ask Codex to create a plan, tickets, and an inventory if needed."
-          action={
-            <Button onClick={onOpenWorkspaceChat} type="button">
-              <Bot className="size-4" aria-hidden="true" />
-              Open Workspace Chat
-            </Button>
-          }
+          title={t("No planning documents yet")}
+          description={t("Create tickets with the implementation-ledger skill in Codex, then review them here.")}
         />
       );
     }
 
     return (
       <BoardState
-        title="No document selected"
-        description="Choose a plan, ticket, or inventory document from the sidebar."
+        title={t("No document selected")}
+        description={t("Choose a plan, ticket, or inventory document from the sidebar.")}
       />
     );
   }
 
   if (!selectedFile) {
-    return <BoardState title="Document unavailable" />;
+    return <BoardState title={t("Document unavailable")} />;
   }
 
   if (selectedFile.type !== "tickets" || ticketViewMode === "markdown") {
@@ -2772,31 +2659,102 @@ function DocumentContent({
   }
 
   if (ticketIsLoading) {
-    return <BoardState isLoading title="Loading ticket board" />;
+    return <BoardState isLoading title={t("Loading ticket board")} />;
   }
 
   if (ticketIsError) {
     return (
       <BoardState
         icon="error"
-        title="Could not load ticket board"
-        description={ticketError?.message ?? "Unknown API error"}
+        title={t("Could not load ticket board")}
+        description={ticketError ? formatClientError(ticketError) : t("Unknown API error")}
       />
     );
   }
 
+  if (!ticketDocument) return <BoardState title={t("Document unavailable")} />;
+
   return (
-    <div className="grid min-w-[900px] grid-cols-6 gap-3" aria-label="Ticket kanban board">
-      {BOARD_STATUSES.map((status) => (
-        <KanbanColumn
-          key={status}
-          onTicketSelect={onTicketSelect}
-          runSummaryByTicket={runSummaryByTicket}
-          status={status}
-          tickets={ticketsByStatus.get(status) ?? []}
+    <TicketBoard
+      key={`${selectedWorkspace?.id}:${selectedFileId}`}
+      document={ticketDocument}
+      onTicketSelect={onTicketSelect}
+      onSaveStatus={onTicketStatusChange}
+      runSummaryByTicket={runSummaryByTicket}
+      ticketsByStatus={ticketsByStatus}
+    />
+  );
+}
+
+export function TicketBoard({ document, onTicketSelect, onSaveStatus, runSummaryByTicket, ticketsByStatus }: {
+  document: TicketDocumentResponse;
+  onTicketSelect: (ticketId: string) => void;
+  onSaveStatus: SaveTicketStatus;
+  runSummaryByTicket: Map<string, CodexRunSummary>;
+  ticketsByStatus: Map<TicketStatus, TicketItem[]>;
+}) {
+  const { t } = useTranslation();
+  const [dragged, setDragged] = useState<{ document: TicketDocumentResponse; ticketId: string }>();
+  const [overStatus, setOverStatus] = useState<TicketStatus>();
+  const [pendingMove, setPendingMove] = useState<TicketMove>();
+
+  function resetDrag() {
+    setDragged(undefined);
+    setOverStatus(undefined);
+  }
+
+  function drop(event: DragEvent<HTMLElement>, status: TicketStatus) {
+    event.preventDefault();
+    if (dragged && !pendingMove) {
+      setPendingMove(prepareTicketMove(dragged.document, dragged.ticketId, status));
+    }
+    resetDrag();
+  }
+
+  return (
+    <>
+      <div className="grid min-w-[900px] grid-cols-6 gap-3" aria-label={t("Ticket kanban board")}>
+        {BOARD_STATUSES.map((status) => (
+          <KanbanColumn
+            key={status}
+            onTicketSelect={onTicketSelect}
+            runSummaryByTicket={runSummaryByTicket}
+            status={status}
+            tickets={ticketsByStatus.get(status) ?? []}
+            dragDisabled={Boolean(pendingMove)}
+            isDragOver={overStatus === status}
+            onDragStart={(event, ticketId) => {
+              event.dataTransfer.setData("application/x-alpha-kanban-ticket", ticketId);
+              event.dataTransfer.effectAllowed = "move";
+              setDragged({ document, ticketId });
+            }}
+            onDragEnd={resetDrag}
+            onDragOver={(event) => {
+              if (!dragged || pendingMove) return;
+              event.preventDefault();
+              const target = prepareTicketMove(dragged.document, dragged.ticketId, status);
+              event.dataTransfer.dropEffect = target ? "move" : "none";
+              setOverStatus(target ? status : undefined);
+            }}
+            onDragLeave={(event) => {
+              if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+                setOverStatus(undefined);
+              }
+            }}
+            onDrop={(event) => drop(event, status)}
+          />
+        ))}
+      </div>
+      {pendingMove ? (
+        <TicketMoveDialog
+          move={pendingMove}
+          currentHash={document.file.hash}
+          currentMtimeMs={document.file.mtimeMs}
+          onSave={onSaveStatus}
+          onClose={() => setPendingMove(undefined)}
         />
-      ))}
-    </div>
+      ) : null}
+    </>
   );
 }
 
@@ -2827,6 +2785,8 @@ function StartWorkspacePage({
   workspaceRootsSettings?: WorkspaceRootsSettingsResponse;
   workspaces: WorkspaceSummary[];
 }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const availableWorkspaces = workspaces.filter((workspace) => workspace.isAvailable);
   const recentWorkspaces = availableWorkspaces
     .filter((workspace) => workspace.lastOpenedAt)
@@ -2837,21 +2797,26 @@ function StartWorkspacePage({
       <header className="flex flex-wrap items-start justify-between gap-3 px-1">
         <div className="grid min-w-0 gap-2">
           <div>
-            <p className="ak-muted-label">Start</p>
-            <h2 className="ak-title mt-1.5 text-xl">Choose a project</h2>
+            <p className="ak-muted-label">{t("Start")}</p>
+            <h2 className="ak-title mt-1.5 text-xl">{t("Choose a project")}</h2>
           </div>
-          <label className="flex items-center gap-2 text-sm text-[var(--ak-ink-secondary)]">
+          <label className="flex flex-wrap items-center gap-2 text-sm text-[var(--ak-ink-secondary)]">
             <Checkbox
               checked={autoOpenLastWorkspace}
               onCheckedChange={(checked) => onAutoOpenLastWorkspaceChange(checked === true)}
             />
-            <span>Open last project automatically</span>
+            <span>{t("Open last project automatically")}</span>
             <span className="text-xs text-[var(--ak-ink-muted)]">
-              Applies on next root URL load.
+              {t("Applies on next root URL load.")}
             </span>
           </label>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
+          <LanguageSelector />
+          <Button onClick={() => navigate({ to: "/all" })} size="sm" type="button" variant="outline">
+            <LayoutGrid className="size-3" aria-hidden="true" />
+            {t("All tickets")}
+          </Button>
           <ProjectBrowseButton onOpen={onWorkspaceOpenPath} />
           <NewProjectButton onCreate={onWorkspaceCreate} />
         </div>
@@ -2883,12 +2848,13 @@ function RecentProjectsPanel({
   onWorkspaceSelect: (workspaceId: string) => Promise<void>;
   recentWorkspaces: WorkspaceSummary[];
 }) {
+  const { t } = useTranslation();
   return (
     <section className="ak-panel grid content-start gap-3 p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="ak-muted-label">Recent</p>
-          <h3 className="ak-title mt-1 text-base">Recent projects</h3>
+          <p className="ak-muted-label">{t("Recent")}</p>
+          <h3 className="ak-title mt-1 text-base">{t("Recent projects")}</h3>
         </div>
         <Badge variant="muted">{recentWorkspaces.length}</Badge>
       </div>
@@ -2905,7 +2871,7 @@ function RecentProjectsPanel({
         </div>
       ) : (
         <p className="ak-panel-muted px-3 py-4 text-sm text-[var(--ak-ink-muted)]">
-          No recent projects yet.
+          {t("No recent projects yet.")}
         </p>
       )}
     </section>
@@ -2917,6 +2883,7 @@ function ProjectBrowseButton({
 }: {
   onOpen: (root: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [browseRoot, setBrowseRoot] = useState<string | undefined>();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
@@ -2962,7 +2929,7 @@ function ProjectBrowseButton({
         ) : (
           <Folder className="size-3" aria-hidden="true" />
         )}
-        Browse project
+        {t("Browse project")}
       </Button>
 
       {error ? (
@@ -2997,6 +2964,7 @@ function NewProjectButton({
     projectName: string;
   }) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [parentRoot, setParentRoot] = useState("");
   const [projectName, setProjectName] = useState("");
   const [gitInit, setGitInit] = useState(true);
@@ -3053,29 +3021,28 @@ function NewProjectButton({
         variant="outline"
       >
         <FolderKanban className="size-3" aria-hidden="true" />
-        New project
+        {t("New project")}
       </Button>
 
       <Dialog onOpenChange={setIsOpen} open={isOpen}>
         <DialogContent className="grid-rows-[auto_minmax(0,1fr)]">
           <DialogHeader className="pr-12">
-            <DialogTitle>New project</DialogTitle>
+            <DialogTitle>{t("New project")}</DialogTitle>
             <DialogDescription>
-              Create a new project folder under a configured root.
+              {t("Create a new project folder under a configured root.")}
             </DialogDescription>
           </DialogHeader>
 
           <form className="grid gap-0" onSubmit={(event) => void createProject(event)}>
             <div className="grid gap-4 px-5 pb-5 pt-2">
               <label className="grid gap-1.5 text-xs font-medium text-[var(--ak-ink-muted)]">
-                Location
-                <Select
+                {t("Location")}<Select
                   disabled={isCreating || directoriesQuery.isLoading || roots.length === 0}
                   onValueChange={setParentRoot}
                   value={parentRoot}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="No configured roots" />
+                    <SelectValue placeholder={t("No configured roots")} />
                   </SelectTrigger>
                   <SelectContent>
                     {roots.map((root) => (
@@ -3088,8 +3055,7 @@ function NewProjectButton({
               </label>
 
               <label className="grid gap-1.5 text-xs font-medium text-[var(--ak-ink-muted)]">
-                Project name
-                <input
+                {t("Project name")}<input
                   className="ak-control-field h-9 px-3 text-sm placeholder:text-[var(--ak-ink-faint)]"
                   disabled={isCreating}
                   onChange={(event) => {
@@ -3107,7 +3073,7 @@ function NewProjectButton({
                   disabled={isCreating}
                   onCheckedChange={(checked) => setGitInit(checked === true)}
                 />
-                Initialize git repository with main branch
+                {t("Initialize git repository with main branch")}
               </label>
 
               {directoriesQuery.isError ? (
@@ -3128,7 +3094,7 @@ function NewProjectButton({
                 type="button"
                 variant="outline"
               >
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button
                 disabled={!parentRoot || !projectName.trim() || isCreating}
@@ -3139,7 +3105,7 @@ function NewProjectButton({
                 ) : (
                   <FolderKanban className="size-3" aria-hidden="true" />
                 )}
-                Create project
+                {t("Create project")}
               </Button>
             </DialogFooter>
           </form>
@@ -3160,6 +3126,7 @@ function WorkspaceRootsPanel({
   onSave: (roots: string[]) => Promise<void>;
   settings?: WorkspaceRootsSettingsResponse;
 }) {
+  const { t } = useTranslation();
   const [localRoots, setLocalRoots] = useState<string[]>([]);
   const [browseRoot, setBrowseRoot] = useState<string | undefined>();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
@@ -3213,21 +3180,21 @@ function WorkspaceRootsPanel({
     <section className="ak-panel grid gap-4 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="ak-muted-label">Workspace roots</p>
-          <h3 className="ak-title mt-1 text-base">Allowed project locations</h3>
+          <p className="ak-muted-label">{t("Workspace roots")}</p>
+          <h3 className="ak-title mt-1 text-base">{t("Allowed project locations")}</h3>
           <p className="ak-body-muted mt-1 text-sm leading-6">
-            Project discovery, folder browsing, project creation, and Codex run cwd validation use these roots immediately after selection.
+            {t("Project discovery, folder browsing, project creation, and Codex run cwd validation use these roots immediately after selection.")}
           </p>
         </div>
         <Badge variant={settings?.hasOverride ? "warning" : "outline"}>
-          {settings?.hasOverride ? "override" : "default"}
+          {settings?.hasOverride ? t("override") : t("default")}
         </Badge>
       </div>
 
       {isLoading ? (
         <div className="ak-panel-muted flex items-center gap-2 p-3 text-sm text-[var(--ak-ink-muted)]">
           <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-          Loading roots
+          {t("Loading roots")}
         </div>
       ) : null}
 
@@ -3246,7 +3213,7 @@ function WorkspaceRootsPanel({
             <Folder className="size-4 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
             <span className="min-w-0 flex-1 break-all text-[var(--ak-ink)]">{root}</span>
             <Button
-              aria-label={`Remove ${root}`}
+              aria-label={t("Remove {{path}}", { path: root })}
               disabled={isSaving || localRoots.length <= 1}
               onClick={() =>
                 void saveRoots(localRoots.filter((_, rootIndex) => rootIndex !== index))
@@ -3269,7 +3236,7 @@ function WorkspaceRootsPanel({
           type="button"
           variant="ghost"
         >
-          Use defaults
+          {t("Use defaults")}
         </Button>
         <Button
           disabled={isSaving}
@@ -3286,7 +3253,7 @@ function WorkspaceRootsPanel({
           ) : (
             <Folder className="size-3" aria-hidden="true" />
           )}
-          Browse root
+          {t("Browse root")}
         </Button>
       </div>
 
@@ -3332,21 +3299,22 @@ function WorkspaceRootBrowserDialog({
   onSelect: (root: string) => void;
   open: boolean;
 }) {
+  const { t } = useTranslation();
   const currentDirectory = data?.directory;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="h-[min(720px,calc(100vh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader className="pr-12">
-          <DialogTitle>Select workspace root</DialogTitle>
+          <DialogTitle>{t("Select workspace root")}</DialogTitle>
           <DialogDescription>
-            Choose a local folder to use as an Alpha Kanban project root.
+            {t("Choose a local folder to use as an Alpha Kanban project root.")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 grid-cols-[190px_minmax(0,1fr)] border-y border-[var(--ak-hairline)] max-[720px]:grid-cols-1">
           <aside className="min-h-0 border-r border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] p-3 max-[720px]:border-b max-[720px]:border-r-0">
-            <p className="ak-muted-label mb-2 px-1">Shortcuts</p>
+            <p className="ak-muted-label mb-2 px-1">{t("Shortcuts")}</p>
             <div className="grid gap-1 max-[720px]:grid-cols-2">
               {data?.roots.map((root) => (
                 <DirectoryRootButton
@@ -3363,7 +3331,7 @@ function WorkspaceRootBrowserDialog({
             <div className="grid gap-3 border-b border-[var(--ak-hairline)] p-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Button
-                  aria-label="Parent folder"
+                  aria-label={t("Parent folder")}
                   disabled={!currentDirectory?.parentPath || isLoading}
                   onClick={() => onBrowse(currentDirectory?.parentPath)}
                   size="icon"
@@ -3374,16 +3342,16 @@ function WorkspaceRootBrowserDialog({
                 </Button>
                 <div className="ak-control flex h-9 min-w-0 flex-1 items-center gap-2 px-3 text-sm">
                   <Folder className="size-4 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-                  <span className="truncate">{currentDirectory?.path ?? "Loading"}</span>
+                  <span className="truncate">{currentDirectory?.path ?? t("Loading")}</span>
                 </div>
               </div>
               {currentDirectory ? (
                 <div className="flex flex-wrap items-center gap-1">
                   <Badge variant={currentDirectory.hasDocs ? "muted" : "outline"}>
-                    {currentDirectory.hasDocs ? "docs" : "empty"}
+                    {currentDirectory.hasDocs ? t("docs") : t("empty")}
                   </Badge>
                   {currentDirectory.isWorkspaceCandidate ? (
-                    <Badge variant="success">project</Badge>
+                    <Badge variant="success">{t("project")}</Badge>
                   ) : null}
                 </div>
               ) : null}
@@ -3391,14 +3359,14 @@ function WorkspaceRootBrowserDialog({
 
             <div className="ak-scroll-area min-h-0 overflow-auto">
               <div className="grid min-w-[700px] grid-cols-[minmax(190px,1.25fr)_150px_minmax(300px,2fr)] border-b border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] px-3 py-2 ak-muted-label">
-                <span>Name</span>
-                <span>Type</span>
-                <span>Path</span>
+                <span>{t("Name")}</span>
+                <span>{t("Type")}</span>
+                <span>{t("Path")}</span>
               </div>
               {isLoading ? (
                 <div className="ak-body-muted flex items-center gap-2 px-4 py-5 text-sm">
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  Loading folders
+                  {t("Loading folders")}
                 </div>
               ) : null}
               {error ? (
@@ -3415,7 +3383,7 @@ function WorkspaceRootBrowserDialog({
               ))}
               {!isLoading && currentDirectory?.children.length === 0 ? (
                 <p className="ak-panel-muted m-3 border-dashed px-3 py-8 text-center text-sm text-[var(--ak-ink-muted)]">
-                  Empty folder
+                  {t("Empty folder")}
                 </p>
               ) : null}
             </div>
@@ -3424,7 +3392,7 @@ function WorkspaceRootBrowserDialog({
 
         <DialogFooter className="max-[720px]:flex-col max-[720px]:items-stretch">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={!currentDirectory?.path}
@@ -3432,7 +3400,7 @@ function WorkspaceRootBrowserDialog({
             type="button"
           >
             <Folder className="size-4" aria-hidden="true" />
-            Select Root
+            {t("Select Root")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -3441,32 +3409,33 @@ function WorkspaceRootBrowserDialog({
 }
 
 function HowAlphaKanbanWorksPanel() {
+  const { t } = useTranslation();
   return (
     <section className="ak-panel grid content-start gap-3 p-5">
       <div>
-        <p className="ak-muted-label">Guide</p>
-        <h3 className="ak-title mt-1 text-base">Plan work with Codex</h3>
+        <p className="ak-muted-label">{t("Guide")}</p>
+        <h3 className="ak-title mt-1 text-base">{t("Work through documents")}</h3>
       </div>
       <div className="grid gap-2">
         <StartGuideStep
-          description="Open an existing folder or create a new project. It is fine if there are no Alpha Kanban docs yet."
+          description={t("Open an existing folder or create a new project. It is fine if there are no Alpha Kanban docs yet.")}
           icon={FolderKanban}
-          title="Open or create a project"
+          title={t("Open or create a project")}
         />
         <StartGuideStep
-          description="Describe what you want to build, investigate, fix, or organize before creating tickets."
+          description={t("Discuss the project in Codex with the implementation-ledger skill.")}
           icon={Bot}
-          title="Discuss the work"
+          title={t("Discuss the work")}
         />
         <StartGuideStep
-          description="Ask Codex to create a plan, tickets, and an inventory when the direction is clear."
+          description={t("Ask Codex to create a plan, tickets, and an inventory when the direction is clear.")}
           icon={BookOpen}
-          title="Generate planning docs"
+          title={t("Generate planning docs")}
         />
         <StartGuideStep
-          description="Read the generated docs, refine scope in Workspace Chat, then run focused ticket work one by one."
+          description={t("Review tickets here and record feedback or status-change reasons. Continue the work in Codex using the updated document.")}
           icon={ListChecks}
-          title="Review, revise, and run"
+          title={t("Review and leave directions")}
         />
       </div>
     </section>
@@ -3512,16 +3481,17 @@ function MarkdownDocumentReader({
   isLoading: boolean;
   onFileSelect: (file: MarkdownFileSummary) => void;
 }) {
+  const { t } = useTranslation();
   if (isLoading) {
-    return <BoardState isLoading title={`Loading ${documentTypeLabel(file.type)}`} />;
+    return <BoardState isLoading title={t("Loading {{type}}", { type: documentTypeLabel(file.type) })} />;
   }
 
   if (isError || !document) {
     return (
       <BoardState
         icon="error"
-        title="Could not load document"
-        description={error?.message ?? "Unknown API error"}
+        title={t("Could not load document")}
+        description={error ? formatClientError(error) : t("Unknown API error")}
       />
     );
   }
@@ -3546,7 +3516,7 @@ function MarkdownDocumentReader({
 
         <div className="ak-scroll-area grid min-h-0 flex-1 content-start gap-4 overflow-auto p-4">
           <section className="grid gap-2">
-            <h4 className="ak-muted-label">Linked docs</h4>
+            <h4 className="ak-muted-label">{t("Linked docs")}</h4>
             <div className="grid gap-1">
               {(documentSet?.documents ?? [file]).map((linkedFile) => (
                 <button
@@ -3574,21 +3544,15 @@ function MarkdownDocumentReader({
 
           {documentSet?.ticketProgress?.totalTickets !== undefined ? (
             <section className="grid gap-2">
-              <h4 className="ak-muted-label">Ticket progress</h4>
+              <h4 className="ak-muted-label">{t("Ticket progress")}</h4>
               <div className="ak-panel-muted px-3 py-2 text-sm">
-                <span className="font-medium text-[var(--ak-ink)]">
-                  {documentSet.ticketProgress.doneTickets ?? 0}
-                </span>
-                <span className="text-[var(--ak-ink-muted)]">
-                  {" "}
-                  / {documentSet.ticketProgress.totalTickets} tickets done
-                </span>
+                {t("{{done}} / {{total}} tickets done", { done: documentSet.ticketProgress.doneTickets ?? 0, total: documentSet.ticketProgress.totalTickets })}
               </div>
             </section>
           ) : null}
 
           <section className="grid gap-2">
-            <h4 className="ak-muted-label">Outline</h4>
+            <h4 className="ak-muted-label">{t("Outline")}</h4>
             {document.outline.length > 0 ? (
               <ol className="grid gap-1 text-xs leading-5 text-[var(--ak-ink-muted)]">
                 {document.outline.map((heading) => {
@@ -3600,12 +3564,12 @@ function MarkdownDocumentReader({
                     style={{ paddingLeft: `${Math.max(0, heading.level - 1) * 8}px` }}
                   >
                     <button
-                      className="ak-focus-ring grid w-full min-w-0 grid-cols-[32px_minmax(0,1fr)] gap-2 rounded-[var(--ak-radius-sm)] px-1 py-1 text-left transition-colors hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]"
+                      className="ak-focus-ring grid w-full min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-2 rounded-[var(--ak-radius-sm)] px-1 py-1 text-left transition-colors hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]"
                       onClick={() => scrollToMarkdownHeading(headingId)}
                       title={heading.title}
                       type="button"
                     >
-                      <span className="text-[var(--ak-ink-faint)]">L{heading.line}</span>
+                      <span className="text-[var(--ak-ink-faint)]">{t("Line {{line}}", { line: heading.line })}</span>
                       <span className="truncate">{heading.title}</span>
                     </button>
                   </li>
@@ -3613,7 +3577,7 @@ function MarkdownDocumentReader({
                 })}
               </ol>
             ) : (
-              <p className="text-xs text-[var(--ak-ink-faint)]">No headings</p>
+              <p className="text-xs text-[var(--ak-ink-faint)]">{t("No headings")}</p>
             )}
           </section>
         </div>
@@ -3621,7 +3585,7 @@ function MarkdownDocumentReader({
 
       <article className="ak-panel flex min-h-0 min-w-0 flex-col overflow-hidden max-[960px]:h-[calc(100dvh-10rem)]">
         <div className="shrink-0 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-4">
-          <p className="ak-muted-label">{documentTypeLabel(file.type)} reader</p>
+            <p className="ak-muted-label">{t("{{type}} reader", { type: documentTypeLabel(file.type) })}</p>
           <h3 className="ak-title mt-1 break-words text-lg">
             {document.outline[0]?.title ?? file.filename}
           </h3>
@@ -3670,25 +3634,46 @@ function KanbanColumn({
   runSummaryByTicket,
   status,
   tickets,
+  dragDisabled,
+  isDragOver,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   onTicketSelect: (ticketId: string) => void;
   runSummaryByTicket: Map<string, CodexRunSummary>;
   status: TicketStatus;
   tickets: TicketItem[];
+  dragDisabled: boolean;
+  isDragOver: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>, ticketId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragEvent<HTMLElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLElement>) => void;
+  onDrop: (event: DragEvent<HTMLElement>) => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <section className="ak-panel-muted min-h-[calc(100vh-8rem)] overflow-hidden">
+    <section
+      className={`ak-panel-muted min-h-[calc(100vh-8rem)] overflow-hidden ${isDragOver ? "ring-2 ring-inset ring-primary" : ""}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      aria-label={t("{{status}} tickets", { status: t(status) })}
+    >
       <header className="flex items-center justify-between gap-2 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <StatusDot status={status} />
-          <h3 className="ak-muted-label truncate">{status}</h3>
+          <h3 className="ak-muted-label truncate">{t(status)}</h3>
         </div>
         <Badge variant="muted">{tickets.length}</Badge>
       </header>
       <div className="grid gap-2 p-2">
         {tickets.length === 0 ? (
           <div className="rounded-[var(--ak-radius-md)] border border-dashed border-[var(--ak-hairline)] px-3 py-8 text-center text-xs text-[var(--ak-ink-muted)]">
-            Empty
+            {t("Empty")}
           </div>
         ) : null}
         {tickets.map((ticket) => (
@@ -3697,6 +3682,9 @@ function KanbanColumn({
             onSelect={() => onTicketSelect(ticket.id)}
             runSummary={runSummaryByTicket.get(ticket.id)}
             ticket={ticket}
+            draggable={!dragDisabled}
+            onDragStart={(event) => onDragStart(event, ticket.id)}
+            onDragEnd={onDragEnd}
           />
         ))}
       </div>
@@ -3708,16 +3696,28 @@ function TicketCard({
   onSelect,
   runSummary,
   ticket,
+  draggable,
+  onDragStart,
+  onDragEnd,
 }: {
   onSelect: () => void;
   runSummary?: CodexRunSummary;
   ticket: TicketItem;
+  draggable: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <article className="ak-card transition-colors hover:border-[rgba(0,0,0,0.18)] hover:bg-[rgba(255,255,255,0.92)]">
+    <article
+      className="ak-card transition-colors hover:border-border hover:bg-muted"
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <button
-        aria-label={`Open ${ticket.id}`}
-        className="block w-full p-3 text-left"
+        aria-label={t("Open {{id}}", { id: ticket.id })}
+        className="block w-full cursor-grab p-3 text-left active:cursor-grabbing"
         onClick={onSelect}
         type="button"
       >
@@ -3732,13 +3732,13 @@ function TicketCard({
           {ticket.title}
         </h4>
         <div className="ak-body-muted mt-3 grid gap-1.5 text-xs">
-          <PropertyRow label="Progress" value={`${ticket.progress}%`} />
+          <PropertyRow label={t("Progress")} value={`${ticket.progress}%`} />
           <PropertyRow
-            label="Repo"
+            label={t("Repo")}
             value={ticket.repository.length > 0 ? ticket.repository.join(", ") : "-"}
           />
           <PropertyRow
-            label="Depends"
+            label={t("Depends")}
             value={ticket.dependsOn.length > 0 ? ticket.dependsOn.join(", ") : "-"}
           />
         </div>
@@ -3778,6 +3778,7 @@ function WorkspaceChatDialog({
   selectedWorkspace?: WorkspaceSummary;
   workspaceId?: string;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const [bypassSandbox, setBypassSandbox] = useState(false);
   const [intent, setIntent] = useState<CodexWorkspaceChatIntent>("general");
@@ -3955,10 +3956,10 @@ function WorkspaceChatDialog({
   const isRunModeLocked = intent !== "general";
   const sendLabel =
     intent === "plan_ticketing_handoff"
-      ? "Run handoff"
+      ? t("Run handoff")
       : intent === "spec_grilling"
-        ? "Ask"
-        : "Send";
+        ? t("Ask")
+        : t("Send");
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -3966,9 +3967,9 @@ function WorkspaceChatDialog({
         <DialogHeader className="border-b border-[var(--ak-hairline)] px-5 py-4 pr-12">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <DialogTitle>Workspace Chat</DialogTitle>
+              <DialogTitle>{t("Workspace Chat")}</DialogTitle>
               <DialogDescription className="mt-1 truncate">
-                {selectedWorkspace?.root ?? "Select a project"}
+                {selectedWorkspace?.root ?? t("Select a project")}
               </DialogDescription>
               {selectedFile ? (
                 <p className="ak-body-muted mt-1 truncate text-xs">
@@ -3984,12 +3985,12 @@ function WorkspaceChatDialog({
               {isWorkspaceRunActive ? (
                 <Badge variant="warning">
                   <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                  Running
+                  {t("Running")}
                 </Badge>
               ) : run ? (
-                <Badge variant="muted">{run.status}</Badge>
+                <Badge variant="muted">{runLabel(run.status)}</Badge>
               ) : null}
-              <Badge variant="outline">{documentCount} docs</Badge>
+              <Badge variant="outline">{t("{{count}} documents", { count: documentCount })}</Badge>
             </div>
           </div>
         </DialogHeader>
@@ -3998,13 +3999,13 @@ function WorkspaceChatDialog({
           <div className="ak-workspace-chat-thread grid gap-4">
             {error ? (
               <div className="rounded-[var(--ak-radius-md)] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                {error.message}
+                {formatClientError(error)}
               </div>
             ) : null}
 
             {!canUseWorkspaceChat ? (
               <div className="ak-panel-muted px-3 py-2 text-sm text-[var(--ak-ink-muted)]">
-                Select an available project before opening workspace chat.
+                {t("Select an available project before opening workspace chat.")}
               </div>
             ) : null}
 
@@ -4025,7 +4026,7 @@ function WorkspaceChatDialog({
               availableTickets={availableTickets}
               disabled={!canUseWorkspaceChat}
               hideLabel
-              label="Workspace message"
+              label={t("Workspace message")}
               onChange={(nextValue) => {
                 setDraft(nextValue);
                 setPreview(null);
@@ -4060,7 +4061,7 @@ function WorkspaceChatDialog({
                   >
                     <section className="grid gap-2">
                       <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                        Purpose
+                        {t("Purpose")}
                       </p>
                       <CompactWorkspaceIntentControl
                         disabled={!canUseWorkspaceChat || isWorkspaceRunActive}
@@ -4081,7 +4082,7 @@ function WorkspaceChatDialog({
                     </section>
                     <section className="grid gap-2">
                       <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                        Access
+                        {t("Access")}
                       </p>
                       <CompactRunModeControl
                         disabled={!canUseWorkspaceChat || isRunModeLocked}
@@ -4095,13 +4096,13 @@ function WorkspaceChatDialog({
                       />
                       {isRunModeLocked ? (
                         <p className="text-xs text-[var(--ak-ink-faint)]">
-                          Locked by {workspaceIntentLabel(intent)}.
+                          {t("Locked by")}{workspaceIntentLabel(intent)}.
                         </p>
                       ) : null}
                     </section>
                     <section className="grid gap-2">
                       <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                        Model
+                        {t("Model")}
                       </p>
                       <CodexRunDefaultsControl
                         defaults={codexRunDefaults}
@@ -4118,7 +4119,7 @@ function WorkspaceChatDialog({
                     </section>
                     <section className="grid gap-2">
                       <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                        Advanced
+                        {t("Advanced")}
                       </p>
                       <BypassSandboxControl
                         checked={bypassSandbox}
@@ -4160,7 +4161,7 @@ function WorkspaceChatDialog({
                       variant="ghost"
                     >
                       <Terminal className="size-3.5" aria-hidden="true" />
-                      Preview
+                      {t("Preview")}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
@@ -4174,7 +4175,7 @@ function WorkspaceChatDialog({
                     ) : (
                       <div className="flex items-center gap-2 p-2 text-sm text-[var(--ak-ink-muted)]">
                         <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                        Preparing prompt
+                        {t("Preparing prompt")}
                       </div>
                     )}
                   </PopoverContent>
@@ -4196,11 +4197,11 @@ function WorkspaceChatDialog({
                 {isWorkspaceRunActive ? (
                   <span className="flex items-center gap-1 text-xs font-medium text-[var(--ak-ink-muted)]">
                     <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                    Running
+                    {t("Running")}
                   </span>
                 ) : run ? (
                   <span className="text-xs text-[var(--ak-ink-faint)]">
-                    Last run {run.status}
+                    {t("Last run: {{status}}", { status: runLabel(run.status) })}
                   </span>
                 ) : null}
               </div>
@@ -4219,7 +4220,7 @@ function WorkspaceChatDialog({
                 ) : (
                   <Send className="size-3" aria-hidden="true" />
                 )}
-                {isWorkspaceRunActive ? "Running" : sendLabel}
+                {isWorkspaceRunActive ? t("Running") : sendLabel}
               </Button>
             </div>
           </div>
@@ -4229,7 +4230,7 @@ function WorkspaceChatDialog({
   );
 }
 
-function TicketDetailDrawer({
+export function TicketDetailDrawer({
   availableTickets,
   codexModels,
   codexDisabledReason,
@@ -4240,24 +4241,20 @@ function TicketDetailDrawer({
   documentMtimeMs,
   externalFileChange,
   fileId,
-  isLoadingCodexRunDefaults,
-  isResizing,
-  mode,
-  onCodexRunDefaultsChange,
-  onChangeMode,
+  isLoadingCodexRunDefaults = false,
+  presentation,
+  onCodexRunDefaultsChange = async () => { throw new Error("Embedded chat is unavailable in this view."); },
   onClose,
+  onAppendInstruction,
   onExternalFileReload,
   onPatchTicket,
   onReload,
-  onRunDocumentChange,
-  onRunRead,
-  onRunStatusChange,
-  onResizeNudge,
-  onResizeReset,
-  onResizeStart,
+  onRunDocumentChange = onReload,
+  onRunRead = onReload,
+  onRunStatusChange = onReload,
+  onOpenInWorkspace,
   ticket,
   ticketRunSummary,
-  width,
   workspaceId,
 }: {
   availableTickets: TicketItem[];
@@ -4270,36 +4267,42 @@ function TicketDetailDrawer({
   documentMtimeMs: number;
   externalFileChange?: MarkdownFileChangeEvent | null;
   fileId: string;
-  isLoadingCodexRunDefaults: boolean;
-  isResizing: boolean;
-  mode: TicketDetailMode;
-  onCodexRunDefaultsChange: (defaults: {
+  isLoadingCodexRunDefaults?: boolean;
+  presentation: TicketDetailPresentation;
+  onCodexRunDefaultsChange?: (defaults: {
     model?: string | null;
     reasoningEffort?: string | null;
     speedTier?: string | null;
   }) => Promise<unknown>;
-  onChangeMode: (mode: TicketDetailMode) => void;
   onClose: () => void;
+  onAppendInstruction: (
+    ticketId: string,
+    kind: TicketInstructionKind,
+    text: string,
+  ) => Promise<void>;
   onExternalFileReload: () => Promise<unknown>;
   onPatchTicket: (
     ticketId: string,
     status: TicketStatus,
     progress: TicketProgress,
+    reason: string,
   ) => Promise<void>;
   onReload: () => Promise<unknown>;
-  onRunDocumentChange: () => Promise<unknown>;
-  onRunRead: () => Promise<unknown>;
-  onRunStatusChange: () => Promise<unknown>;
-  onResizeNudge: (delta: number) => void;
-  onResizeReset: () => void;
-  onResizeStart: (clientX: number) => void;
+  onRunDocumentChange?: () => Promise<unknown>;
+  onRunRead?: () => Promise<unknown>;
+  onRunStatusChange?: () => Promise<unknown>;
+  onOpenInWorkspace?: () => void;
   ticket: TicketItem;
   ticketRunSummary?: CodexRunSummary;
-  width: number;
   workspaceId?: string;
 }) {
+  const { t } = useTranslation();
   const [statusDraft, setStatusDraft] = useState<TicketStatus>(ticket.status);
   const [progressDraft, setProgressDraft] = useState<TicketProgress>(ticket.progress);
+  const [changeReason, setChangeReason] = useState("");
+  const [instructionText, setInstructionText] = useState("");
+  const [isAppendingInstruction, setIsAppendingInstruction] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("");
   const [runDraft, setRunDraft] = useState("");
   const [runMode, setRunMode] = useState<CodexRunMode>("edit");
   const [bypassSandbox, setBypassSandbox] = useState(false);
@@ -4316,7 +4319,7 @@ function TicketDetailDrawer({
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
   const [error, setError] = useState<ClientApiError | Error | null>(null);
   const ticketChatQuery = useQuery({
-    enabled: Boolean(workspaceId && fileId && ticket.id),
+    enabled: Boolean(IN_APP_CHAT_ENABLED && workspaceId && fileId && ticket.id),
     queryFn: () => fetchTicketChat(workspaceId ?? "", fileId, ticket.id),
     queryKey: ticketChatKey(workspaceId, fileId, ticket.id),
     refetchInterval: run?.status === "running" ? 5_000 : false,
@@ -4334,7 +4337,7 @@ function TicketDetailDrawer({
   }, [ticket.id, ticket.progress, ticket.status]);
 
   useEffect(() => {
-    if (!ticketRunSummary?.id) {
+    if (!IN_APP_CHAT_ENABLED || !ticketRunSummary?.id) {
       setRun(null);
       setRunEvents([]);
       return;
@@ -4382,14 +4385,39 @@ function TicketDetailDrawer({
   }, [run?.id, run?.status]);
 
   async function saveStatus(): Promise<void> {
+    if (isSaving || isAppendingInstruction || externalFileChange || !canSaveStatus || !TICKET_PROGRESS_BY_STATUS[statusDraft].includes(progressDraft)) {
+      return;
+    }
     setIsSaving(true);
     setError(null);
+    setSavedMessage("");
     try {
-      await onPatchTicket(ticket.id, statusDraft, progressDraft);
+      await onPatchTicket(ticket.id, statusDraft, progressDraft, changeReason.trim());
+      setChangeReason("");
+      setSavedMessage("상태와 변경 사유를 문서에 저장했습니다.");
     } catch (nextError) {
       setError(normalizeClientError(nextError));
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function saveInstruction(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!instructionText.trim() || isAppendingInstruction || isSaving || externalFileChange) {
+      return;
+    }
+    setIsAppendingInstruction(true);
+    setError(null);
+    setSavedMessage("");
+    try {
+      await onAppendInstruction(ticket.id, "manual", instructionText.trim());
+      setInstructionText("");
+      setSavedMessage("사용자 지시를 문서에 추가했습니다.");
+    } catch (nextError) {
+      setError(normalizeClientError(nextError));
+    } finally {
+      setIsAppendingInstruction(false);
     }
   }
 
@@ -4514,7 +4542,7 @@ function TicketDetailDrawer({
 
   async function deleteChatMessage(message: CodexChatMessage): Promise<void> {
     const confirmed = window.confirm(
-      "Delete this failed chat message? The raw run log will be kept.",
+      t("Delete this failed chat message? The raw run log will be kept."),
     );
     if (!confirmed) {
       return;
@@ -4583,88 +4611,33 @@ function TicketDetailDrawer({
   );
   const scopeWarnings = codexChatScopeRunWarnings(scopeResolution, runMode);
   const isScopeAllowed = isCodexChatScopeRunAllowed(scopeResolution, runMode);
-  const canUseCodex = !codexDisabledReason;
+  const canUseCodex = IN_APP_CHAT_ENABLED && !codexDisabledReason;
   const canStartCodexRun =
     canUseCodex &&
     !externalFileChange &&
     (documentRunSummary?.canStartRun ?? true) &&
     isScopeAllowed;
   const ticketChatMessageCount = ticketChatQuery.data?.messages.length ?? 0;
-  const panelStyle = {
-    "--ticket-detail-width": `${width}px`,
-  } as CSSProperties;
-  const panelClassName =
-    mode === "side"
-      ? "absolute inset-y-0 right-0 flex w-[min(var(--ticket-detail-width),100vw)] flex-col overflow-clip border-l border-[var(--ak-hairline)] bg-[var(--ak-surface)] shadow-[var(--ak-shadow-soft)]"
-      : "relative flex max-h-[min(960px,calc(100dvh-2rem))] w-[min(960px,calc(100vw-2rem))] flex-col overflow-clip rounded-[var(--ak-radius-lg)] border border-[var(--ak-hairline)] bg-[var(--ak-surface)] shadow-[var(--ak-shadow-soft)]";
-  const ticketSendLabel = runMode === "read_only" ? "Ask" : "Run";
+  const ticketSendLabel = runMode === "read_only" ? t("Ask") : t("Run");
 
   return (
-    <div
-      aria-labelledby="ticket-detail-title"
-      aria-modal="true"
-      className={[
-        "fixed inset-0 z-50 bg-black/20 backdrop-blur-[1px]",
-        mode === "modal" ? "grid place-items-center p-4" : "",
-      ].join(" ")}
-      role="dialog"
-    >
-      <div className={panelClassName} style={panelStyle}>
-        {mode === "side" ? (
-          <TicketDetailResizeHandle
-            isDragging={isResizing}
-            onChangeWidth={(nextWidth) => onResizeNudge(nextWidth - width)}
-            onNudge={onResizeNudge}
-            onPointerDown={onResizeStart}
-            onReset={onResizeReset}
-            width={width}
-          />
-        ) : null}
+    <TicketDetailFrame ticketId={ticket.id} presentation={presentation} onClose={onClose}
+      onOpenInWorkspace={onOpenInWorkspace}
+      isBusy={isSaving || isAppendingInstruction}
+      hasDraft={canSaveStatus || Boolean(changeReason.trim() || instructionText.trim() || runDraft.trim())}>
         <header className="ak-drawer-header">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{ticket.id}</Badge>
+            <DialogTitle className="ak-title break-words text-2xl">{ticket.title}</DialogTitle>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge>
-              <Badge variant="muted">lines {ticket.range.startLine}-{ticket.range.endLine}</Badge>
+              <span className="ak-body-muted text-sm">{ticket.type}</span>
             </div>
-            <h2
-              className="ak-title mt-3 break-words text-2xl"
-              id="ticket-detail-title"
-            >
-              {ticket.title}
-            </h2>
-            <p className="ak-body-muted mt-2 text-sm">{ticket.type}</p>
-          </div>
-          <div className="ak-drawer-actions">
-            <Button
-              aria-label={mode === "side" ? "Open ticket detail as modal" : "Open ticket detail as side panel"}
-              onClick={() => onChangeMode(mode === "side" ? "modal" : "side")}
-              size="iconSm"
-              title={mode === "side" ? "Open as modal" : "Open as side panel"}
-              variant="ghost"
-            >
-              {mode === "side" ? (
-                <Maximize2 className="size-4" aria-hidden="true" />
-              ) : (
-                <PanelRight className="size-4" aria-hidden="true" />
-              )}
-            </Button>
-            <Button
-              aria-label="Close ticket detail"
-              onClick={onClose}
-              size="iconSm"
-              variant="ghost"
-            >
-              <X className="size-4" aria-hidden="true" />
-            </Button>
-          </div>
         </header>
 
-        <div className="ak-scroll-area ak-drawer-body min-h-0 flex-1 overflow-y-auto">
+        <div className="ak-drawer-body">
           {externalFileChange ? (
             <ExternalFileChangeBanner
               event={externalFileChange}
-              hasLocalDraft={canSaveStatus || Boolean(runDraft.trim())}
+              hasLocalDraft={canSaveStatus || Boolean(changeReason.trim() || instructionText.trim() || runDraft.trim())}
               onReload={onExternalFileReload}
             />
           ) : null}
@@ -4675,44 +4648,27 @@ function TicketDetailDrawer({
               onReload={onReload}
             />
           ) : null}
+          {savedMessage ? (
+            <p className="mb-3 text-sm text-[var(--ak-ink-muted)]" role="status">{t(savedMessage)}</p>
+          ) : null}
 
           <section className="grid gap-3 border-b border-[var(--ak-hairline)] pb-5">
-            <h3 className="ak-title text-sm">Properties</h3>
-            <div className="grid grid-cols-2 gap-3 max-[560px]:grid-cols-1">
-              <label className="grid gap-1 text-xs font-medium text-[var(--ak-ink-muted)]">
-                Status
-                <select
-                  className="ak-control-field h-9 px-2 text-sm font-medium"
-                  onChange={(event) => setStatusDraft(event.target.value as TicketStatus)}
-                  value={statusDraft}
-                >
-                  {BOARD_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-xs font-medium text-[var(--ak-ink-muted)]">
-                Progress
-                <select
-                  className="ak-control-field h-9 px-2 text-sm font-medium"
-                  onChange={(event) =>
-                    setProgressDraft(Number(event.target.value) as TicketProgress)
-                  }
-                  value={progressDraft}
-                >
-                  {PROGRESS_VALUES.map((progress) => (
-                    <option key={progress} value={progress}>
-                      {progress}%
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <h3 className="ak-title text-sm">{t("Properties")}</h3>
+            <TicketStatusFields
+              currentStatus={ticket.status}
+              currentProgress={ticket.progress}
+              draft={{ status: statusDraft, progress: progressDraft, reason: changeReason }}
+              disabled={isSaving || isAppendingInstruction}
+              onChange={(draft) => {
+                setStatusDraft(draft.status);
+                setProgressDraft(draft.progress);
+                setChangeReason(draft.reason);
+                setSavedMessage("");
+              }}
+            />
             <div className="flex flex-wrap gap-2">
               <Button
-                disabled={!canSaveStatus || isSaving || Boolean(externalFileChange)}
+                disabled={!canSaveStatus || !TICKET_PROGRESS_BY_STATUS[statusDraft].includes(progressDraft) || isSaving || isAppendingInstruction || Boolean(externalFileChange)}
                 onClick={saveStatus}
                 size="sm"
               >
@@ -4721,51 +4677,69 @@ function TicketDetailDrawer({
                 ) : (
                   <Save className="size-3" aria-hidden="true" />
                 )}
-                Save status
+                {t("Save status")}
               </Button>
-              <Badge variant="muted">Hash {documentHash.slice(0, 10)}</Badge>
             </div>
           </section>
 
           <div className="grid gap-6 py-5">
-            <CanonicalSection title="Repository" items={ticket.repository} />
-            <CanonicalSection title="Depends on" items={ticket.dependsOn} />
-            <CanonicalSection title="목표" items={ticket.goal} />
-            <CanonicalSection title="현재 문제" items={ticket.currentProblem} />
-            <CanonicalSection title="구현 범위" items={ticket.implementationScope} />
-            <CanonicalSection title="제외 범위" items={ticket.outOfScope} />
+            <CanonicalSection title={t("Repository")} items={ticket.repository} />
+            <CanonicalSection title={t("Depends on")} items={ticket.dependsOn} />
+            <CanonicalSection title={t("목표")} items={ticket.goal} />
+            <CanonicalSection title={t("현재 문제")} items={ticket.currentProblem} />
+            <CanonicalSection title={t("구현 범위")} items={ticket.implementationScope} />
+            <CanonicalSection title={t("제외 범위")} items={ticket.outOfScope} />
             <CanonicalSection
-              title="완료 기준"
+              title={t("완료 기준")}
               items={ticket.completionCriteria}
               checklistItems={ticket.completionCriteriaItems}
             />
             <CanonicalSection
-              title="검증"
+              title={t("검증")}
               items={ticket.validation}
               checklistItems={ticket.validationItems}
             />
 
             <section className="grid gap-3 border-t border-[var(--ak-hairline)] pt-5">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="ak-title text-sm">사용자 지시</h3>
+                <h3 className="ak-title text-sm">{t("사용자 지시")}</h3>
                 <Badge variant="muted">{ticket.userInstructions.length}</Badge>
               </div>
-              <LogTimeline emptyLabel="No user instructions" entries={ticket.userInstructions} />
+              <LogTimeline emptyLabel={t("No user instructions")} entries={ticket.userInstructions} />
+              <form className="grid gap-3" onSubmit={(event) => void saveInstruction(event)}>
+                <label className="grid gap-2 text-xs font-medium text-[var(--ak-ink-muted)]">
+                  {t("수동 지시")}<Textarea
+                    disabled={isSaving || isAppendingInstruction}
+                    onChange={(event) => {
+                      setInstructionText(event.target.value);
+                      setSavedMessage("");
+                    }}
+                    rows={3}
+                    value={instructionText}
+                  />
+                </label>
+                <div className="flex justify-end">
+                  <Button disabled={!instructionText.trim() || isSaving || isAppendingInstruction || Boolean(externalFileChange)} size="sm" type="submit">
+                    {isAppendingInstruction ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <Save className="size-3" aria-hidden="true" />}
+                    {t("문서에 추가")}
+                  </Button>
+                </div>
+              </form>
             </section>
 
             <section className="grid gap-3 border-t border-[var(--ak-hairline)] pt-5">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="ak-title text-sm">진행 메모</h3>
+                <h3 className="ak-title text-sm">{t("진행 메모")}</h3>
                 <Badge variant="muted">{ticket.progressNotes.length}</Badge>
               </div>
-              <LogTimeline emptyLabel="No progress notes" entries={ticket.progressNotes} />
+              <LogTimeline emptyLabel={t("No progress notes")} entries={ticket.progressNotes} />
             </section>
 
-            <section className="grid gap-3 border-t border-[var(--ak-hairline)] pt-5">
+            {IN_APP_CHAT_ENABLED ? <section className="grid gap-3 border-t border-[var(--ak-hairline)] pt-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Bot className="size-4 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-                  <h3 className="ak-title text-sm">Ticket chat</h3>
+                  <h3 className="ak-title text-sm">{t("Ticket chat")}</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="muted">{ticketChatMessageCount}</Badge>
@@ -4782,14 +4756,14 @@ function TicketDetailDrawer({
               {activeRun ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   <RunSignalBadge compact run={activeRun} />
-                  <span className="font-medium">Active run on {activeRun.ticketId}</span>
+                  <span className="font-medium">{t("Active run on")}{activeRun.ticketId}</span>
                 </div>
               ) : null}
               {ticketRunSummary?.isUnread ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                   <div className="flex min-w-0 items-center gap-2">
                     <RunSignalBadge compact run={ticketRunSummary} />
-                    <span className="truncate font-medium">Unread run result</span>
+                    <span className="truncate font-medium">{t("Unread run result")}</span>
                   </div>
                   <Button disabled={isMarkingRead} onClick={markRunRead} size="sm" variant="outline">
                     {isMarkingRead ? (
@@ -4797,7 +4771,7 @@ function TicketDetailDrawer({
                     ) : (
                       <Check className="size-3" aria-hidden="true" />
                     )}
-                    Mark as read
+                    {t("Mark as read")}
                   </Button>
                 </div>
               ) : null}
@@ -4819,7 +4793,7 @@ function TicketDetailDrawer({
                   availableTickets={availableTickets}
                   disabled={!canUseCodex}
                   hideLabel
-                  label="Ticket message"
+                  label={t("Ticket message")}
                   onChange={(nextValue) => {
                     setRunDraft(nextValue);
                     setPreview(null);
@@ -4827,8 +4801,8 @@ function TicketDetailDrawer({
                   }}
                   placeholder={
                     runMode === "read_only"
-                      ? "답변받을 질문을 입력"
-                      : "이번 Codex 실행에서 처리할 지시를 입력"
+                      ? t("답변받을 질문을 입력")
+                      : t("이번 Codex 실행에서 처리할 지시를 입력")
                   }
                   value={runDraft}
                 />
@@ -4856,7 +4830,7 @@ function TicketDetailDrawer({
                       >
                         <section className="grid gap-2">
                           <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                            Access
+                            {t("Access")}
                           </p>
                           <RunModeControl
                             idPrefix={`codex-run-mode-${ticket.id}`}
@@ -4871,7 +4845,7 @@ function TicketDetailDrawer({
                         </section>
                         <section className="grid gap-2">
                           <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                            Model
+                            {t("Model")}
                           </p>
                           <CodexRunDefaultsControl
                             defaults={codexRunDefaults}
@@ -4888,7 +4862,7 @@ function TicketDetailDrawer({
                         </section>
                         <section className="grid gap-2">
                           <p className="text-xs font-semibold uppercase tracking-normal text-[var(--ak-ink-faint)]">
-                            Advanced
+                            {t("Advanced")}
                           </p>
                           <BypassSandboxControl
                             checked={bypassSandbox}
@@ -4933,7 +4907,7 @@ function TicketDetailDrawer({
                           ) : (
                             <Terminal className="size-3.5" aria-hidden="true" />
                           )}
-                          Preview
+                          {t("Preview")}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent
@@ -4947,7 +4921,7 @@ function TicketDetailDrawer({
                         ) : (
                           <div className="flex items-center gap-2 p-2 text-sm text-[var(--ak-ink-muted)]">
                             <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                            Preparing prompt
+                            {t("Preparing prompt")}
                           </div>
                         )}
                       </PopoverContent>
@@ -4969,11 +4943,11 @@ function TicketDetailDrawer({
                     {run?.status === "running" ? (
                       <span className="flex items-center gap-1 text-xs font-medium text-[var(--ak-ink-muted)]">
                         <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                        Running
+                        {t("Running")}
                       </span>
                     ) : run ? (
                       <span className="text-xs text-[var(--ak-ink-faint)]">
-                        Last run {run.status}
+                        {t("Last run: {{status}}", { status: runLabel(run.status) })}
                       </span>
                     ) : null}
                   </div>
@@ -4985,7 +4959,7 @@ function TicketDetailDrawer({
                         ) : (
                           <Square className="size-3" aria-hidden="true" />
                         )}
-                        Cancel
+                        {t("Cancel")}
                       </Button>
                     ) : null}
                     <Button
@@ -4998,16 +4972,15 @@ function TicketDetailDrawer({
                       ) : (
                         <Send className="size-3" aria-hidden="true" />
                       )}
-                      {run?.status === "running" ? "Running" : ticketSendLabel}
+                      {run?.status === "running" ? t("Running") : ticketSendLabel}
                     </Button>
                   </div>
                 </div>
               </div>
-            </section>
+            </section> : null}
           </div>
         </div>
-      </div>
-    </div>
+    </TicketDetailFrame>
   );
 }
 
@@ -5020,6 +4993,7 @@ function ErrorBanner({
   isStale: boolean;
   onReload: () => Promise<unknown>;
 }) {
+  const { t } = useTranslation();
   const [isReloading, setIsReloading] = useState(false);
 
   async function reload(): Promise<void> {
@@ -5035,8 +5009,9 @@ function ErrorBanner({
     <div className="mb-5 rounded-[var(--ak-radius-md)] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-medium">{isStale ? "Markdown changed on disk" : "Request failed"}</p>
-          <p className="mt-1 text-red-700">{error.message}</p>
+          <p className="font-medium">{isStale ? t("Markdown changed on disk") : t("Request failed")}</p>
+          <p className="mt-1 text-red-700">{errorSummary(error)}</p>
+          <details className="mt-1 text-xs"><summary>{t("Technical details")}</summary><p className="break-words">{errorDetails(error)}</p></details>
         </div>
         {isStale ? (
           <Button disabled={isReloading} onClick={reload} size="sm" variant="outline">
@@ -5045,7 +5020,7 @@ function ErrorBanner({
             ) : (
               <RefreshCcw className="size-3" aria-hidden="true" />
             )}
-            Reload
+            {t("Reload")}
           </Button>
         ) : null}
       </div>
@@ -5062,6 +5037,7 @@ function ExternalFileChangeBanner({
   hasLocalDraft: boolean;
   onReload: () => Promise<unknown>;
 }) {
+  const { t } = useTranslation();
   const [isReloading, setIsReloading] = useState(false);
 
   async function reload(): Promise<void> {
@@ -5078,14 +5054,14 @@ function ExternalFileChangeBanner({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">
-            {event.eventType === "removed" ? "Markdown file was removed" : "File changed externally"}
+            {event.eventType === "removed" ? t("Markdown file was removed") : t("File changed externally")}
           </p>
           <p className="mt-1 break-words text-xs text-amber-800">
             {event.workspaceRelativePath} · {formatDateTime(event.observedAt)}
           </p>
           {hasLocalDraft ? (
             <p className="mt-1 text-xs text-amber-800">
-              Reload before saving or running Codex so the draft does not use stale Markdown.
+              {t("Reload before saving so the draft does not use stale Markdown.")}
             </p>
           ) : null}
         </div>
@@ -5095,7 +5071,7 @@ function ExternalFileChangeBanner({
           ) : (
             <RefreshCcw className="size-3" aria-hidden="true" />
           )}
-          Reload
+          {t("Reload")}
         </Button>
       </div>
     </div>
@@ -5133,12 +5109,13 @@ function ScopeComposer({
   placeholder: string;
   value: string;
 }) {
+  const { t } = useTranslation();
   const [activeMention, setActiveMention] = useState<ActiveMentionQuery | undefined>();
   const [activeIndex, setActiveIndex] = useState(0);
   const listboxId = useId();
   const suggestions = useMemo(
     () => buildScopeSuggestions(availableTickets, activeMention?.query ?? ""),
-    [activeMention?.query, availableTickets],
+    [activeMention?.query, availableTickets, t],
   );
   const isPopoverOpen = Boolean(activeMention && suggestions.length > 0);
   const activeOptionId = `${listboxId}-option-${Math.min(
@@ -5340,7 +5317,7 @@ function ScopeComposer({
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <div
-            aria-label="Scope suggestions"
+            aria-label={t("Scope suggestions")}
             className="ak-scroll-area ak-scope-suggest"
             id={listboxId}
             role="listbox"
@@ -5482,7 +5459,7 @@ function scopeMentionAttributesFromToken(input: {
     kind: input.kind,
     label:
       input.kind === "ticket" && input.targetTicketId
-        ? `Ticket ${input.targetTicketId}`
+        ? t("Ticket {{id}}", { id: input.targetTicketId })
         : scopeMentionLabel(input.kind, input.token),
     targetTicketId: input.targetTicketId,
     token: input.token,
@@ -5491,12 +5468,12 @@ function scopeMentionAttributesFromToken(input: {
 
 function scopeMentionLabel(kind: CodexChatScopeMentionKind, token: string): string {
   if (kind === "workspace") {
-    return "Workspace";
+    return t("Workspace");
   }
   if (kind === "ticket") {
-    return token.includes(":") ? `Ticket ${token.slice(token.indexOf(":") + 1).toUpperCase()}` : "Ticket";
+    return token.includes(":") ? t("Ticket {{id}}", { id: token.slice(token.indexOf(":") + 1).toUpperCase() }) : t("Ticket");
   }
-  return token.toLowerCase() === "@tickets" ? "Tickets" : "Document";
+  return t(token.toLowerCase() === "@tickets" ? "Tickets" : "Document");
 }
 
 function readActiveMentionQuery(editor: Editor): ActiveMentionQuery | undefined {
@@ -5526,24 +5503,24 @@ function buildScopeSuggestions(
 ): ScopeSuggestion[] {
   const fixedSuggestions: ScopeSuggestion[] = [
     {
-      description: "Selected workspace",
+      description: t("Selected workspace"),
       id: "workspace",
       kind: "workspace",
-      label: "Workspace",
+      label: t("Workspace"),
       token: "@workspace",
     },
     {
-      description: "Current ticket document",
+      description: t("Current ticket document"),
       id: "tickets",
       kind: "document",
-      label: "Tickets",
+      label: t("Tickets"),
       token: "@tickets",
     },
     {
-      description: "Current document",
+      description: t("Current document"),
       id: "document",
       kind: "document",
-      label: "Document",
+      label: t("Document"),
       token: "@document",
     },
   ];
@@ -5551,7 +5528,7 @@ function buildScopeSuggestions(
     description: ticket.title,
     id: ticket.id,
     kind: "ticket",
-    label: `Ticket ${ticket.id}`,
+    label: t("Ticket {{id}}", { id: ticket.id }),
     targetTicketId: ticket.id,
     token: `@t:${ticket.id}`,
   }));
@@ -5591,9 +5568,10 @@ function RunModeControl({
   mode: CodexRunMode;
   onChange: (mode: CodexRunMode) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <fieldset className="grid gap-2">
-      <legend className="text-xs font-medium text-[var(--ak-ink-muted)]">Mode</legend>
+      <legend className="text-xs font-medium text-[var(--ak-ink-muted)]">{t("Mode")}</legend>
       <div className="grid grid-cols-2 gap-1 rounded-[var(--ak-radius-md)] border border-[var(--ak-hairline)] bg-[var(--ak-surface)] p-1">
         {RUN_MODE_OPTIONS.map((option) => {
           const isSelected = mode === option.mode;
@@ -5619,7 +5597,7 @@ function RunModeControl({
                 onChange={() => onChange(option.mode)}
                 type="radio"
               />
-              {option.label}
+              {t(option.label)}
             </label>
           );
         })}
@@ -5639,9 +5617,10 @@ function CompactRunModeControl({
   mode: CodexRunMode;
   onChange: (mode: CodexRunMode) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <fieldset className="flex min-h-8 items-center gap-1 rounded-[var(--ak-radius-md)] border border-[var(--ak-hairline)] bg-[var(--ak-surface)] p-1">
-      <legend className="sr-only">Mode</legend>
+      <legend className="sr-only">{t("Mode")}</legend>
       {RUN_MODE_OPTIONS.map((option) => {
         const isSelected = mode === option.mode;
         const inputId = `${idPrefix}-compact-${option.mode}`;
@@ -5666,7 +5645,7 @@ function CompactRunModeControl({
               onChange={() => onChange(option.mode)}
               type="radio"
             />
-            {option.mode === "edit" ? "Edit" : "Read-only"}
+            {option.mode === "edit" ? t("Edit") : t("Read-only")}
           </label>
         );
       })}
@@ -5685,9 +5664,10 @@ function CompactWorkspaceIntentControl({
   intent: CodexWorkspaceChatIntent;
   onChange: (intent: CodexWorkspaceChatIntent) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <fieldset className="flex min-h-8 items-center gap-1 rounded-[var(--ak-radius-md)] border border-[var(--ak-hairline)] bg-[var(--ak-surface)] p-1">
-      <legend className="sr-only">Workspace chat purpose</legend>
+      <legend className="sr-only">{t("Workspace chat purpose")}</legend>
       {WORKSPACE_CHAT_INTENT_OPTIONS.map((option) => {
         const isSelected = intent === option.intent;
         const inputId = `${idPrefix}-compact-${option.intent}`;
@@ -5712,7 +5692,7 @@ function CompactWorkspaceIntentControl({
               onChange={() => onChange(option.intent)}
               type="radio"
             />
-            {option.label}
+            {t(option.label)}
           </label>
         );
       })}
@@ -5729,6 +5709,7 @@ function BypassSandboxControl({
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <label
       className={[
@@ -5736,7 +5717,7 @@ function BypassSandboxControl({
         checked ? "border-amber-200 bg-amber-50 text-amber-950" : "text-[var(--ak-ink-secondary)]",
         disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
-      title="Pass --dangerously-bypass-approvals-and-sandbox to Codex CLI for this run only"
+      title={t("Pass --dangerously-bypass-approvals-and-sandbox to Codex CLI for this run only")}
     >
       <Checkbox
         checked={checked}
@@ -5745,9 +5726,9 @@ function BypassSandboxControl({
         onCheckedChange={(nextChecked) => onChange(nextChecked === true)}
       />
       <span className="grid gap-0.5">
-        <span className="font-semibold">Bypass approvals and sandbox</span>
+        <span className="font-semibold">{t("Bypass approvals and sandbox")}</span>
         <span className="font-normal text-[var(--ak-ink-muted)]">
-          This run only. Allows operations such as Git metadata creation, installs, and scripts.
+          {t("This run only. Allows operations such as Git metadata creation, installs, and scripts.")}
         </span>
       </span>
     </label>
@@ -5765,6 +5746,7 @@ function ScopeResolutionPanel({
   resolution: CodexChatScopeResolution;
   warnings: string[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-2 rounded-[var(--ak-radius-md)] border border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
@@ -5777,14 +5759,14 @@ function ScopeResolutionPanel({
             {resolution.mentions.map((mention) => mention.token).join(", ")}
           </span>
         ) : (
-          <span className="text-[var(--ak-ink-faint)]">{emptyMentionsLabel}</span>
+          <span className="text-[var(--ak-ink-faint)]">{t(emptyMentionsLabel)}</span>
         )}
       </div>
       {warnings.length > 0 ? (
         <div className="grid gap-1 text-amber-800">
           {warnings.map((warning) => (
             <p className="break-words" key={warning}>
-              {warning}
+              {t(warning)}
             </p>
           ))}
         </div>
@@ -5874,6 +5856,7 @@ function CodexRunDefaultsControl({
   }) => Promise<unknown>;
   queryError?: unknown;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState<CodexRunDefaults>(defaults ?? {});
   const [saveError, setSaveError] = useState<ClientApiError | Error | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -5934,14 +5917,14 @@ function CodexRunDefaultsControl({
         value={draft.model ?? CLI_DEFAULT_SELECT_VALUE}
       >
         <SelectTrigger
-          aria-label="Codex model"
+          aria-label={t("Codex model")}
           className="h-8 w-auto min-w-[8.5rem] max-w-52 rounded-full px-2.5 text-xs"
         >
           <Zap className="size-3.5 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-          <SelectValue placeholder="CLI model" />
+          <SelectValue placeholder={t("CLI model")} />
         </SelectTrigger>
         <SelectContent className="min-w-56">
-          <SelectItem value={CLI_DEFAULT_SELECT_VALUE}>CLI default</SelectItem>
+          <SelectItem value={CLI_DEFAULT_SELECT_VALUE}>{t("CLI default")}</SelectItem>
           {draft.model && !selectedModel ? (
             <SelectItem value={draft.model}>{draft.model}</SelectItem>
           ) : null}
@@ -5964,13 +5947,13 @@ function CodexRunDefaultsControl({
         value={draft.reasoningEffort ?? MODEL_DEFAULT_SELECT_VALUE}
       >
         <SelectTrigger
-          aria-label="Codex reasoning effort"
+          aria-label={t("Codex reasoning effort")}
           className="h-8 w-auto min-w-[6.75rem] rounded-full px-2.5 text-xs"
         >
-          <SelectValue placeholder="Model default" />
+          <SelectValue placeholder={t("Model default")} />
         </SelectTrigger>
         <SelectContent className="min-w-44">
-          <SelectItem value={MODEL_DEFAULT_SELECT_VALUE}>Model default</SelectItem>
+          <SelectItem value={MODEL_DEFAULT_SELECT_VALUE}>{t("Model default")}</SelectItem>
           {draft.reasoningEffort &&
           !reasoningOptions.some((level) => level.effort === draft.reasoningEffort) ? (
             <SelectItem value={draft.reasoningEffort}>
@@ -5991,7 +5974,7 @@ function CodexRunDefaultsControl({
           isDisabled || !canUseFast ? "cursor-not-allowed opacity-45" : "cursor-pointer",
           draft.speedTier === "fast" ? "border-amber-200 bg-amber-50 text-amber-900" : "",
         ].join(" ")}
-        title={canUseFast ? "Use Codex fast service tier" : "Selected model does not expose fast tier"}
+        title={canUseFast ? t("Use Codex fast service tier") : t("Selected model does not expose fast tier")}
       >
         <Checkbox
           checked={draft.speedTier === "fast"}
@@ -6004,18 +5987,18 @@ function CodexRunDefaultsControl({
             });
           }}
         />
-        Fast
+        {t("Fast")}
       </label>
 
       {isSaving ? (
         <span className="flex items-center gap-1 text-xs text-[var(--ak-ink-faint)]">
           <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-          saving
+          {t("saving")}
         </span>
       ) : null}
       {error ? (
         <span className="max-w-72 truncate text-xs text-red-700" title={error.message}>
-          {error.message}
+          {errorSummary(error)}
         </span>
       ) : null}
     </div>
@@ -6070,6 +6053,7 @@ function TicketChatHistory({
   retryingMessageId: string | null;
   runs: CodexRunSummary[];
 }) {
+  const { t } = useTranslation();
   const messages = chat?.messages ?? [];
   const entries = useMemo(() => buildChatHistoryEntries(messages), [messages]);
   const runById = useMemo(() => new Map(runs.map((run) => [run.id, run])), [runs]);
@@ -6086,14 +6070,14 @@ function TicketChatHistory({
   return (
     <div className="grid gap-3">
       {isLoading ? (
-        <p className="text-sm text-[var(--ak-ink-faint)]">Loading chat history</p>
+        <p className="text-sm text-[var(--ak-ink-faint)]">{t("Loading chat history")}</p>
       ) : null}
       {error ? (
-        <p className="text-sm text-red-700">Could not load ticket chat: {error.message}</p>
+        <p className="text-sm text-red-700">{t("Could not load ticket chat:")} {formatClientError(error)}</p>
       ) : null}
       {!isLoading && !error && messages.length === 0 ? (
         <p className="text-sm text-[var(--ak-ink-faint)]">
-          Run with Codex messages will appear here.
+          {t("Run with Codex messages will appear here.")}
         </p>
       ) : null}
       {entries.length > 0 ? (
@@ -6141,6 +6125,7 @@ function WorkspaceChatHistory({
   run: CodexRunSnapshot | null;
   runEvents: CodexRunEvent[];
 }) {
+  const { t } = useTranslation();
   const messages = chat?.messages ?? [];
   const entries = useMemo(() => buildChatHistoryEntries(messages), [messages]);
   const assistantRunIds = useMemo(
@@ -6158,19 +6143,19 @@ function WorkspaceChatHistory({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Bot className="size-4 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-          <h4 className="ak-title text-sm">Workspace chat</h4>
+          <h4 className="ak-title text-sm">{t("Workspace chat")}</h4>
         </div>
         <Badge variant="muted">{messages.length}</Badge>
       </div>
       {isLoading ? (
-        <p className="text-sm text-[var(--ak-ink-faint)]">Loading workspace chat</p>
+        <p className="text-sm text-[var(--ak-ink-faint)]">{t("Loading workspace chat")}</p>
       ) : null}
       {error ? (
-        <p className="text-sm text-red-700">Could not load workspace chat: {error.message}</p>
+        <p className="text-sm text-red-700">{t("Could not load workspace chat:")} {formatClientError(error)}</p>
       ) : null}
       {!isLoading && !error && messages.length === 0 ? (
         <p className="text-sm text-[var(--ak-ink-faint)]">
-          Project-wide messages will appear here.
+          {t("Project-wide messages will appear here.")}
         </p>
       ) : null}
       {entries.length > 0 ? (
@@ -6205,6 +6190,7 @@ function RunActivityForRunId({
   liveRunEvents: CodexRunEvent[];
   runId: string;
 }) {
+  const { t } = useTranslation();
   const isLiveRun = liveRun?.id === runId;
   const runQuery = useQuery({
     enabled: !isLiveRun,
@@ -6221,14 +6207,14 @@ function RunActivityForRunId({
         <div className="ak-workspace-run-activity-header">
           <div className="flex min-w-0 items-center gap-2">
             <Terminal className="size-3.5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-            <span className="text-sm font-semibold text-[var(--ak-ink)]">Activity</span>
-            <Badge variant="muted">{runQuery.isError ? "unavailable" : "loading"}</Badge>
+            <span className="text-sm font-semibold text-[var(--ak-ink)]">{t("Activity")}</span>
+            <Badge variant="muted">{runQuery.isError ? t("unavailable") : t("loading")}</Badge>
           </div>
           <span className="truncate text-xs text-[var(--ak-ink-faint)]">{runId.slice(0, 8)}</span>
         </div>
         {runQuery.isError ? (
           <p className="text-xs text-red-700">
-            Could not load run activity: {normalizeClientError(runQuery.error).message}
+            {t("Could not load run activity:")} {formatClientError(normalizeClientError(runQuery.error))}
           </p>
         ) : null}
       </section>
@@ -6277,6 +6263,7 @@ function RunActivity({
   events: CodexRunEvent[];
   run: CodexRunSnapshot;
 }) {
+  const { t } = useTranslation();
   const activityItems = buildRunActivityItems(events);
   const visibleItems = selectVisibleRunActivityItems(activityItems);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -6319,13 +6306,13 @@ function RunActivity({
           ) : (
             <Terminal className="size-3.5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
           )}
-          <span className="text-sm font-semibold text-[var(--ak-ink)]">Activity</span>
-          <Badge variant={run.status === "running" ? "warning" : "muted"}>{run.status}</Badge>
-          {isBypassSandboxArgs(run.args) ? <Badge variant="warning">bypass sandbox</Badge> : null}
+          <span className="text-sm font-semibold text-[var(--ak-ink)]">{t("Activity")}</span>
+          <Badge variant={run.status === "running" ? "warning" : "muted"}>{runLabel(run.status)}</Badge>
+          {isBypassSandboxArgs(run.args) ? <Badge variant="warning">{t("bypass sandbox")}</Badge> : null}
           <RunDefaultsBadges defaults={run.runDefaults} compact />
         </div>
         <span className="text-xs text-[var(--ak-ink-faint)]">
-          {activityItems.length} steps · {events.length} events
+          {t("{{steps}} steps · {{events}} events", { steps: activityItems.length, events: events.length })}
         </span>
       </button>
       {isExpanded ? (
@@ -6343,7 +6330,7 @@ function RunActivity({
                   />
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium text-[var(--ak-ink-secondary)]">
-                      {item.label}
+                      {t(item.label)}
                     </p>
                     <p className="ak-workspace-run-activity-detail text-xs text-[var(--ak-ink-faint)]">
                       {item.detail}
@@ -6352,7 +6339,7 @@ function RunActivity({
                 </li>
               ))
             ) : (
-              <li className="text-xs text-[var(--ak-ink-faint)]">Waiting for Codex activity.</li>
+              <li className="text-xs text-[var(--ak-ink-faint)]">{t("Waiting for Codex activity.")}</li>
             )}
           </ol>
           <p className="truncate text-xs text-[var(--ak-ink-faint)]" title={run.logPath}>
@@ -6385,6 +6372,7 @@ function TicketChatMessage({
   run?: CodexRunSummary;
   variant?: "card" | "stream";
 }) {
+  const { t } = useTranslation();
   const isAssistant = message.role === "assistant";
   const isStream = variant === "stream";
   const intent = workspaceIntentFromMetadata(message.metadata);
@@ -6415,13 +6403,13 @@ function TicketChatMessage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant={isAssistant ? "outline" : "default"}>
-            {isAssistant ? "Assistant" : "User"}
+            {isAssistant ? t("Assistant") : t("User")}
           </Badge>
           {intent ? <Badge variant="warning">{workspaceIntentLabel(intent)}</Badge> : null}
           {message.runId ? <Badge variant="muted">{message.runId.slice(0, 8)}</Badge> : null}
           {canRetry ? (
             <Badge variant={run ? "warning" : "muted"}>
-              {run ? runLabel(run.rawStatus) : "Run status unknown"}
+              {run ? runLabel(run.rawStatus) : t("Run status unknown")}
             </Badge>
           ) : null}
         </div>
@@ -6434,7 +6422,7 @@ function TicketChatMessage({
               disabled={!canStartRun || isRetrying}
               onClick={() => onRetry?.(message)}
               size="xs"
-              title={canStartRun ? "Retry this chat message" : "Another Codex run is active"}
+              title={canStartRun ? t("Retry this chat message") : t("Another Codex run is active")}
               variant="outline"
             >
               {isRetrying ? (
@@ -6442,7 +6430,7 @@ function TicketChatMessage({
               ) : (
                 <RefreshCcw className="size-3" aria-hidden="true" />
               )}
-              Retry
+              {t("Retry")}
             </Button>
           ) : null}
           {canDelete ? (
@@ -6450,7 +6438,7 @@ function TicketChatMessage({
               disabled={isDeleting || isRetrying}
               onClick={() => onDelete?.(message)}
               size="xs"
-              title="Delete this chat message"
+              title={t("Delete this chat message")}
               variant="ghost"
             >
               {isDeleting ? (
@@ -6458,7 +6446,7 @@ function TicketChatMessage({
               ) : (
                 <Trash2 className="size-3" aria-hidden="true" />
               )}
-              Delete
+              {t("Delete")}
             </Button>
           ) : null}
         </div>
@@ -6640,6 +6628,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function PromptPreview({ preview }: { preview: PromptPreviewModel }) {
+  const { t } = useTranslation();
   return (
     <div className="ak-panel-muted grid gap-2 p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -6654,10 +6643,10 @@ function PromptPreview({ preview }: { preview: PromptPreviewModel }) {
           {scopeResolutionLabel(preview.scopeResolution)}
         </Badge>
         <Badge variant="muted">
-          {preview.resumeSessionId ? "resume session" : "new session"}
+          {preview.resumeSessionId ? t("resume session") : t("new session")}
         </Badge>
         {isBypassSandboxArgs(preview.args) ? (
-          <Badge variant="warning">bypass sandbox</Badge>
+          <Badge variant="warning">{t("bypass sandbox")}</Badge>
         ) : null}
         <RunDefaultsBadges defaults={preview.runDefaults} />
       </div>
@@ -6665,7 +6654,7 @@ function PromptPreview({ preview }: { preview: PromptPreviewModel }) {
         <div className="grid gap-1 text-xs text-amber-800">
           {codexChatScopeRunWarnings(preview.scopeResolution, preview.mode).map((warning) => (
             <p className="break-words" key={warning}>
-              {warning}
+              {t(warning)}
             </p>
           ))}
         </div>
@@ -6687,29 +6676,30 @@ function RunDefaultsBadges({
   compact?: boolean;
   defaults: CodexAppliedRunDefaults;
 }) {
+  const { t } = useTranslation();
   const hasAnyDefault = Boolean(
     defaults.model || defaults.reasoningEffort || defaults.speedTier,
   );
 
   if (!hasAnyDefault) {
-    return <Badge variant="muted">CLI defaults</Badge>;
+    return <Badge variant="muted">{t("CLI defaults")}</Badge>;
   }
 
   return (
     <>
       {defaults.model ? (
-        <Badge variant="outline">{compact ? defaults.model : `model ${defaults.model}`}</Badge>
+        <Badge variant="outline">{compact ? defaults.model : t("model {{model}}", { model: defaults.model })}</Badge>
       ) : null}
       {defaults.reasoningEffort ? (
         <Badge variant="outline">
-          {compact ? defaults.reasoningEffort : `reasoning ${defaults.reasoningEffort}`}
+          {compact ? reasoningEffortLabel(defaults.reasoningEffort) : t("reasoning {{effort}}", { effort: reasoningEffortLabel(defaults.reasoningEffort) })}
         </Badge>
       ) : null}
       {defaults.speedTier ? (
         <Badge variant={defaults.speedTierApplied ? "warning" : "muted"}>
           {defaults.speedTierApplied
-            ? `${defaults.speedTier} tier`
-            : `${defaults.speedTier} saved, not applied`}
+            ? t("{{tier}} tier", { tier: t(defaults.speedTier) })
+            : t("{{tier}} saved, not applied", { tier: t(defaults.speedTier) })}
         </Badge>
       ) : null}
     </>
@@ -6733,14 +6723,14 @@ function workspaceComposerSummary({
 }): string {
   const model = defaults?.model
     ? (models?.models.find((item) => item.slug === defaults.model)?.displayName ?? defaults.model)
-    : "CLI default";
+    : t("CLI default");
   const reasoning = defaults?.reasoningEffort
     ? reasoningEffortLabel(defaults.reasoningEffort)
-    : "model default";
-  const speed = defaults?.speedTier === "fast" ? "fast tier" : "standard";
-  const access = isRunModeLocked ? `${runModeLabel(mode)} locked` : runModeLabel(mode);
-  const scope = mentions.length > 0 ? mentions.join(", ") : "default scope";
-  const sandbox = bypassSandbox ? "bypass sandbox" : undefined;
+    : t("model default");
+  const speed = defaults?.speedTier === "fast" ? t("fast tier") : t("standard");
+  const access = isRunModeLocked ? t("{{mode}} locked", { mode: runModeLabel(mode) }) : runModeLabel(mode);
+  const scope = mentions.length > 0 ? mentions.join(", ") : t("default scope");
+  const sandbox = bypassSandbox ? t("bypass sandbox") : undefined;
 
   return [compactModelLabel(model, defaults?.model ?? model), reasoning, speed, access, scope, sandbox]
     .filter(Boolean)
@@ -6749,7 +6739,7 @@ function workspaceComposerSummary({
 
 function confirmBypassSandboxRun(): boolean {
   return window.confirm(
-    "This run will bypass Codex approvals and sandbox restrictions. Continue only if you trust the target workspace and command scope.",
+    t("This run will bypass Codex approvals and sandbox restrictions. Continue only if you trust the target workspace and command scope."),
   );
 }
 
@@ -6910,7 +6900,7 @@ function summarizeCommandItem(event: CodexRunEvent, item: Record<string, unknown
   const exitCode = getNumberValue(item, "exit_code");
   const failed = status === "failed" || (typeof exitCode === "number" && exitCode !== 0);
   const running = status === "in_progress";
-  const exit = typeof exitCode === "number" ? `exit ${exitCode}` : running ? "running" : status;
+  const exit = typeof exitCode === "number" ? t("exit {{code}}", { code: exitCode }) : running ? t("Running") : status;
   const detail = [command, exit, output].filter(Boolean).join(" · ");
 
   return {
@@ -6944,7 +6934,8 @@ function summarizePromptEvent(event: CodexRunEvent): string {
   const scopeLabel = getStringValue(scope, "scope");
   const instruction = getStringValue(data, "instructionSummary");
   const mode = getStringValue(data, "mode");
-  return [scopeLabel ? `${scopeLabel} scope` : undefined, mode, instruction]
+  const scopeName = scopeLabel === "workspace" ? t("Workspace") : scopeLabel === "document" ? t("Document") : t("Ticket");
+  return [scopeLabel ? t("{{scope}} scope", { scope: scopeName }) : undefined, mode === "edit" || mode === "read_only" ? runModeLabel(mode) : mode, instruction]
     .filter(Boolean)
     .join(" · ");
 }
@@ -6954,9 +6945,9 @@ function summarizeUsage(usage: Record<string, unknown> | undefined): string {
   const outputTokens = getNumberValue(usage, "output_tokens");
   const reasoningTokens = getNumberValue(usage, "reasoning_output_tokens");
   return [
-    typeof inputTokens === "number" ? `${inputTokens.toLocaleString()} input tokens` : undefined,
-    typeof outputTokens === "number" ? `${outputTokens.toLocaleString()} output tokens` : undefined,
-    typeof reasoningTokens === "number" ? `${reasoningTokens.toLocaleString()} reasoning tokens` : undefined,
+    typeof inputTokens === "number" ? t("{{count}} input tokens", { count: inputTokens.toLocaleString(locale()) }) : undefined,
+    typeof outputTokens === "number" ? t("{{count}} output tokens", { count: outputTokens.toLocaleString(locale()) }) : undefined,
+    typeof reasoningTokens === "number" ? t("{{count}} reasoning tokens", { count: reasoningTokens.toLocaleString(locale()) }) : undefined,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -7034,6 +7025,7 @@ function RunSignalBadge({
   compact?: boolean;
   run: CodexRunSummary;
 }) {
+  const { t } = useTranslation();
   const isActive = run.status === "queued" || run.status === "running";
   const label = runSignalLabel(run.status);
 
@@ -7043,7 +7035,7 @@ function RunSignalBadge({
         "inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border px-1.5 text-xs font-medium",
         runSignalClassName(run.status),
       ].join(" ")}
-      title={`${label} ${runModeLabel(run.mode)} on ${run.ticketId}`}
+      title={t("{{status}} · {{mode}} · {{id}}", { status: label, mode: runModeLabel(run.mode), id: run.ticketId })}
     >
       {isActive ? (
         <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
@@ -7073,13 +7065,14 @@ function formatDateTime(value: string): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
 }
 
 function DocumentTypeBadge({ type }: { type: MarkdownFileType }) {
+  useTranslation();
   return (
     <Badge variant={type === "tickets" ? "default" : "outline"}>
       {documentTypeLabel(type)}
@@ -7089,10 +7082,10 @@ function DocumentTypeBadge({ type }: { type: MarkdownFileType }) {
 
 function documentTypeLabel(type: MarkdownFileType): string {
   return {
-    inventory: "Inventory",
-    markdown: "Markdown",
-    plan: "Plan",
-    tickets: "Tickets",
+    inventory: t("Inventory"),
+    markdown: t("Markdown"),
+    plan: t("Plan"),
+    tickets: t("Tickets"),
   }[type];
 }
 
@@ -7116,7 +7109,7 @@ function PropertyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatusDot({ status }: { status: TicketStatus }) {
+export function StatusDot({ status }: { status: TicketStatus }) {
   const className = {
     BLOCKED: "bg-red-500",
     DEFERRED: "bg-neutral-400",
@@ -7131,31 +7124,31 @@ function StatusDot({ status }: { status: TicketStatus }) {
 
 function runSignalLabel(status: CodexRunSignalStatus): string {
   return {
-    cancelled: "Cancelled",
-    failed: "Failed",
-    idle: "Idle",
-    needs_auth: "Needs auth",
-    queued: "Queued",
-    running: "Running",
-    succeeded: "Succeeded",
-    unknown: "Unknown",
+    cancelled: t("Cancelled"),
+    failed: t("Failed"),
+    idle: t("Idle"),
+    needs_auth: t("Needs auth"),
+    queued: t("Queued"),
+    running: t("Running"),
+    succeeded: t("Succeeded"),
+    unknown: t("Unknown"),
   }[status];
 }
 
 function runLabel(status: CodexRunSummary["rawStatus"]): string {
   return {
-    cancelled: "Cancelled",
-    failed: "Failed",
-    queued: "Queued",
-    running: "Running",
-    succeeded: "Succeeded",
+    cancelled: t("Cancelled"),
+    failed: t("Failed"),
+    queued: t("Queued"),
+    running: t("Running"),
+    succeeded: t("Succeeded"),
   }[status];
 }
 
 function runModeLabel(mode: CodexRunMode): string {
   return {
-    edit: "Edit files",
-    read_only: "Read-only",
+    edit: t("Edit files"),
+    read_only: t("Read-only"),
   }[mode];
 }
 
@@ -7165,12 +7158,12 @@ function compactModelLabel(displayName: string, slug: string): string {
 
 function reasoningEffortLabel(effort: string): string {
   const labels: Record<string, string> = {
-    high: "높음",
-    low: "낮음",
-    medium: "중간",
-    minimal: "최소",
-    none: "없음",
-    xhigh: "매우 높음",
+    high: t("높음"),
+    low: t("낮음"),
+    medium: t("중간"),
+    minimal: t("최소"),
+    none: t("없음"),
+    xhigh: t("매우 높음"),
   };
 
   return labels[effort] ?? effort;
@@ -7178,17 +7171,17 @@ function reasoningEffortLabel(effort: string): string {
 
 function workspaceIntentLabel(intent: CodexWorkspaceChatIntent): string {
   return {
-    general: "Workspace chat",
-    plan_ticketing_handoff: "Plan/Ticket handoff",
-    spec_grilling: "Spec grilling",
+    general: t("Workspace chat"),
+    plan_ticketing_handoff: t("Plan/Ticket handoff"),
+    spec_grilling: t("Spec grilling"),
   }[intent];
 }
 
 function workspaceIntentPlaceholder(intent: CodexWorkspaceChatIntent): string {
   return {
-    general: "프로젝트 전체 기준 질문이나 논의를 입력",
-    plan_ticketing_handoff: "정리된 논의를 plan/ticket 문서로 생성 또는 갱신하도록 지시",
-    spec_grilling: "구현 전 요구사항을 질문으로 좁히고 싶은 내용을 입력",
+    general: t("프로젝트 전체 기준 질문이나 논의를 입력"),
+    plan_ticketing_handoff: t("정리된 논의를 plan/ticket 문서로 생성 또는 갱신하도록 지시"),
+    spec_grilling: t("구현 전 요구사항을 질문으로 좁히고 싶은 내용을 입력"),
   }[intent];
 }
 
@@ -7208,12 +7201,12 @@ function workspaceIntentFromMetadata(
 
 function scopeResolutionLabel(resolution: CodexChatScopeResolution): string {
   if (resolution.scope === "workspace") {
-    return "Workspace scope";
+    return t("Workspace scope");
   }
   if (resolution.scope === "document") {
-    return "Document scope";
+    return t("Document scope");
   }
-  return resolution.targetTicketId ? `Ticket ${resolution.targetTicketId}` : "Ticket scope";
+  return resolution.targetTicketId ? t("Ticket {{id}}", { id: resolution.targetTicketId }) : t("Ticket scope");
 }
 
 function runSignalClassName(status: CodexRunSignalStatus): string {
@@ -7242,7 +7235,7 @@ function runSignalDotClassName(status: CodexRunSignalStatus): string {
   }[status];
 }
 
-function priorityVariant(priority: string) {
+export function priorityVariant(priority: string) {
   if (priority === "P0") {
     return "warning";
   }
@@ -7252,7 +7245,7 @@ function priorityVariant(priority: string) {
   return "muted";
 }
 
-function normalizeClientError(error: unknown): ClientApiError | Error {
+export function normalizeClientError(error: unknown): ClientApiError | Error {
   return error instanceof ClientApiError
     ? error
     : error instanceof Error
@@ -7260,8 +7253,8 @@ function normalizeClientError(error: unknown): ClientApiError | Error {
       : new Error(String(error));
 }
 
-function formatClientError(error: ClientApiError | Error): string {
-  return error instanceof ClientApiError ? `${error.code}: ${error.message}` : error.message;
+export function formatClientError(error: ClientApiError | Error): string {
+  return `${errorSummary(error)} (${errorDetails(error)})`;
 }
 
 function upsertEvent(events: CodexRunEvent[], event: CodexRunEvent): CodexRunEvent[] {

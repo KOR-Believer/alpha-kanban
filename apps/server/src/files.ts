@@ -10,10 +10,12 @@ import type {
   MarkdownFileType,
   MarkdownHeading,
   TicketDocumentResponse,
+  TicketInstructionKind,
   WorkspaceSummary,
 } from "@alpha-kanban/shared";
 
 import type { ServerConfig } from "./config";
+import { withPathLock } from "./pathLock";
 import {
   appendProgressNote,
   appendUserInstruction,
@@ -47,6 +49,7 @@ export type WriteGuard = {
 export type PatchTicketOptions = WriteGuard & {
   status?: Parameters<typeof updateTicketStatusAndProgress>[2]["status"];
   progress?: Parameters<typeof updateTicketStatusAndProgress>[2]["progress"];
+  reason?: string;
 };
 
 export type AppendLogOptions = WriteGuard & {
@@ -183,6 +186,7 @@ export class MarkdownFileStore {
       updateTicketStatusAndProgress(markdown, ticketId, {
         status: options.status,
         progress: options.progress,
+        reason: options.reason,
       }),
     );
   }
@@ -190,11 +194,12 @@ export class MarkdownFileStore {
   async appendInstruction(
     fileId: string,
     ticketId: string,
-    options: AppendLogOptions,
+    options: AppendLogOptions & { kind?: TicketInstructionKind },
   ): Promise<TicketDocumentResponse> {
     return this.updateTicketFile(fileId, options, (markdown) =>
       appendUserInstruction(markdown, ticketId, options.text, {
         date: options.date,
+        kind: options.kind,
       }),
     );
   }
@@ -255,15 +260,17 @@ export class MarkdownFileStore {
     updater: (markdown: string) => string,
   ): Promise<TicketDocumentResponse> {
     const filePath = this.resolveFileId(fileId);
-    const before = await this.readWithMetadata(filePath);
-    assertFresh(before.summary, guard);
-    const nextMarkdown = updater(before.markdown);
+    return withPathLock(filePath, async () => {
+      const before = await this.readWithMetadata(filePath);
+      assertFresh(before.summary, guard);
+      const nextMarkdown = updater(before.markdown);
 
-    if (nextMarkdown !== before.markdown) {
-      await atomicWrite(filePath, nextMarkdown);
-    }
+      if (nextMarkdown !== before.markdown) {
+        await atomicWrite(filePath, nextMarkdown);
+      }
 
-    return this.readTicketDocument(fileId);
+      return this.readTicketDocument(fileId);
+    });
   }
 
   private async createSummary(filePath: string): Promise<MarkdownFileSummary> {

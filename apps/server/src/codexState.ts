@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 import {
   alphaKanbanStateSchema,
@@ -12,6 +13,7 @@ import {
 } from "@alpha-kanban/shared";
 
 import type { ServerConfig } from "./config";
+import { withPathLock } from "./pathLock";
 
 const EMPTY_STATE: AlphaKanbanState = {
   version: 2,
@@ -20,6 +22,7 @@ const EMPTY_STATE: AlphaKanbanState = {
   runResults: {},
   codexRunDefaults: {},
   runtimeSettings: {},
+  boardOrder: [],
 };
 
 export class CodexStateStore {
@@ -52,21 +55,20 @@ export class CodexStateStore {
       relatedDocuments?: string[];
     } = {},
   ): Promise<CodexDocumentState> {
-    const state = await this.readState();
-    const key = this.documentKey(relativePath);
-    const current = state.documents[key] ?? state.documents[normalizeDocumentPath(relativePath)];
-    const next: CodexDocumentState = {
-      codexSessionId: sessionId,
-      relatedDocuments: options.relatedDocuments ?? current?.relatedDocuments ?? [],
-      parentTicketId: options.parentTicketId ?? current?.parentTicketId,
-      lastTicketId: options.parentTicketId ?? current?.lastTicketId,
-      updatedAt: new Date().toISOString(),
-    };
+    return this.mutateState(async (state) => {
+      const key = this.documentKey(relativePath);
+      const current = state.documents[key] ?? state.documents[normalizeDocumentPath(relativePath)];
+      const next: CodexDocumentState = {
+        codexSessionId: sessionId,
+        relatedDocuments: options.relatedDocuments ?? current?.relatedDocuments ?? [],
+        parentTicketId: options.parentTicketId ?? current?.parentTicketId,
+        lastTicketId: options.parentTicketId ?? current?.lastTicketId,
+        updatedAt: new Date().toISOString(),
+      };
 
-    state.documents[key] = next;
-    await this.writeState(state);
-
-    return next;
+      state.documents[key] = next;
+      return next;
+    });
   }
 
   async getRecentWorkspaces(): Promise<RecentWorkspace[]> {
@@ -82,21 +84,20 @@ export class CodexStateStore {
   async recordRecentWorkspace(
     workspace: Omit<RecentWorkspace, "lastOpenedAt"> & { lastOpenedAt?: string },
   ): Promise<RecentWorkspace> {
-    const state = await this.readState();
-    const now = new Date().toISOString();
-    const next: RecentWorkspace = {
-      ...workspace,
-      lastOpenedAt: workspace.lastOpenedAt ?? now,
-    };
+    return this.mutateState(async (state) => {
+      const now = new Date().toISOString();
+      const next: RecentWorkspace = {
+        ...workspace,
+        lastOpenedAt: workspace.lastOpenedAt ?? now,
+      };
 
-    state.recentWorkspaces = [
-      next,
-      ...state.recentWorkspaces.filter((item) => item.id !== next.id),
-    ].slice(0, 20);
-    state.lastWorkspaceId = next.id;
-    await this.writeState(state);
-
-    return next;
+      state.recentWorkspaces = [
+        next,
+        ...state.recentWorkspaces.filter((item) => item.id !== next.id),
+      ].slice(0, 20);
+      state.lastWorkspaceId = next.id;
+      return next;
+    });
   }
 
   async getRunReadAt(runId: string): Promise<string | undefined> {
@@ -119,18 +120,17 @@ export class CodexStateStore {
   }
 
   async markRunRead(runId: string): Promise<CodexRunReadState> {
-    const state = await this.readState();
-    const now = new Date().toISOString();
-    const current = state.runResults[runId];
-    const next: CodexRunReadState = {
-      readAt: current?.readAt ?? now,
-      updatedAt: now,
-    };
+    return this.mutateState(async (state) => {
+      const now = new Date().toISOString();
+      const current = state.runResults[runId];
+      const next: CodexRunReadState = {
+        readAt: current?.readAt ?? now,
+        updatedAt: now,
+      };
 
-    state.runResults[runId] = next;
-    await this.writeState(state);
-
-    return next;
+      state.runResults[runId] = next;
+      return next;
+    });
   }
 
   async getCodexRunDefaults(): Promise<CodexRunDefaults> {
@@ -145,20 +145,19 @@ export class CodexStateStore {
       speedTier?: string | null;
     },
   ): Promise<CodexRunDefaults> {
-    const state = await this.readState();
-    const next: CodexRunDefaults = {
-      model: normalizeOptionalSetting(defaults.model, state.codexRunDefaults.model),
-      reasoningEffort: normalizeOptionalSetting(
-        defaults.reasoningEffort,
-        state.codexRunDefaults.reasoningEffort,
-      ),
-      speedTier: normalizeOptionalSetting(defaults.speedTier, state.codexRunDefaults.speedTier),
-    };
+    return this.mutateState(async (state) => {
+      const next: CodexRunDefaults = {
+        model: normalizeOptionalSetting(defaults.model, state.codexRunDefaults.model),
+        reasoningEffort: normalizeOptionalSetting(
+          defaults.reasoningEffort,
+          state.codexRunDefaults.reasoningEffort,
+        ),
+        speedTier: normalizeOptionalSetting(defaults.speedTier, state.codexRunDefaults.speedTier),
+      };
 
-    state.codexRunDefaults = next;
-    await this.writeState(state);
-
-    return next;
+      state.codexRunDefaults = next;
+      return next;
+    });
   }
 
   async getRuntimeSettings(): Promise<AlphaKanbanRuntimeSettings> {
@@ -169,14 +168,33 @@ export class CodexStateStore {
   async setWorkspaceRootsOverride(
     roots: string[] | undefined,
   ): Promise<AlphaKanbanRuntimeSettings> {
-    const state = await this.readState();
-    state.runtimeSettings = {
-      ...state.runtimeSettings,
-      workspaceRoots: roots,
-    };
-    await this.writeState(state);
+    return this.mutateState(async (state) => {
+      state.runtimeSettings = {
+        ...state.runtimeSettings,
+        workspaceRoots: roots,
+      };
+      return state.runtimeSettings;
+    });
+  }
 
-    return state.runtimeSettings;
+  async getBoardOrder(): Promise<string[]> {
+    return (await this.readState()).boardOrder;
+  }
+
+  async setBoardOrder(keys: string[]): Promise<string[]> {
+    return this.mutateState(async (state) => {
+      state.boardOrder = [...new Set(keys)];
+      return state.boardOrder;
+    });
+  }
+
+  private mutateState<T>(update: (state: AlphaKanbanState) => Promise<T>): Promise<T> {
+    return withPathLock(this.statePath, async () => {
+      const state = await this.readState();
+      const result = await update(state);
+      await this.writeState(state);
+      return result;
+    });
   }
 
   private async readState(): Promise<AlphaKanbanState> {
@@ -194,9 +212,13 @@ export class CodexStateStore {
   private async writeState(state: AlphaKanbanState): Promise<void> {
     const nextState = alphaKanbanStateSchema.parse(state);
     await fs.mkdir(path.dirname(this.statePath), { recursive: true });
-    const tempPath = `${this.statePath}.${process.pid}.${Date.now()}.tmp`;
-    await fs.writeFile(tempPath, `${JSON.stringify(nextState, null, 2)}\n`, "utf8");
-    await fs.rename(tempPath, this.statePath);
+    const tempPath = `${this.statePath}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(tempPath, `${JSON.stringify(nextState, null, 2)}\n`, "utf8");
+      await fs.rename(tempPath, this.statePath);
+    } finally {
+      await fs.rm(tempPath, { force: true });
+    }
   }
 
   private documentKey(relativePath: string): string {
@@ -216,6 +238,7 @@ function emptyState(): AlphaKanbanState {
     runResults: {},
     codexRunDefaults: {},
     runtimeSettings: {},
+    boardOrder: [],
   };
 }
 
@@ -235,6 +258,9 @@ function normalizeState(value: unknown, workspaceId: string): AlphaKanbanState {
     runResults: normalizeRunResults(value.runResults),
     codexRunDefaults: normalizeCodexRunDefaults(value.codexRunDefaults),
     runtimeSettings: normalizeRuntimeSettings(value.runtimeSettings),
+    boardOrder: Array.isArray(value.boardOrder)
+      ? value.boardOrder.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : [],
   });
 }
 

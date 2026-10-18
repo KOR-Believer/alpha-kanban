@@ -3,20 +3,26 @@
 ## Status
 
 - 작성일: {{YYYY-MM-DD}}
-- 기준 문서: `{{plan path or 없음}}`
-- 목적: {{purpose}}
+- 기준 문서: {{plan path or 없음}}
+- 목적: {{사용자가 얻을 변화와 이유}}
 - 범위: {{workspace-relative paths}}
 - 현재 진행률: `0 / 1 tickets`
 
+## 확인·결정이 필요한 사항
+
+- {{질문 / 현재 이해·가정 / 답에 따라 달라질 목표·범위·완료 기준}}
+
+{{검토 후 질문이 없으면 제목은 유지하고 본문을 "- 없음"으로 교체}}
+
 ## Ticket List
 
-### {{PREFIX}}-00. {{Ticket title}}
+### {{PREFIX}}-00. {{결과 중심 제목}}
 
-Status: READY
-Progress: 25%
+Status: TODO
+Progress: 0%
 Repository:
 
-- `{{workspace-relative path}}`
+- `{{repository or workspace-relative package path}}`
 
 Priority: P1
 Type: Feature
@@ -26,32 +32,30 @@ Depends on:
 
 목표:
 
-- {{observable outcome}}
+- {{끝나면 가능해지는 일}}
 
 현재 문제:
 
-- {{current gap or risk}}
+- {{현재 동작이나 불편과 확인 근거}}
 
 구현 범위:
 
-- {{concrete files, routes, APIs, or components}}
+- {{바꿀 동작과 필요한 근거 위치}}
 
 제외 범위:
 
-- {{explicit non-goal}}
+- {{합의한 제외 사항 또는 없음}}
 
 완료 기준:
 
-- [ ] {{functional completion condition}}
+- [ ] {{관찰 가능한 수용 조건}}
 
 검증:
 
-- [ ] {{specific automated or manual check}}
+- [ ] {{확인 방법; 수행 후 결과와 근거}}
 
 사용자 지시:
 
-- {{YYYY-MM-DD}}: {{durable user direction}}
-
 진행 메모:
 
-- {{YYYY-MM-DD}}: 티켓 초안 작성.
+- {{YYYY-MM-DD}}: {{현재 확인한 사실과 다음 할 일; 중요한 미결정 사항은 권고와 영향}}

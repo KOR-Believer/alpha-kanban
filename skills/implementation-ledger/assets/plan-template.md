@@ -1,32 +1,34 @@
-# {{Title}} 구현 계획
+# {{Title}} 계획
 
 작성일: {{YYYY-MM-DD}}
 수정일: {{YYYY-MM-DD}}
 
+## 목표와 이유
+
+{{사용자에게 생기는 변화와 이 작업이 필요한 이유}}
+
 ## 영향 범위
 
-- `{{workspace-relative path}}`
+- {{repository or workspace-relative package path}}
 
-## 목표
+## 확인한 현재 상태
 
-- {{goal}}
+- {{관찰한 동작과 근거 위치; 추정과 미확인은 표시}}
 
-## 현재 상태
+## 할 일과 선택한 방향
 
-- {{observed fact and evidence path}}
+- {{예정된 변화와 선택 이유; 진행 상태는 티켓에 기록}}
 
-## 결정 및 구현 방향
+## 성공을 확인할 방법
 
-- {{selected decision and rationale}}
+- {{관찰 가능한 결과와 적절한 검증 방법}}
 
-## 비목표
+## 확인·결정이 필요한 사항
 
-- {{rejected or deferred work; remove section when empty}}
+- {{질문 / 현재 이해·가정 / 답에 따라 달라질 목표·범위·완료 기준}}
 
-## 검증 계획
+{{실제 선택일 때만 선택지·권고를 추가. 합의된 요구와 조사·검증 할 일은 제외. 검토 후 질문이 없으면 제목은 유지하고 본문을 "- 없음"으로 교체}}
 
-- {{automated or manual validation}}
+## 제외 범위
 
-## Open Questions
-
-- {{actionable unresolved question; remove section when empty}}
+- {{합의한 제외 사항; 없으면 섹션 삭제}}

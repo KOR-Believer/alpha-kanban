@@ -1,16 +1,32 @@
 # Alpha Kanban
 
-Local kanban workspace for selecting a target project, browsing implementation-ledger Markdown sets, editing ticket state, discussing scope-aware work, and launching local Codex runs from the selected workspace context.
+Local kanban workspace for browsing implementation-ledger Markdown sets, reviewing work, and leaving durable ticket directions. Discuss and execute work in Codex; exchange context through the project's Markdown files.
 
 ## What It Does
 
 - Lists available target projects from configured `workspaceRoots`.
 - Groups selected workspace Markdown files into document sets for `*_plan.md`, `*_tickets.md`, `*_inventory.md`, and other `.md` files.
 - Renders selected ticket documents as a Notion-like flat kanban board and renders plan/inventory/markdown files in reader mode.
-- Opens a ticket detail drawer with canonical fields, status/progress controls, user instruction history, progress notes, scope-aware Codex run draft, prompt preview, and ticket chat history.
-- Provides a workspace chat surface for project-wide discussion, spec grilling, and implementation-ledger handoff prompts.
+- Opens a ticket detail drawer with canonical fields, status/progress controls, user instruction history, and progress notes.
+- Appends manual user directions and status-change reasons to the selected ticket's Markdown.
 - Writes ticket changes back to Markdown with stale-file protection and external Markdown change detection.
-- Runs `codex exec --json` locally, streams logs, supports cancel/read state, and stores workspace-scoped Codex session ids in `.alpha-kanban/state.json`.
+
+In-app Workspace Chat, ticket chat, model options, and run controls are temporarily
+hidden. Existing chat/run data and backend APIs are retained, but document saves
+do not send prompts or start Codex.
+
+## Workflow
+
+The UI defaults to Korean. Choose **한국어 / English** in the Start page or either
+board's top bar; the choice applies immediately and is remembered in this browser.
+It does not change document content, canonical Markdown status/field names, paths,
+or stored user directions. Default status-change reasons remain in their original
+Korean because the input previews the exact text written to Markdown.
+
+1. Open or create a project. Existing compatible documents are optional.
+2. Discuss the work in Codex with `$implementation-ledger`, then ask it to create tickets and, when useful, a plan or inventory.
+3. Review those documents in Alpha Kanban. Leave a manual direction or change a ticket's status with an optional reason. Dragging a card opens a confirmation dialog before saving.
+4. Ask Codex to read the updated ticket file and carry out the work. The agent records its results and evidence in Markdown.
 
 ## Install
 
@@ -51,15 +67,15 @@ Alpha Kanban reads `alpha-kanban.config.json` from the workspace root.
 - `workspaceRoots`: target project allowlist. Project selection, file reads/writes, and Codex cwd routing must stay inside these roots.
 - `defaultDocRoots`: Markdown roots scanned inside each selected target workspace.
 - `docRoots`: backward-compatible alias for `defaultDocRoots`.
-- `codexCommand`: executable used for `Run with Codex`.
+- `codexCommand`: executable for the retained runner API; unused by document-only UI actions.
 
 If the config file is missing, the server defaults to `defaultDocRoots: ["docs"]`, `workspaceRoots: ["."]`, and `codexCommand: "codex"`.
 
 ## Required Codex Skill
 
-Alpha Kanban is designed around the bundled `implementation-ledger` Codex skill. The
-app can browse and edit Markdown without the skill, but Workspace Chat handoffs
-and `Run with Codex` prompts assume the skill is installed.
+Alpha Kanban is designed around the bundled `implementation-ledger` Codex skill.
+The app can browse and edit compatible Markdown without Codex. Install the skill
+in Codex to create compatible documents and interpret the directions left here.
 
 The full skill directory is vendored in this repository:
 
@@ -111,24 +127,40 @@ pnpm ticket-md show docs/11_alpha_kanban_autonomous_runs_tickets.md NVD-03
 
 Ticket writes are intentionally narrow:
 
-- Status/progress updates change the ticket body and top-level `현재 진행률`; ticket body fields are the canonical source for UI/API state.
-- `DONE` tickets get `Completed at: YYYY-MM-DDTHH:mm:ss+09:00` immediately after `Progress`; reopening a ticket removes that field.
+- Status/progress changes share one form in ticket detail and the drag confirmation dialog. An empty reason uses the displayed user-action default; custom text is labeled `사용자 사유:`. One guarded file update changes the ticket body, completion timestamp, top-level `현재 진행률`, and appends the record to `사용자 지시`.
+- Dragging to another column opens a dialog; canceling does not move or save the card. The card moves only after a successful save. Same-column drops on a workspace board do not reorder tickets; the all-projects board supports a separate saved order. Stale documents or save failures do not cause an optimistic move.
+- `DONE` tickets get `Completed at: YYYY-MM-DDTHH:mm:ss+HH:MM` using the server's local offset immediately after `Progress`; reopening removes that field. Old checked items and progress notes are preserved for reassessment, not silently reset. A user's DONE action is not a claim that an agent ran verification.
 - Legacy `Progress Board` sections may remain in older docs, but new docs do not require them and the UI/API do not use them as the source of truth.
-- Run draft text is summarized and appended to `사용자 지시` only after the Codex CLI session starts successfully enough to provide a session id.
-- Agent-authored results are appended to `진행 메모`.
+- `문서에 추가` appends free text prefixed by `[수동지시]` to `사용자 지시`. There is no record-type selector. It does not change status or start a chat/run.
+- Codex records its own outcomes in `진행 메모` during separately authorized work.
 - Writes include the current file hash and mtime from the UI; if the Markdown changed on disk, the API returns `STALE_FILE` and the UI asks for reload.
-- The server emits workspace-scoped Markdown change events for selected workspace doc roots. The UI refetches the current document or, when a ticket drawer is open, shows `File changed externally` with a `Reload` action before saving or running Codex.
+- The server emits workspace-scoped Markdown change events for selected workspace doc roots. The UI refetches the current document or, when a ticket drawer is open, shows `File changed externally` with a `Reload` action before saving.
 
-## Run With Codex
+New records retain the ledger's single-line dated format. Input line breaks are
+collapsed to spaces so they cannot create new ticket headings or fields:
 
-The runner uses the local Codex CLI and existing local auth.
-
-Before using it:
-
-```bash
-codex --version
-codex exec --help
+```md
+- 2026-10-13: DONE -> TODO 사용자가 명시적으로 할 일로 변경했습니다.
+- 2026-10-13: DONE -> TODO 사용자 사유: 저장 후 값이 초기화되는 버그 발견.
+- 2026-10-13: [수동지시] 자동 저장은 이번 범위에서 제외한다.
 ```
+
+## All-Projects Board
+
+- `/all` groups tickets by the first directory beneath a registered `workspaceRoots` entry. Overlapping roots use the most specific enclosing root, not a common prefix guessed from discovered projects. A workspace equal to a registered root represents that root itself.
+- Project identity comes from its canonical absolute path. Identical folder names in different roots remain separate; their tabs show the full path to disambiguate. For example, registering `~/workspace` groups `sparkone/apps/crew-admin` under `sparkone`; additionally registering `~/workspace/sparkone/apps` groups it under `crew-admin` instead.
+- Existing discovery still lists project candidates and explicitly opened recent workspaces; registering a root does not recursively open every nested directory. Nested workspaces that expose the same document are deduplicated, preferring the most specific workspace for API routing.
+- Search, project filters, and Hide DONE are remembered locally. The header counts visible cards; project tabs count all loaded tickets in that project.
+- Reads are concurrency-limited. An inaccessible project or document produces a warning while the remaining tickets stay visible. The board polls every 15 seconds; an open editor preserves its draft and requires reload if its file changed.
+- Workspace and all-projects views share the reason dialog, editable ticket detail, manual direction input, and detail preferences. Ticket views offer side peek, center peek, and full view. Drag the side edge or center edges/corner to resize; double-click an edge to reset. Each peek remembers its size, and switching views preserves unsaved input. Saving edits Markdown only and does not start Codex.
+- Same-column card ordering can be changed by drag/drop or the up/down buttons. Order saves are serialized within the view, roll back on failure, and preserve entries for temporarily unavailable projects. A cross-column move saves the status and reason first; an order-save failure is reported separately and does not undo an already saved Markdown change.
+- State-file mutations and guarded Markdown writes are serialized per path across service instances in one API process. This does not coordinate separate API processes or external editors. File revisions still protect against stale UI saves; the global board order is last-save-wins across browser tabs.
+
+## Retained Runner
+
+The runner and chat APIs remain for compatibility and a later product decision.
+They are not exposed by the current UI. Hiding the UI is not an API security
+boundary and does not cancel an already running process.
 
 Runner behavior:
 
@@ -161,11 +193,12 @@ Manual smoke checklist:
 - Open `http://127.0.0.1:5173/`.
 - Select or open an allowed target project from the project switcher.
 - Confirm document sets list plan/tickets/inventory/markdown documents and that tickets open as a board while plan/inventory files open as readers.
-- Open a ticket card and confirm the side/modal detail mode and width preference still work.
-- Change status/progress on a disposable or fixture ticket, save, and confirm the ticket body plus top-level progress update.
-- Enter a scoped Run with Codex draft such as `@t:AKW-10 상태만 확인해줘` and preview the prompt; confirm the resolved scope block and target workspace root are shown.
-- Open Workspace Chat, send a read-only/spec prompt, and confirm the workspace-scoped chat history updates.
-- Run Codex only when local CLI auth is ready; cancel if needed, then confirm run status, unread result badge, and mark-read behavior.
+- Open a ticket card in both boards and confirm side/center/full view, independent size preferences, resize handles, and unsaved-input preservation work.
+- Confirm there is no Workspace Chat launcher, ticket chat composer, or model/run control.
+- Change status/progress on a disposable ticket, enter a reason, save, and confirm the ticket body, top-level progress, and `사용자 지시` update together.
+- Reopen a DONE fixture ticket and confirm `Completed at` disappears, a user-authored transition is appended, and old checklists/notes remain.
+- Drag a fixture card to another status and confirm the dialog uses the same default reason. Cancel once, then confirm a move; the card must not move until saving succeeds.
+- Append a manual direction and confirm one dated `[수동지시]` line appears in the selected ticket's `사용자 지시` without a chat message or Codex run.
 - Edit the selected Markdown file externally, then confirm the board refetches or the open ticket drawer shows `File changed externally` with a working `Reload` action.
 - Refresh the browser or open a direct route and confirm selected workspace, selected document, and ticket detail hash state are restored.
 

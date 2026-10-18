@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import type {
+  BoardOrder,
   CreateWorkspaceRequest,
   SelectWorkspaceRequest,
   WorkspaceDirectoriesResponse,
@@ -13,6 +14,7 @@ import type {
   WorkspaceDirectoryRoot,
   WorkspaceRootsSettingsResponse,
   WorkspaceSummary,
+  WorkspaceProject,
   WorkspacesResponse,
 } from "@alpha-kanban/shared";
 
@@ -68,7 +70,7 @@ export class WorkspaceService {
 
     for (const allowlistRoot of allowlistRoots) {
       for (const candidateRoot of await this.discoverCandidateRoots(allowlistRoot)) {
-        const workspace = await this.createAvailableSummary(candidateRoot);
+        const workspace = await this.createAvailableSummary(candidateRoot, allowlistRoots);
         discovered.set(workspace.id, workspace);
       }
     }
@@ -105,7 +107,7 @@ export class WorkspaceService {
       }
 
       discovered.set(recent.id, {
-        ...(await this.createAvailableSummary(realRoot)),
+        ...(await this.createAvailableSummary(realRoot, allowlistRoots)),
         lastOpenedAt: recent.lastOpenedAt,
       });
     }
@@ -138,6 +140,14 @@ export class WorkspaceService {
       areSameRootSet(normalizedRoots, defaultRoots) ? undefined : normalizedRoots,
     );
     return this.getWorkspaceRootSettings();
+  }
+
+  async getBoardOrder(): Promise<BoardOrder> {
+    return { keys: await this.stateStore.getBoardOrder() };
+  }
+
+  async updateBoardOrder(keys: string[]): Promise<BoardOrder> {
+    return { keys: await this.stateStore.setBoardOrder(keys) };
   }
 
   async selectWorkspace(request: SelectWorkspaceRequest): Promise<WorkspaceSummary> {
@@ -209,7 +219,7 @@ export class WorkspaceService {
       }
     }
 
-    const workspace = await this.createAvailableSummary(targetRoot);
+    const workspace = await this.createAvailableSummary(targetRoot, allowlistRoots);
     await this.stateStore.recordRecentWorkspace({
       id: workspace.id,
       label: workspace.label,
@@ -274,7 +284,7 @@ export class WorkspaceService {
       );
     }
 
-    return this.createAvailableSummary(realRoot);
+    return this.createAvailableSummary(realRoot, allowlistRoots);
   }
 
   async getAvailableWorkspace(workspaceId: string): Promise<WorkspaceSummary> {
@@ -352,14 +362,15 @@ export class WorkspaceService {
     return [...roots];
   }
 
-  private async createAvailableSummary(root: string): Promise<WorkspaceSummary> {
-    const normalizedRoot = normalizeAbsolutePath(root);
+  private async createAvailableSummary(root: string, allowlistRoots: string[]): Promise<WorkspaceSummary> {
+    const normalizedRoot = normalizeAbsolutePath(await fs.realpath(root));
     return {
       id: createWorkspaceId(normalizedRoot),
       label: path.basename(normalizedRoot) || normalizedRoot,
       root: normalizedRoot,
       isAvailable: true,
       hasDocs: await hasDocs(normalizedRoot),
+      project: resolveWorkspaceProject(normalizedRoot, allowlistRoots),
     };
   }
 
@@ -590,6 +601,21 @@ function isConfiguredPathInsideRoots(targetPath: string, roots: string[]): boole
   );
 }
 
+export function resolveWorkspaceProject(root: string, registeredRoots: string[]): WorkspaceProject | undefined {
+  const workspaceRoot = registeredRoots
+    .filter((candidate) => isPathInsideOrSame(root, candidate))
+    .sort((a, b) => b.length - a.length || a.localeCompare(b))[0];
+  if (!workspaceRoot) return undefined;
+  const firstDirectory = path.relative(workspaceRoot, root).split(path.sep)[0];
+  const projectRoot = firstDirectory ? path.join(workspaceRoot, firstDirectory) : workspaceRoot;
+  return {
+    id: createWorkspaceId(projectRoot),
+    label: path.basename(projectRoot) || projectRoot,
+    root: projectRoot,
+    workspaceRoot,
+  };
+}
+
 function isPathInsideAnyRoot(targetPath: string, roots: string[]): boolean {
   return roots.some((root) => isPathInsideOrSame(targetPath, root));
 }
@@ -598,7 +624,7 @@ function isPathInsideOrSame(targetPath: string, root: string): boolean {
   const relativePath = path.relative(root, targetPath);
   return (
     relativePath === "" ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+    (relativePath !== ".." && !relativePath.startsWith(`..${path.sep}`) && !path.isAbsolute(relativePath))
   );
 }
 

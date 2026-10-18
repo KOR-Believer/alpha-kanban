@@ -1,170 +1,71 @@
-# Implementation Ledger Format
+# Ledger Format
 
-Use this file as the single structural source of truth for documents created by `implementation-ledger`. Every new document must be readable by Alpha Kanban. Existing project documents may remain on their established format and must not be migrated or mixed with this format without explicit approval.
+## Renderer Contract
 
-## Alpha Kanban Compatibility Contract
+- Ticket documents contain exactly one `## Status` and one `## Ticket List`. Every `### PREFIX-00. Title` belongs inside `Ticket List`; the prefix is alphanumeric. Another `##` ends that section.
+- Place the document-level `## 확인·결정이 필요한 사항` between `Status` and `Ticket List`, never between individual tickets. Keep this section (or its existing equivalent) when its questions are resolved, replacing the pending items with `- 없음` after review.
+- Preserve every field and its order in [tickets-template.md](../assets/tickets-template.md). Keep block labels on their own lines. Use `없음` for empty dependencies/exclusions and `기준 문서: 없음` when no plan is needed. Name the repository or workspace-relative package; never use `.` as its identity.
+- `현재 진행률` inside `Status` counts `DONE / all tickets`, including deferred tickets. Do not add a duplicate progress board, status glossary, or embedded ticket template.
+- Ticket detail displays recognized fields as plain text. Put consequential information there: custom fields and extra Status properties may be invisible. Use short, flat bullets; do not rely on Markdown links, emphasis, tables, or nested lists rendering inside ticket detail.
+- Each log entry is one physical line: `- YYYY-MM-DD: text`. Continuation lines are not rendered as log entries. Split distinct updates into dated bullets; same-day order follows document order.
 
-New documents must satisfy all applicable rules:
+Check existing structure before adding tickets. Preserve incompatible legacy prose and create a compatible file for new work. Migrate only within user-requested restructuring scope.
 
-- Plan filenames end with the exact suffix `_plan.md`.
-- Ticket filenames end with the exact suffix `_tickets.md`.
-- Inventory filenames end with the exact suffix `_inventory.md`.
-- Hyphenated variants such as `-tickets.md` are plain Markdown to Alpha Kanban and are not compatible.
-- Ticket documents contain exactly one `## Status` section and one `## Ticket List` section.
-- Ticket headings use `### PREFIX-00. Title`, with an alphanumeric prefix and numeric suffix.
-- Ticket `Status` values use uppercase canonical values: `TODO`, `READY`, `IN_PROGRESS`, `BLOCKED`, `DEFERRED`, or `DONE`.
-- Ticket fields use the order documented below.
-- The `## Ticket List` section contains the ticket headings. Do not place phase headings using `##` inside it because the next level-two heading ends the parsed ticket section.
-- The top-level `현재 진행률` line appears inside `## Status` and matches the parsed ticket bodies.
+## Content and History
 
-Before adding a ticket to an existing file, check these rules. If the file is incompatible, do not append a canonical ticket to it. Preserve the legacy file and create a new compatible ticket document for new work unless the user explicitly requests migration.
+Use the user's language and retain parser field names. Prefer a short sentence or a few bullets per field. Goals describe outcomes; scope describes planned behavior with only useful evidence locators. Acceptance criteria describe observable results; verification describes how those results will be checked. Label assumptions and unverified claims.
 
-## File Naming
+Leave `사용자 지시` empty until a durable user direction exists. Keep current fields authoritative; when direction changes, update affected fields and append the decision once. Resolve user answers in the plan and affected goal, scope, acceptance, or verification fields, not only in a log; remove resolved pending questions. Preserve dated history rather than silently replacing earlier instructions or outcomes. Record consequential unanswered user-context questions or choices, their current assumptions, and affected scope in `진행 메모` when relevant to that ticket; routine questions need no durable entry.
 
-Use these exact suffixes. Apply the project's existing directory and numbering convention when possible:
-
-```text
-docs/{domain}/{NN}_{slug}_plan.md
-docs/{domain}/{NN+1}_{slug}_tickets.md
-docs/{domain}/{next_available_number}_{slug}_inventory.md
-```
-
-Keep the same slug for related documents. Adjacency is preferred for a new plan and ticket pair, but an inventory may be created before or after them as investigation requires. Never replace the underscore before `plan`, `tickets`, or `inventory` with a hyphen.
-
-## Plan
-
-Required content:
-
-- title and dates
-- affected scope
-- goal
-- code-observed current state
-- selected decisions or implementation direction
-- validation strategy
-
-Conditional content:
-
-- non-goals and rejected alternatives
-- security or operational constraints
-- error policy
-- risks
-- open questions
-
-Omit conditional sections that carry no information. Record why an alternative was rejected when that decision would otherwise be reopened later.
-
-## Inventory
-
-Include:
-
-- purpose and affected scope
-- evidence sources such as files, commands, branches, dumps, or policies
-- concise conclusion summary
-- the matrix, map, or register needed by the investigation
-- immediate conclusions or next decisions
-
-Separate observed facts, interpretations, assumptions, and unresolved gaps. Do not use an inventory to claim implementation completion.
-
-## Ticket Document
-
-Use this top-level shape:
+Example progress note:
 
 ```md
-# {Title} 티켓
-
-## Status
-
-- 작성일: YYYY-MM-DD
-- 기준 문서: `path/to/plan.md` or 없음
-- 목적: ...
-- 범위: ...
-- 현재 진행률: `N / M tickets`
-
-## Ticket List
+- 2026-09-07: 중복 요청에서도 결제가 한 번만 발생하도록 처리했다. 동시 요청 검증은 통과했다. 결제사 테스트 환경 확인은 남아 있다.
 ```
 
-Do not embed a status glossary, progress tutorial, or reusable Ticket Template in every ticket document. Those are format documentation, not project state.
+Keep detailed evidence in an existing artifact or an inventory when warranted. Tickets can use concise source paths; plan/inventory Markdown can carry tables and clickable links.
 
-## Ticket Fields
+## User Direction Records
 
-Use this field order for new tickets:
+Alpha Kanban writes ordinary dated records to `사용자 지시` without running an AI. Read the selected ticket's current fields and latest relevant directions together; do not replay every historical record as a new command.
 
 ```md
-### PREFIX-00. Ticket title
-
-Status: READY
-Progress: 25%
-Repository:
-
-- `workspace-relative/path`
-
-Priority: P1
-Type: Feature
-Depends on:
-
-- 없음
-
-목표:
-
-- ...
-
-현재 문제:
-
-- ...
-
-구현 범위:
-
-- ...
-
-제외 범위:
-
-- ...
-
-완료 기준:
-
-- [ ] ...
-
-검증:
-
-- [ ] ...
-
-사용자 지시:
-
-- YYYY-MM-DD: ...
-
-진행 메모:
-
-- YYYY-MM-DD: 티켓 초안 작성.
+- 2026-10-16: DONE -> TODO 사용자가 명시적으로 할 일로 변경했습니다.
+- 2026-10-16: DONE -> TODO 사용자 사유: 저장 후 값이 사라지는 버그 발견.
+- 2026-10-16: IN_PROGRESS 진행률 50% -> 75% 사용자가 명시적으로 진행률을 변경했습니다.
+- 2026-10-16: [수동지시] 자동 저장은 이번 범위에서 제외한다.
 ```
 
-Add `Completed at: YYYY-MM-DDTHH:mm:ss+HH:MM` immediately after `Progress` only for `DONE` tickets. Preserve the actual local offset rather than requiring a specific timezone.
+- State and progress changes record the user's action, not agent implementation or verification. A user-applied DONE does not prove checks passed; report missing evidence rather than inventing checked items or silently undoing the user's status just to satisfy validation.
+- Reopening makes prior completion subject to reassessment during authorized work. Preserve old checklists and notes as history; update affected current fields and checks when findings warrant it, not by resetting all evidence.
+- `[수동지시]` is user-authored free text and does not itself change status. Untagged entries and older `[재오픈]`, `[상태 변경]`, and typed records remain valid history; do not migrate them merely to match the new form.
+- These records do not start or authorize implementation by themselves. Apply relevant directions within the current task, without duplicating them, and append agent findings to `진행 메모`.
 
-Allowed status and progress relationships:
+## Status and Completion
 
-| Status | Progress |
-| --- | --- |
-| `TODO` | `0%` |
-| `READY` | `25%` |
-| `IN_PROGRESS` | `50%`, `75%` |
-| `BLOCKED` | `0%`, `25%`, `50%`, `75%` |
-| `DEFERRED` | `0%`, `25%`, `50%`, `75%` |
-| `DONE` | `100%` |
+| Status | Progress | Meaning |
+| --- | --- | --- |
+| TODO | 0% | Scope or approach needs definition. |
+| READY | 25% | Scope, decisions, and edit points permit execution. |
+| IN_PROGRESS | 50%, 75% | Work is underway; at 75%, the main change exists with required checks or finishing work remaining. |
+| BLOCKED | 0%, 25%, 50%, 75% | A named dependency or decision prevents the next required action. |
+| DEFERRED | 0%, 25%, 50%, 75% | Work is deliberately postponed. |
+| DONE | 100% | The agreed outcome and required checks are complete. |
 
-`READY` means scope, decisions, and edit points are known well enough to execute. Its `25%` represents lifecycle readiness, not implemented code. `IN_PROGRESS` percentages represent implementation and verification evidence.
+Progress denotes lifecycle stages, not effort or percentage of code written. The template starts at `TODO / 0%`; promote it only when evidence supports readiness. For blocked/deferred work, retain the last evidenced progress and record the reason and next action.
 
-The top-level numerator is the number of `DONE` tickets. The denominator is every ticket in the document, including `DEFERRED`, unless the project explicitly defines and documents another convention.
+When the agent marks a ticket `DONE`:
 
-## Completion Evidence
+- Both `완료 기준` and `검증` have at least one applicable checkbox, with all required items checked. A document-only task can use a concrete content review. Use plain `N/A: reason` for inapplicable categories alongside actual checks; never check an unperformed test.
+- `진행 메모` states the result and verification evidence. Required checks that remain unavailable keep the ticket open. User review or deployment gates completion only when the task requires them.
+- Set `Progress: 100%` and add `Completed at: YYYY-MM-DDTHH:mm:ss+HH:MM` immediately after it, using the actual completion time and local offset. Remove the timestamp when reopening and recalculate the top-level count.
 
-Mark a ticket `DONE` only when:
+`--legacy` accommodates established progress/completion conventions and a missing user-instructions field. It does not accept arbitrary Markdown or establish completion.
 
-- every required `완료 기준` checkbox is checked,
-- every required `검증` checkbox is checked,
-- `진행 메모` states what changed and what was verified,
-- `Progress` is `100%`, and
-- `Completed at` is present.
+## Scoped Editing
 
-Use `N/A` text instead of a fake checked item when a validation category genuinely does not apply.
+When a repository provides `pnpm ticket-md`, prefer its `show <file> <id>` before canonical mutations and use `status`, `append-user`, and `append-note` for supported changes. Consult `--help` for arguments. The helper updates the completion count; prose and checkboxes still need scoped edits. Inspect its before/after ranges and re-read the changed ticket.
 
-## Durable Logs
+Outside such a repository, the same optional helper is available as `node <skill-directory>/scripts/ticket-md.mjs` when Node is available. For unsupported edits or environments, use targeted search and patch only the inspected ticket range. Do not bypass an ambiguous target or reported validation failure by editing a guessed range.
 
-`사용자 지시` stores only durable user decisions affecting delivery. `진행 메모` stores agent-authored implementation evidence and remaining risk. Neither field is a full chat transcript or process event log.
+Validate the edited file with the skill's strict checker after related edits; helper success alone is insufficient. Report existing evidence gaps without fabricating completion or broadening an unrelated ticket's scope to make validation pass.

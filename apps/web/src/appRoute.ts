@@ -1,4 +1,4 @@
-export type TicketDetailMode = "side" | "modal";
+export type TicketDetailMode = "side" | "modal" | "full";
 export type TicketDocumentViewMode = "board" | "markdown";
 
 export type AppRouteState = {
@@ -47,7 +47,7 @@ export function parseAppRouteState(location: AppRouteLocation): AppRouteState {
   }
 
   const detailMode = hashParams.get("detail");
-  if (detailMode === "modal" || detailMode === "side") {
+  if (detailMode === "modal" || detailMode === "side" || detailMode === "full") {
     route.detailMode = detailMode;
   }
 
