@@ -113,6 +113,24 @@ describe("all-projects document workflow", () => {
     expect(container.querySelector("main.ak-all-board-columns.ak-scroll-area .ak-kanban-grid")).not.toBeNull();
   });
 
+  it("shares progress bars with project cards and keeps reorder controls separate", async () => {
+    documents[first.id]!.document.tickets[0]!.progress = 75;
+    await mount();
+    for (const [id, progress] of [[first.id, 75], [second.id, 100]] as const) {
+      const bar = card(id).querySelector<HTMLElement>('[role="progressbar"]')!;
+      expect(bar.getAttribute("aria-label")).toBe("진행률");
+      expect(bar.getAttribute("aria-valuenow")).toBe(String(progress));
+      expect((bar.firstElementChild as HTMLElement).style.width).toBe(`${progress}%`);
+      expect(bar.nextElementSibling?.textContent).toBe(`${progress}%`);
+      expect(bar.parentElement?.querySelector("button")).toBeNull();
+      expect(card(id).querySelectorAll('[data-tour="ticket-order"] button')).toHaveLength(2);
+    }
+    await act(async () => { await setLanguage("en"); });
+    expect(card().querySelector('[role="progressbar"]')?.getAttribute("aria-label")).toBe("Progress");
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(api.saveOrder).not.toHaveBeenCalled();
+  });
+
   it("shows ready cards and loading progress before all projects finish", async () => {
     let release!: () => void;
     const slow = new Promise<void>((resolve) => { release = resolve; });

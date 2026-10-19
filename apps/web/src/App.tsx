@@ -65,6 +65,7 @@ import {
   useTicketDetailPresentation, type TicketDetailPresentation,
 } from "./components/tickets/useTicketDetailPresentation";
 import { TicketDetailFrame } from "./components/tickets/TicketDetailFrame";
+import { TicketProgressBar } from "./components/tickets/TicketProgressBar";
 
 export const BOARD_STATUSES: TicketStatus[] = [
   "TODO",
@@ -249,27 +250,19 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     [routeLocation],
   );
   const initialRouteRef = useRef<AppRouteState>(routeState);
-  const previousFileSelectionRef = useRef<{ id?: string; path?: string }>({});
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | undefined>(
-    initialRouteRef.current.workspaceId,
-  );
-  const [selectedFileId, setSelectedFileId] = useState<string | undefined>();
-  const [isProjectGuideOpen, setIsProjectGuideOpen] = useState(initialRouteRef.current.showGuide === true);
+  const selectedWorkspaceId = routeState.workspaceId;
+  const preferredFilePath = routeState.filePath;
+  const selectedTicketId = routeState.ticketId;
+  const ticketViewMode = routeState.ticketViewMode ?? "board";
+  const isProjectGuideOpen = routeState.showGuide === true;
+  const [defaultDocument, setDefaultDocument] = useState<{ workspaceId: string; fileId: string }>();
   const [pendingBoardTour, setPendingBoardTour] = useState<string>();
   const lastBoardFile = useRef<MarkdownFileSummary | undefined>(undefined);
-  const [preferredFilePath, setPreferredFilePath] = useState<string | undefined>(
-    initialRouteRef.current.filePath,
-  );
-  const [selectedTicketId, setSelectedTicketId] = useState<string | undefined>(
-    initialRouteRef.current.ticketId,
-  );
-  const [ticketViewMode, setTicketViewMode] = useState<TicketDocumentViewMode>(
-    () => initialRouteRef.current.ticketViewMode ?? "board",
-  );
   const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
-  const ticketPresentation = useTicketDetailPresentation(initialRouteRef.current.detailMode);
-  const { mode: ticketDetailMode, setMode: setTicketDetailMode } = ticketPresentation;
+  const ticketPresentation = useTicketDetailPresentation(routeState.detailMode, (detailMode) => {
+    void navigateTo({ ...routeState, filePath: resolvedSelectedFileId, detailMode });
+  });
   const [externalFileChange, setExternalFileChange] =
     useState<MarkdownFileChangeEvent | null>(null);
   const [documentSetSortPreferences, setDocumentSetSortPreferences] = useState(
@@ -317,12 +310,14 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     [sortedDocumentSets],
   );
   const firstPlanningFile = allFiles.find((file) => file.type !== "markdown");
-  const selectedFileById = allFiles.find((file) => file.id === selectedFileId);
+  const defaultFile = (defaultDocument?.workspaceId === selectedWorkspaceId
+    ? allFiles.find((file) => file.id === defaultDocument?.fileId)
+    : undefined) ?? firstPlanningFile;
   const preferredFile = preferredFilePath
     ? allFiles.find((file) => file.id === preferredFilePath)
     : undefined;
-  const listedSelectedFile = selectedFileById ?? preferredFile;
-  const resolvedSelectedFileId = listedSelectedFile?.id ?? selectedFileId ?? preferredFilePath;
+  const listedSelectedFile = isProjectGuideOpen ? undefined : preferredFilePath ? preferredFile : defaultFile;
+  const resolvedSelectedFileId = isProjectGuideOpen ? undefined : preferredFilePath ?? listedSelectedFile?.id;
   const isProjectGuideVisible = isProjectGuideOpen ||
     (canLoadWorkspace && documentSetsQuery.isSuccess && !resolvedSelectedFileId && !firstPlanningFile);
   const selectedFileQuery = useQuery({
@@ -371,9 +366,10 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     return grouped;
   }, [ticketQuery.data?.document.tickets]);
   const selectedTicket =
-    ticketViewMode === "board"
+    isTicketsDocument && ticketViewMode === "board"
       ? ticketQuery.data?.document.tickets.find((ticket) => ticket.id === selectedTicketId)
       : undefined;
+  const isTicketDetailOpen = Boolean(selectedTicket);
   const shellStyle = {
     "--sidebar-width": `${sidebarWidth}px`,
   } as CSSProperties;
@@ -400,6 +396,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   );
 
   useEffect(() => {
+    if (selectedWorkspaceId || !allowStartupAutoOpen) {
+      shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
+    }
     if (
       !shouldAutoOpenLastWorkspaceOnLoadRef.current ||
       selectedWorkspaceId ||
@@ -415,93 +414,17 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         workspace.id === workspacesQuery.data.lastWorkspaceId && workspace.isAvailable,
     );
     if (lastWorkspace) {
-      setSelectedWorkspaceId(lastWorkspace.id);
+      void navigate({ href: buildAppRoute({ workspaceId: lastWorkspace.id }), resetScroll: false });
     }
-  }, [autoOpenLastWorkspace, selectedWorkspaceId, workspacesQuery.data]);
+  }, [allowStartupAutoOpen, autoOpenLastWorkspace, navigate, selectedWorkspaceId, workspacesQuery.data]);
 
   useEffect(() => {
-    if (isProjectGuideOpen || !selectedWorkspaceId || sortedDocumentSets.length === 0) {
-      return;
+    // Keep the initial document stable when sorting, without adding an automatic history entry.
+    if (isProjectGuideOpen || preferredFilePath || !selectedWorkspaceId || !defaultFile) return;
+    if (defaultDocument?.workspaceId !== selectedWorkspaceId || defaultDocument.fileId !== defaultFile.id) {
+      setDefaultDocument({ workspaceId: selectedWorkspaceId, fileId: defaultFile.id });
     }
-
-    const selectedFileExists = Boolean(selectedFileId && selectedFileById);
-    if (selectedFileExists) {
-      return;
-    }
-
-    if (preferredFilePath && !preferredFile) return;
-    const nextFile = preferredFile ?? firstPlanningFile;
-    if (nextFile?.id && nextFile.id !== selectedFileId) {
-      setSelectedFileId(nextFile.id);
-    }
-  }, [
-    firstPlanningFile,
-    isProjectGuideOpen,
-    preferredFile,
-    preferredFilePath,
-    selectedFileById,
-    selectedFileId,
-    selectedWorkspaceId,
-    sortedDocumentSets,
-  ]);
-
-  useEffect(() => {
-    const previousSelection = previousFileSelectionRef.current;
-    const currentFilePath = selectedFile ? documentRouteId(selectedFile) : preferredFilePath;
-    if (
-      previousSelection.id &&
-      previousSelection.id !== selectedFileId &&
-      previousSelection.path &&
-      previousSelection.path !== currentFilePath
-    ) {
-      setSelectedTicketId(undefined);
-    }
-    previousFileSelectionRef.current = {
-      id: selectedFileId,
-      path: currentFilePath,
-    };
-  }, [preferredFilePath, selectedFile?.workspaceRelativePath, selectedFileId]);
-
-  useEffect(() => {
-    if (selectedTicketId && ticketQuery.isSuccess && !selectedTicket) {
-      setSelectedTicketId(undefined);
-    }
-  }, [selectedTicket, selectedTicketId, ticketQuery.isSuccess]);
-
-  useEffect(() => {
-    if (selectedFile && selectedFile.type !== "tickets" && selectedTicketId) {
-      setSelectedTicketId(undefined);
-    }
-  }, [selectedFile, selectedTicketId]);
-
-  useEffect(() => {
-    if (ticketViewMode === "markdown" && selectedTicketId) {
-      setSelectedTicketId(undefined);
-    }
-  }, [selectedTicketId, ticketViewMode]);
-
-  useEffect(() => {
-    const nextHref = buildAppRoute({
-      workspaceId: selectedWorkspaceId,
-      showGuide: isProjectGuideOpen,
-      filePath: currentSelectedFilePath,
-      ticketId: selectedTicketId,
-      detailMode: selectedTicketId ? ticketDetailMode : undefined,
-      ticketViewMode,
-    });
-    if (nextHref !== routeLocation.href) {
-      void navigate({ href: nextHref, replace: true, resetScroll: false });
-    }
-  }, [
-    currentSelectedFilePath,
-    isProjectGuideOpen,
-    navigate,
-    routeLocation.href,
-    selectedTicketId,
-    selectedWorkspaceId,
-    ticketDetailMode,
-    ticketViewMode,
-  ]);
+  }, [defaultDocument, defaultFile, isProjectGuideOpen, preferredFilePath, selectedWorkspaceId]);
 
   useEffect(() => {
     setExternalFileChange(null);
@@ -543,7 +466,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         return;
       }
 
-      if (isTicketsDocument && selectedTicketId) {
+      if (isTicketDetailOpen) {
         setExternalFileChange(event);
         return;
       }
@@ -567,33 +490,14 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }, [
     canLoadWorkspace,
     currentSelectedFilePath,
+    isTicketDetailOpen,
     isTicketsDocument,
     markdownQuery.data?.file.hash,
     queryClient,
     resolvedSelectedFileId,
-    selectedTicketId,
     selectedWorkspaceId,
     ticketQuery.data?.file.hash,
     ticketViewMode,
-  ]);
-
-  useEffect(() => {
-    setSelectedWorkspaceId(routeState.workspaceId);
-    setIsProjectGuideOpen(routeState.showGuide === true);
-    setPreferredFilePath(routeState.filePath);
-    setSelectedFileId(undefined);
-    setSelectedTicketId(routeState.ticketId);
-    setTicketViewMode(routeState.ticketViewMode ?? "board");
-    if (routeState.detailMode) {
-      setTicketDetailMode(routeState.detailMode);
-    }
-  }, [
-    routeState.detailMode,
-    routeState.filePath,
-    routeState.showGuide,
-    routeState.ticketId,
-    routeState.ticketViewMode,
-    routeState.workspaceId,
   ]);
 
   useEffect(() => {
@@ -687,40 +591,39 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   async function handleWorkspaceSelect(workspaceId: string): Promise<void> {
     setPendingBoardTour(undefined);
     const response = await selectWorkspaceById(workspaceId);
-    setIsProjectGuideOpen(false);
-    setSelectedFileId(undefined);
-    setPreferredFilePath(undefined);
-    setSelectedTicketId(undefined);
-    setSelectedWorkspaceId(response.workspace.id);
+    shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
+    await navigateTo({ workspaceId: response.workspace.id });
     await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+  }
+
+  function navigateTo(state: AppRouteState): Promise<void> | undefined {
+    const href = buildAppRoute(state);
+    if (href !== routeLocation.href) return navigate({ href, resetScroll: false });
   }
 
   function handleGoToStartPage(): void {
     setPendingBoardTour(undefined);
     shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
-    setIsProjectGuideOpen(false);
-    setSelectedFileId(undefined);
-    setPreferredFilePath(undefined);
-    setSelectedTicketId(undefined);
-    setSelectedWorkspaceId(undefined);
+    void navigateTo({});
   }
 
   function handleShowProjectGuide(): void {
     lastBoardFile.current = selectedFile?.type === "tickets" ? selectedFile : undefined;
     setPendingBoardTour(undefined);
-    setIsProjectGuideOpen(true);
-    setSelectedFileId(undefined);
-    setPreferredFilePath(undefined);
-    setSelectedTicketId(undefined);
-    setTicketViewMode("board");
+    void navigateTo({ workspaceId: selectedWorkspaceId, showGuide: true });
   }
 
-  function handleDocumentSelect(file: MarkdownFileSummary): void {
+  function handleDocumentSelect(file: MarkdownFileSummary, view = ticketViewMode): Promise<void> | undefined {
     setPendingBoardTour(undefined);
-    setIsProjectGuideOpen(false);
-    setSelectedFileId(file.id);
-    setPreferredFilePath(documentRouteId(file));
-    if (file.type !== "tickets") setSelectedTicketId(undefined);
+    return navigateTo({ workspaceId: selectedWorkspaceId, filePath: documentRouteId(file), ticketViewMode: view });
+  }
+
+  function handleTicketSelect(ticketId?: string): void {
+    void navigateTo({ workspaceId: selectedWorkspaceId, filePath: resolvedSelectedFileId, ticketId, detailMode: ticketPresentation.mode });
+  }
+
+  function handleTicketViewChange(view: TicketDocumentViewMode): void {
+    void navigateTo({ workspaceId: selectedWorkspaceId, filePath: resolvedSelectedFileId, ticketViewMode: view });
   }
 
   async function handlePatchTicket(
@@ -764,16 +667,16 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }
 
   const boardTour = useScreenTour("project", {
-    enabled: canLoadWorkspace && !selectedTicketId,
+    enabled: canLoadWorkspace && !isTicketDetailOpen,
     eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
     scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}`,
   });
   const tourFile = allFiles.find((file) => file.id === lastBoardFile.current?.id && file.type === "tickets") ?? allFiles.find((file) => file.type === "tickets");
   useEffect(() => {
     if (!pendingBoardTour) return;
-    if (resolvedSelectedFileId !== pendingBoardTour || isProjectGuideVisible || selectedTicketId) { setPendingBoardTour(undefined); return; }
+    if (resolvedSelectedFileId !== pendingBoardTour || isProjectGuideVisible || isTicketDetailOpen) { setPendingBoardTour(undefined); return; }
     if (boardTour.enabled && ticketQuery.isSuccess) { boardTour.start(); setPendingBoardTour(undefined); }
-  }, [pendingBoardTour, resolvedSelectedFileId, isProjectGuideVisible, selectedTicketId, boardTour.enabled, boardTour.start, ticketQuery.isSuccess]);
+  }, [pendingBoardTour, resolvedSelectedFileId, isProjectGuideVisible, isTicketDetailOpen, boardTour.enabled, boardTour.start, ticketQuery.isSuccess]);
 
   if (!selectedWorkspaceId) {
     return (
@@ -920,7 +823,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {selectedFile?.type === "tickets" ? (
                   <TicketDocumentViewToggle
                     mode={ticketViewMode}
-                    onChange={setTicketViewMode}
+                    onChange={handleTicketViewChange}
                   />
                 ) : null}
                 <DocumentSummary
@@ -949,14 +852,12 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 markdownIsLoading={markdownQuery.isLoading}
                 hasDocumentSets={sortedDocumentSets.length > 0}
                 showProjectGuide={isProjectGuideVisible}
-                onBoardTour={tourFile ? () => {
-                  handleDocumentSelect(tourFile);
-                  setTicketViewMode("board");
-                  setSelectedTicketId(undefined);
+                onBoardTour={tourFile ? async () => {
+                  await handleDocumentSelect(tourFile, "board");
                   setPendingBoardTour(tourFile.id);
                 } : undefined}
                 onFileSelect={handleDocumentSelect}
-                onTicketSelect={setSelectedTicketId}
+                onTicketSelect={handleTicketSelect}
                 onTicketStatusChange={handlePatchTicket}
                 ticketDocument={ticketQuery.data}
                 selectedDocumentSet={selectedDocumentSet}
@@ -983,7 +884,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         <TicketDetailDrawer
           key={`${selectedWorkspaceId}:${resolvedSelectedFileId}:${selectedTicket.id}`}
           presentation={ticketPresentation}
-          onClose={() => setSelectedTicketId(undefined)}
+          onClose={() => handleTicketSelect()}
           onAppendInstruction={handleAppendTicketInstruction}
           onPatchTicket={handlePatchTicket}
           onReload={() => ticketQuery.refetch()}
@@ -1907,7 +1808,7 @@ function TicketCard({
           {ticket.title}
         </h4>
         <div className="ak-body-muted mt-3 grid gap-1.5 text-xs">
-          <PropertyRow label={t("Progress")} value={`${ticket.progress}%`} />
+          <TicketProgressBar progress={ticket.progress} />
           <PropertyRow
             label={t("Repo")}
             value={ticket.repository.length > 0 ? ticket.repository.join(", ") : "-"}

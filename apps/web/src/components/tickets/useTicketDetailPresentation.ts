@@ -50,10 +50,10 @@ export function resizeDetailSize(start: DetailSize, mode: TicketDetailMode, edge
   return fitDetailSize({ width, height }, mode, viewport);
 }
 
-export function useTicketDetailPresentation(initialMode?: TicketDetailMode) {
+export function useTicketDetailPresentation(routeMode?: TicketDetailMode, onModeChange?: (mode: TicketDetailMode) => void) {
   const [mode, updateMode] = useState<TicketDetailMode>(() => {
     const value = stored(MODE_KEY);
-    return initialMode ?? (value === "modal" || value === "full" ? value : "side");
+    return routeMode ?? (value === "modal" || value === "full" ? value : "side");
   });
   const [sideWidth, setSideWidth] = useState(() => positive(Number(stored(WIDTH_KEY)), DEFAULT_SIDE_WIDTH));
   const [modalSize, setModalSize] = useState(storedModalSize);
@@ -63,13 +63,17 @@ export function useTicketDetailPresentation(initialMode?: TicketDetailMode) {
   const size = fitDetailSize(mode === "side" ? { width: sideWidth, height: viewport.height } : modalSize, mode, viewport);
   const limits = detailLimits(mode, viewport);
   const stopResize = useCallback(() => setGesture(null), []);
-  const setMode = useCallback((next: TicketDetailMode) => {
+  const applyMode = useCallback((next: TicketDetailMode) => {
     setGesture(null);
     updateMode((current) => {
       if (current !== "full") previousPeek.current = current;
       return next;
     });
   }, []);
+  const setMode = (next: TicketDetailMode) => {
+    applyMode(next);
+    onModeChange?.(next);
+  };
   const restorePeek = () => setMode(previousPeek.current);
   const saveSize = useCallback((next: DetailSize) => {
     if (mode === "side") setSideWidth(next.width);
@@ -93,6 +97,9 @@ export function useTicketDetailPresentation(initialMode?: TicketDetailMode) {
     if (mode === "modal") setModalSize(DEFAULT_MODAL_SIZE);
   };
 
+  useEffect(() => {
+    if (routeMode) applyMode(routeMode);
+  }, [applyMode, routeMode]);
   useEffect(() => {
     const resize = () => { stopResize(); setViewport(viewportSize()); };
     window.addEventListener("resize", resize);

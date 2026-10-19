@@ -66,6 +66,25 @@ describe("ticket drag confirmation", () => {
     }
   }
 
+  it.each([0, 25, 50, 75, 100] as const)("shows %i%% as a localized progress bar without changing ticket metadata", async (progress) => {
+    const item = { ...ticket, progress, dependsOn: ["MOV-00"] };
+    await act(async () => render({ ...fixture, document: { ...fixture.document, tickets: [item] } }));
+    const card = container.querySelector("article")!;
+    const bar = card.querySelector<HTMLElement>('[role="progressbar"]')!;
+    expect(bar.getAttribute("aria-label")).toBe("진행률");
+    expect(bar.getAttribute("aria-valuemin")).toBe("0");
+    expect(bar.getAttribute("aria-valuemax")).toBe("100");
+    expect(bar.getAttribute("aria-valuenow")).toBe(String(progress));
+    expect((bar.firstElementChild as HTMLElement).style.width).toBe(`${progress}%`);
+    expect(bar.nextElementSibling?.textContent).toBe(`${progress}%`);
+    expect(card.textContent).toContain("fixture");
+    expect(card.textContent).toContain("MOV-00");
+    await act(async () => { await setLanguage("en"); });
+    expect(bar.getAttribute("aria-label")).toBe("Progress");
+    expect(bar.getAttribute("aria-valuenow")).toBe(String(progress));
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("opens the shared form without saving or moving, and cancel leaves the source unchanged", async () => {
     await act(async () => render());
     await drag("TODO");

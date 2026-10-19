@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,11 +20,14 @@ import { setLanguage } from "../i18n";
 import { projectFixture, documentFixture } from "../allProjectsFixtures";
 import { buildDocumentSets } from "@alpha-kanban/shared/documents";
 
-const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn() }));
+const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>() }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...await importOriginal<object>(),
   useNavigate: () => routing.navigate,
-  useLocation: ({ select }: { select: (location: typeof routing.location) => unknown }) => select(routing.location),
+  useLocation: ({ select }: { select: (location: typeof routing.location) => unknown }) => select(useSyncExternalStore(
+    (listener) => { routing.listeners.add(listener); return () => { routing.listeners.delete(listener); }; },
+    () => routing.location,
+  )),
   Link: ({ to, children, ...props }: React.PropsWithChildren<{ to: string }>) => <a href={to} {...props}>{children}</a>,
 }));
 
@@ -43,6 +46,11 @@ describe("browser mode UI boundaries", () => {
     vi.stubGlobal("EventSource", eventSource);
     vi.clearAllMocks(); window.localStorage.clear();
     routing.location = { pathname: "/", searchStr: "", hash: "", href: "/" };
+    routing.navigate.mockImplementation(async ({ href, to }: { href?: string; to?: string }) => {
+      const url = new URL(href ?? to ?? "/", "http://localhost");
+      routing.location = { pathname: url.pathname, searchStr: url.search, hash: url.hash.slice(1), href: `${url.pathname}${url.search}${url.hash}` };
+      for (const listener of routing.listeners) listener();
+    });
     await setLanguage("ko");
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue([new DOMRect(0, 0, 100, 28)] as unknown as DOMRectList);
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
@@ -626,7 +634,7 @@ describe("browser mode UI boundaries", () => {
     const content = await waitForElement(type === "tickets" ? ".ak-project-board" : ".ak-markdown");
     expect(content.textContent).toContain(type === "tickets" ? "TEST-01" : "Planning document");
     expect(container.querySelector(".ak-project-guide")).toBeNull();
-    expect(routing.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ href: buildAppRoute({ workspaceId: workspace.id, filePath: file.id }) }));
+    expect(routing.navigate).not.toHaveBeenCalled();
     if (type === "tickets") expect(browserRepository.tickets).toHaveBeenCalledWith(workspace.id, file.id);
     else expect(browserRepository.markdown).toHaveBeenCalledWith(workspace.id, file.id);
 

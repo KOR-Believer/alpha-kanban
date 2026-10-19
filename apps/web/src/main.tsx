@@ -1,14 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  createRoute,
-  createRootRoute,
-  createRouter,
-  RouterProvider,
-} from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { AppRoot } from "./AppRoot";
+import { createAppRouter } from "./router";
 import "./styles.css";
 import { appInstaller } from "./pwa/install";
 import { pwaClient } from "./pwa/client";
@@ -21,38 +16,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const ALL_TICKETS_PATH = "/all";
-
-const rootRoute = createRootRoute({
-  component: AppRoot,
-});
-
-const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/",
-});
-
-const workspaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/w/$workspaceId",
-});
-
-const allTicketsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: ALL_TICKETS_PATH,
-});
-
-const introRoute = createRoute({ getParentRoute: () => rootRoute, path: "/intro" });
-
-const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, workspaceRoute, allTicketsRoute, introRoute]),
-});
-
-declare module "@tanstack/react-router" {
-  interface Register {
-    router: typeof router;
-  }
-}
+const router = createAppRouter();
 
 const rootElement = document.getElementById("root");
 

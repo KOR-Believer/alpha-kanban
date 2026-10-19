@@ -24,6 +24,7 @@ import {
 import { TicketMoveDialog, prepareTicketMove, type TicketMove } from "./components/tickets/TicketMoveDialog";
 import type { TicketWriteGuard } from "./components/tickets/TicketStatusFields";
 import { useTicketDetailPresentation } from "./components/tickets/useTicketDetailPresentation";
+import { TicketProgressBar } from "./components/tickets/TicketProgressBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -362,8 +363,7 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
         <h3 className="mt-1 line-clamp-3 break-words text-sm font-medium leading-5">{ticket.title}</h3>
       </a>
       <div className="mt-3 flex items-center gap-2">
-        <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${ticket.progress}%` }} /></div>
-        <span className="text-xs tabular-nums text-muted-foreground">{ticket.progress}%</span>
+        <TicketProgressBar progress={ticket.progress} />
         <div data-tour="ticket-order" className="flex shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
           <Button title={t("Move up")} aria-label={t("Move {{id}} up", { id: ticket.id })} size="iconSm" variant="ghost" disabled={disabled || !canMoveUp} onClick={() => onReorder(-1)}><ArrowUp aria-hidden="true" /></Button>
           <Button title={t("Move down")} aria-label={t("Move {{id}} down", { id: ticket.id })} size="iconSm" variant="ghost" disabled={disabled || !canMoveDown} onClick={() => onReorder(1)}><ArrowDown aria-hidden="true" /></Button>
