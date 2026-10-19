@@ -1,5 +1,7 @@
 # Alpha Kanban Global Header 구현 계획 초안
 
+> 2026-10-18 적용 상태: topbar·문서 sidebar·상세창·반응형 요구는 유지한다. 아래 Workspace Chat FAB와 앱 내 채팅 시작 안내는 AKD-01 및 AKR-01로 폐기되었고 외부 AI 작업 안내로 대체됐다. AGH-01~04/06의 남은 UI 검증과 AGH-05의 후속 후보를 서버 제거만으로 완료·폐기하지 않는다. 현재 컴포넌트와 후속 담당은 [전환 인벤토리](21_alpha_kanban_browser_transition_inventory.md)를 따른다.
+
 작성일: 2026-06-26
 수정일: 2026-06-26
 

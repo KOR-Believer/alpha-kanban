@@ -1,4 +1,4 @@
-# Alpha Kanban Autonomous Runs 티켓
+# [폐기] Alpha Kanban Autonomous Runs 티켓
 
 ## Status
 
@@ -7,6 +7,14 @@
 - 목적: 한 project 안에서 여러 Codex 요청을 안전하게 queue/lock/supervise하고, 장기적으로 "내비도"처럼 autonomous ticket progression이 가능하도록 실행 기반을 만든다.
 - 범위: `apps/server`, `apps/web`, `packages/shared`, `scripts`, `docs`
 - 현재 진행률: `1 / 13 tickets`
+
+- 적용 상태: 2026-10-18 브라우저 전용 전환으로 앱 내 실행·세션·queue·coordinator/subagent·MCP 계획을 폐기했다. NVD-01~12는 [폐기]와 DEFERRED로 보관하며 재개하려면 별도 제품 결정이 필요하다.
+- 기록 원칙: NVD-00의 과거 DONE, 기존 진행률·체크박스·사용자 지시는 보존한다. 아래 운영 원칙과 미체크 항목은 과거 설계이며 현재 실행 대기열이 아니다.
+- 후속 범위: 브라우저의 문서 저장 잠금·해시 검증·복구는 AKL-02/03에서 유지한다. 폐기 대상인 agent run lock·report store와 혼동하지 않는다. 기존 개인 로그·브라우저 데이터는 삭제하지 않는다.
+
+## 확인·결정이 필요한 사항
+
+- 없음. 폐기된 실행 계획의 worker 권한·운영 store·명칭 질문은 현재 제품의 결정 대상이 아니다. 현재 작업 목록은 docs/21_alpha_kanban_browser_transition_inventory.md를 따른다.
 
 ## 티켓 상태
 
@@ -42,7 +50,7 @@
 
 ## Ticket Template
 
-새 티켓을 추가할 때는 아래 형식을 따른다.
+아래 양식은 폐기된 계획의 작성 이력이다. 새 작업은 현재 동봉 스킬과 유효한 후속 문서에 작성한다.
 
 ```md
 ### NVD-000. Ticket Title
@@ -152,9 +160,9 @@ Depends on:
 
 - 2026-06-26: 초안 작성. 현재 1 document active run 제한과 `.alpha-kanban/state.json`/`.alpha-kanban/runs/*.jsonl` 기반 상태 저장을 전제로 autonomous run phase를 분리했다.
 
-### NVD-01. Run supervisor 상태 모델과 lifecycle 정의
+### NVD-01. [폐기] Run supervisor 상태 모델과 lifecycle 정의
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -169,6 +177,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - 모든 Codex run의 lifecycle을 일관되게 표현하는 supervisor 상태 모델을 만든다.
 
 현재 문제:
@@ -209,10 +218,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-02. Persistent run supervisor store와 restart recovery
+### NVD-02. [폐기] Persistent run supervisor store와 restart recovery
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -227,6 +237,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - WebUI 새로고침과 server restart 이후에도 run/queue/lock 상태를 복구하거나 명확히 orphaned 처리한다.
 - 이 store는 operational state/cache만 담당하며, plan/ticket/inventory Markdown의 canonical source가 되지 않는다.
 - server restart 직후 active run은 PID/process scan, jsonl log, Markdown 변경 내용을 기준으로 가능한 한 자동 재분류한다.
@@ -285,10 +296,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. agent 프로세스 복구는 종료하되 브라우저 폴더·설정·복구 기록은 유지한다.
 
-### NVD-03. Scope lock, run queue, writeback queue scheduler 구현
+### NVD-03. [폐기] Scope lock, run queue, writeback queue scheduler 구현
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -304,6 +316,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - 같은 project 안에서 여러 run 요청이 들어와도 scope conflict를 판단해 queue 또는 block한다.
 - MVP에서는 read-only/edit을 가리지 않고 workspace 단위 active run 1개만 허용해 구현과 운영을 단순화한다.
 - worker/subagent 실행과 coordinator Markdown writeback을 분리해 같은 Markdown 파일에 여러 writer가 동시에 접근하지 않게 한다.
@@ -369,10 +382,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. agent 실행 큐는 종료하되 AKL-02/03의 문서별 저장 잠금과 충돌 보호는 유지한다.
 
-### NVD-04. Workspace coordinator와 worker session mapping 정리
+### NVD-04. [폐기] Workspace coordinator와 worker session mapping 정리
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -388,6 +402,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - workspace coordinator, document, ticket, worker/subagent scope에 따라 Codex session/thread reuse 정책을 명확히 한다.
 
 현재 문제:
@@ -437,10 +452,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 장기 coordinator·worker 세션 관리는 앱 밖의 AI 도구에 맡긴다.
 
-### NVD-05. Conflict-aware Markdown writer와 ticket-md tool contract
+### NVD-05. [폐기] Conflict-aware Markdown writer와 ticket-md tool contract
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -456,6 +472,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - Codex가 긴 Markdown에서 잘못된 ticket range를 수정하는 문제를 줄이고, canonical ticket 변경은 전용 writer를 통하게 한다.
 - worker/subagent report를 coordinator/server writer가 검토한 뒤 Markdown에 반영하는 writeback contract를 둔다.
 
@@ -507,10 +524,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. coordinator writeback은 종료하되 AKL-02의 브라우저 저장 보호와 독립 ticket-md 도구는 유지한다.
 
-### NVD-06. Run API 계약과 control endpoint 확장
+### NVD-06. [폐기] Run API 계약과 control endpoint 확장
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -528,6 +546,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - UI가 run을 시작, queue, cancel, retry, delete, mark-read, inspect할 수 있는 일관된 API를 갖는다.
 
 현재 문제:
@@ -571,10 +590,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-07. Project Run Center와 message-level activity UI
+### NVD-07. [폐기] Project Run Center와 message-level activity UI
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -588,6 +608,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - 사용자가 project 전체 run queue와 각 chat message의 실행 상태를 한눈에 이해하게 한다.
 
 현재 문제:
@@ -632,10 +653,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-08. Autonomous next-ticket executor 정책과 구현
+### NVD-08. [폐기] Autonomous next-ticket executor 정책과 구현
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -655,6 +677,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - 기본 동작은 현재 ticket 완료 후 다음 실행 가능한 ticket을 제안만 하고, 사용자가 auto-enqueue를 켠 경우에만 다음 ticket을 자동 queue에 넣는다.
 - autonomous 실행은 workspace coordinator가 다음 ticket을 고르고, worker/subagent가 구현한 뒤 report를 반환하며, coordinator가 Markdown writeback을 직렬 적용하는 흐름을 따른다.
 
@@ -718,10 +741,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-09. Permission, persistent yolo, read-only 안전 경계 정리
+### NVD-09. [폐기] Permission, persistent yolo, read-only 안전 경계 정리
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -738,6 +762,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - run queue/autonomous mode에서도 read-only/edit/yolo 권한 경계가 명확히 보이고 안전하게 전달되게 한다.
 - 사용자가 yolo/bypass를 한 번 기본값으로 선택하면 이후 run에서는 반복 confirm 없이 그대로 적용되게 한다.
 
@@ -789,10 +814,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-10. 통합 검증, 운영 문서, migration 정리
+### NVD-10. [폐기] 통합 검증, 운영 문서, migration 정리
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -819,6 +845,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - autonomous run phase가 기존 multi-workspace, chat, ticket Markdown, provider harness 흐름을 깨지 않는지 검증한다.
 - Markdown canonical ledger와 operational state/cache/report 분리 원칙이 end-to-end로 유지되는지 검증한다.
 
@@ -878,10 +905,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-11. Alpha Kanban Self Tools와 MCP adapter 계약
+### NVD-11. [폐기] Alpha Kanban Self Tools와 MCP adapter 계약
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -900,6 +928,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - Workspace Chat이 Alpha Kanban 자신을 안전하게 조작할 수 있는 내부 tool contract를 만들고, 같은 contract를 MCP adapter로 노출할 수 있게 한다.
 - Self Tools는 Markdown canonical ledger를 읽고 writer/writeback API를 호출하는 orchestration layer이며, operational store를 canonical ticket database처럼 취급하지 않는다.
 
@@ -969,10 +998,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-26: 초안 작성. NVD-05 writer, NVD-06 run API, NVD-08 autonomous executor 사이를 잇는 안전한 self orchestration layer로 분리했다.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### NVD-12. Subagent report store와 coordinator writeback contract
+### NVD-12. [폐기] Subagent report store와 coordinator writeback contract
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -992,6 +1022,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - workspace coordinator가 장기 기억과 Markdown writeback을 맡고, worker/subagent는 구현과 검증 report만 반환하는 계약을 정의한다.
 - Markdown canonical ledger와 operational state/report store의 책임을 분리해 외부 Markdown 수정과 병렬 writer 충돌을 줄인다.
 
@@ -1049,3 +1080,4 @@ Depends on:
 진행 메모:
 
 - 2026-06-29: 초안 작성. NVD-03 queue, NVD-04 session mapping, NVD-05 writer, NVD-08 autonomous executor, NVD-11 Self Tools를 연결하는 coordinator/subagent 경계 티켓으로 분리했다.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. subagent 보고 저장소는 종료하며 IndexedDB의 폴더 연결·설정·복구 기록은 별개다.

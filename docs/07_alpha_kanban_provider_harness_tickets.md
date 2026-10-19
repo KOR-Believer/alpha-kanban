@@ -1,4 +1,4 @@
-# Alpha Kanban Provider Harness 티켓
+# [폐기] Alpha Kanban Provider Harness 티켓
 
 ## Status
 
@@ -7,6 +7,14 @@
 - 목적: Codex skill/CLI 중심 실행 구조를 Alpha Kanban native run contract와 provider adapter 구조로 분리한다.
 - 범위: `apps/server`, `apps/web`, `packages/shared`, `scripts/ticket-md.mjs`, `docs`
 - 현재 진행률: `1 / 9 tickets`
+
+- 적용 상태: 2026-10-18 브라우저 전용 전환으로 실행 하네스 계획을 폐기했다. AKH-01~08의 DEFERRED는 단순 후순위가 아니라 현재 제품에서 제외한 이력이다. 재도입에는 별도 제품 결정이 필요하다.
+- 기록 원칙: AKH-00의 과거 DONE, 기존 진행률·체크박스·사용자 지시는 보존한다. 미구현 티켓을 완료 처리하지 않으며 현재 진행률은 폐기 티켓을 포함한 DONE/전체 집계다.
+- 후속 범위: Claude 스킬 포팅 AKL-07, 배포·형식·설치 AKL-10~13은 유지한다. ticket-md CLI를 없애거나 개인 전역 스킬을 변경하지 않는다.
+
+## 확인·결정이 필요한 사항
+
+- 없음. 이 실행 계획은 폐기했으며 아래 운영 원칙·목표·체크리스트는 과거 설계 이력이다. 현재 작업 목록은 docs/21_alpha_kanban_browser_transition_inventory.md를 따른다.
 
 ## 티켓 상태
 
@@ -35,7 +43,7 @@
 
 ## Ticket Template
 
-새 티켓을 추가할 때는 아래 형식을 따른다.
+아래 양식은 폐기된 계획의 작성 이력이다. 새 작업은 현재 동봉 스킬과 유효한 후속 문서에 작성한다.
 
 ```md
 ### AKH-000. Ticket Title
@@ -144,9 +152,9 @@ Depends on:
 
 - 2026-06-25: 새 provider harness plan/ticket 묶음을 `06/07` 문서로 분리했다.
 
-### AKH-01. Run Contract v1 schema 정의
+### AKH-01. [폐기] Run Contract v1 schema 정의
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -161,6 +169,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - provider에게 전달할 실행 입력을 긴 prompt 문자열이 아니라 Alpha Kanban native Run Contract v1로 구조화한다.
 
 현재 문제:
@@ -198,10 +207,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### AKH-02. Provider adapter registry와 capability manifest
+### AKH-02. [폐기] Provider adapter registry와 capability manifest
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -216,6 +226,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - Codex CLI, Claude Code, OpenAI-compatible API, local model runner를 같은 server orchestration에서 다룰 수 있는 adapter boundary를 만든다.
 
 현재 문제:
@@ -254,10 +265,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### AKH-03. Codex CLI adapter migration
+### AKH-03. [폐기] Codex CLI adapter migration
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -272,6 +284,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - 기존 Codex run path를 Run Contract v1과 provider adapter interface를 사용하는 구조로 이전한다.
 
 현재 문제:
@@ -310,10 +323,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### AKH-04. Normalized run event와 chat transcript schema
+### AKH-04. [폐기] Normalized run event와 chat transcript schema
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -330,6 +344,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - UI가 Codex JSONL 원본에 의존하지 않고 provider-neutral activity timeline과 chat transcript를 표시하게 한다.
 
 현재 문제:
@@ -371,10 +386,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### AKH-05. Deterministic tool bridge와 ticket-md 통합
+### AKH-05. [폐기] Deterministic tool bridge와 ticket-md 통합
 
-Status: READY
+Status: DEFERRED
 Progress: 25%
 Repository:
 
@@ -390,6 +406,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - provider가 Markdown을 직접 grep/replace하다가 잘못된 ticket 영역을 바꾸지 않도록 deterministic tool bridge를 만든다.
 
 현재 문제:
@@ -430,10 +447,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 독립 ticket-md CLI와 브라우저 writer는 유지한다.
 
-### AKH-06. Provider settings와 capability-aware composer UI
+### AKH-06. [폐기] Provider settings와 capability-aware composer UI
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -449,6 +467,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - workspace chat과 ticket chat composer에서 provider, model, reasoning, fast tier, yolo, read-only/edit options를 capability 기반으로 즉시 선택하게 한다.
 
 현재 문제:
@@ -489,10 +508,11 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### AKH-07. OpenAI-compatible/local provider adapter spike
+### AKH-07. [폐기] OpenAI-compatible/local provider adapter spike
 
-Status: TODO
+Status: DEFERRED
 Progress: 0%
 Repository:
 
@@ -509,6 +529,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - DeepSeek, Gemma, Ollama, vLLM 등 OpenAI-compatible endpoint나 local runner를 Alpha Kanban provider adapter로 붙일 수 있는 최소 경로를 검증한다.
 
 현재 문제:
@@ -548,8 +569,9 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 유효한 후속 작업과 대체 관계는 docs/21_alpha_kanban_browser_transition_inventory.md에 정리했다.
 
-### AKH-08. Claude Code adapter와 skill compatibility spike
+### AKH-08. [폐기] Claude Code adapter와 skill compatibility spike
 
 Status: DEFERRED
 Progress: 0%
@@ -568,6 +590,7 @@ Depends on:
 
 목표:
 
+- 현재 제품에서는 이 실행 계획을 폐기한다. 아래 목표와 범위는 과거 설계 이력이며 착수 조건이 아니다. 재도입은 별도 제품 결정이 필요하다.
 - Claude Code를 provider adapter로 붙일 때 skill/project instruction compatibility를 어떻게 다룰지 검증한다.
 
 현재 문제:
@@ -604,3 +627,4 @@ Depends on:
 진행 메모:
 
 - 2026-06-25: 초안 작성. 우선순위는 Codex adapter 안정화와 OpenAI-compatible/local spike 이후로 둔다.
+- 2026-10-18: 브라우저 전용 전환과 AKR-01의 서버·내장 AI 실행 제거에 따라 이 계획을 폐기했다. DEFERRED와 제목의 [폐기]는 자동 착수 대기가 아니며 재도입에는 별도 제품 결정이 필요하다. 기존 진행률·체크박스·기록은 보존하고 완료로 간주하지 않는다. 외부 Claude용 스킬 포팅·검증은 AKL-07에 남기며 내장 실행 어댑터와 구분한다.

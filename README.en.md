@@ -69,7 +69,7 @@ Usually start with tickets; add a plan or inventory when needed. Related documen
 
 ## 3. Update the skill
 
-Return to the [installation guide](https://kanban.giveit2.me/intro#skill) to find the official skill source. Use the installation request above to compare it with your existing copy. Review the changes, then update with a backup and your customizations preserved.
+Review the request in the [skill update guide](https://kanban.giveit2.me/intro#updates) and send it to Codex. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.
 
 **Web app updates and personal skill updates are separate.** Reopening the website or updating its PWA does not update your installed skill. Ask Codex to check the location and contents of your installation.
 

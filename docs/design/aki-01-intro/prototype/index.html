@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Alpha Kanban — AI와 계획하고, 칸반에서 한눈에 확인하세요. 가상 대화로 작업 흐름을 살펴보세요.">
+<title>Alpha Kanban</title><!-- Standalone scripted workspace preview -->
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" data-od-id="landing-page">
+<noscript><h1>Alpha Kanban</h1><p>AI와 아이디어 토론 → 플랜·티켓 초안 → 사람이 읽고 질문 토론 → 결정 반영과 재검토 → 구현 요청 → 결과 확인과 반복.</p><p>대화 예시를 재생하려면 JavaScript를 켜 주세요. Enable JavaScript to play the fictional conversation.</p></noscript>
+</div>
+<dialog id="prompt-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-desc" data-od-id="prompt-dialog">
+<div class="dialog-head">
+<h2 id="dialog-title">
+</h2>
+<p id="dialog-desc">
+</p>
+</div>
+<div class="dialog-body">
+<textarea id="prompt-text" readonly spellcheck="false" data-od-id="prompt-text">
+</textarea>
+<p id="copy-status" role="status" aria-live="polite">
+</p>
+</div>
+<div class="dialog-footer">
+<button id="close-dialog" data-od-id="close-dialog">
+</button>
+<button id="copy-request" class="primary" data-od-id="copy-request">
+</button>
+</div>
+</dialog>
+<script src="app.js">
+</script>
+</body>
+</html>

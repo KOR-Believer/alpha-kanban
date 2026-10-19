@@ -1,5 +1,7 @@
 # Alpha Kanban Multi Workspace 티켓
 
+> 2026-10-18 적용 상태: 34개 DONE은 과거 구현·검증 이력으로 보존한다. 서버 파일 API·allowlist·Codex runner·채팅·모델 설정은 AKR-01에서 제거했으며 다시 구현할 목록이 아니다. 프로젝트/문서 UI, 정렬, 파서와 ticket-md의 현재 범위는 브라우저 및 문서 중심 티켓으로 이어진다. [기능 구분](21_alpha_kanban_browser_transition_inventory.md)
+
 ## Status
 
 - 작성일: 2026-06-22

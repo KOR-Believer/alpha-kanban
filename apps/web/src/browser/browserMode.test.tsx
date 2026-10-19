@@ -7,7 +7,8 @@ import { App } from "../App";
 import { AppRoot } from "../AppRoot";
 import { partitionProjects, ProjectLists } from "../components/ProjectLauncher";
 import { WorkspaceButton, WorkspaceSwitcherTrigger } from "../components/WorkspaceNavigation";
-import { DEMO_TICKET, DEMO_MARKDOWN, READING_DEMO } from "../components/IntroDemoBoard";
+import { demoTicketMarkdown, READING_DEMO } from "../components/intro/demo";
+import { korean } from "../i18n/messages";
 import { AllProjectsBoard } from "../AllProjectsBoard";
 import { buildAppRoute, parseAppRouteState } from "../appRoute";
 import { browserRepository } from "./repository";
@@ -94,15 +95,18 @@ describe("browser mode UI boundaries", () => {
     const oldTitle = document.title;
     await render(<AppRoot />);
     expect(container.querySelector("h1")?.textContent).toBe("Alpha Kanban");
-    expect(document.title).toContain("같은 Markdown");
+    expect(document.title).toContain("AI와 계획하고, 칸반으로 검토하세요");
     expect(container.querySelectorAll(".ak-intro-demo-column-heading")).toHaveLength(6);
     expect(container.querySelectorAll(".ak-intro-demo-card")).toHaveLength(READING_DEMO.length);
-    const demo = container.querySelector(`[data-ticket-id="${DEMO_TICKET.id}"]`)!;
-    expect(demo.textContent).toContain(DEMO_TICKET.title);
-    expect(demo.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe(String(DEMO_TICKET.progress));
-    expect(container.querySelector("#demo-markdown pre")?.textContent).toBe(DEMO_MARKDOWN);
-    expect(DEMO_MARKDOWN).toContain(`Status: ${DEMO_TICKET.status}`);
-    expect(DEMO_MARKDOWN).toContain(`Progress: ${DEMO_TICKET.progress}%`);
+    const ticket = READING_DEMO.find(item => item.id === "READ-02")!;
+    const demo = container.querySelector<HTMLButtonElement>(`[data-ticket-id="${ticket.id}"]`)!;
+    expect(demo.textContent).toContain(korean[ticket.title]);
+    expect(demo.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe(String(ticket.progress));
+    await act(async () => demo.click());
+    const markdown = demoTicketMarkdown(ticket, key => korean[key] ?? key);
+    expect(container.querySelector("#demo-markdown pre")?.textContent).toBe(markdown);
+    expect(markdown).toContain(`Status: ${ticket.status}`);
+    expect(markdown).toContain(`Progress: ${ticket.progress}%`);
     expect(container.querySelectorAll("img")).toHaveLength(0);
     expect(container.textContent).toContain("모든 작업을 AI 채팅만으로 진행해도 됩니다");
     expect(container.textContent).not.toContain("호환 Markdown");
@@ -118,7 +122,9 @@ describe("browser mode UI boundaries", () => {
     expect(eventSource).not.toHaveBeenCalled();
     expect(routing.navigate).not.toHaveBeenCalled();
     await act(async () => { await setLanguage("en"); });
-    expect(container.textContent).toContain("Start with a conversation. Continue in documents.");
+    expect(container.textContent).toContain("How a conversation becomes a work record.");
+    expect(container.querySelector("#demo-markdown pre")?.textContent).toBe(demoTicketMarkdown(ticket, key => key));
+    expect(container.querySelector("#demo-state")?.textContent).toBe("Ready to play");
     expect(container.textContent).not.toMatch(/versions are being prepared|cannot inspect your installed skill|Claude/);
     expect(document.documentElement.lang).toBe("en");
     expect(browserRepository.workspaces).not.toHaveBeenCalled();
@@ -132,7 +138,7 @@ describe("browser mode UI boundaries", () => {
     expect(localStorage.getItem("alpha-kanban.autoOpenLastWorkspace")).toBe(String(autoOpen));
   });
 
-  it.each(["/", "/intro"])("explains scoped question review before ticket implementation on %s in both languages", async (pathname) => {
+  it.each(["/"])("explains scoped question review before ticket implementation on %s in both languages", async (pathname) => {
     routing.location = { pathname, searchStr: "", hash: "", href: pathname };
     await render(<AppRoot />);
     const workflow = container.querySelector(".ak-document-workflow")!;

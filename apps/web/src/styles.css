@@ -4,6 +4,7 @@
 @import "@fontsource-variable/raleway";
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 @import "./start-pages.css";
+@import "./components/intro/conversation.css";
 @import "./onboarding/tours.css";
 
 @custom-variant dark (&:is(.dark *));

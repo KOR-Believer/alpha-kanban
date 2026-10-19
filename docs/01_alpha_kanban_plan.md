@@ -1,5 +1,7 @@
 # Alpha Kanban 구현 계획 초안
 
+> 2026-10-18 적용 상태: 초기 서버형 MVP의 설계 이력이다. 현재 구현 지시로 사용하지 않는다. 서버·Codex 실행은 AKR-01에서 제거했고, 브라우저 파일 접근·안전한 저장은 AKL-01~06이 담당한다. 재사용된 문서·보드 기능과 폐기된 실행 기능의 구분은 [전환 인벤토리](21_alpha_kanban_browser_transition_inventory.md)를 따른다.
+
 작성일: 2026-06-22
 수정일: 2026-06-22
 
@@ -166,6 +168,10 @@ Manual smoke:
 - `Run with Codex` dry-run 또는 실제 local Codex run을 실행하고 streaming log와 결과 memo append를 확인한다.
 
 ## Open Questions
+
+- 없음. 이 초기 계획의 적용은 종료했다. 아래 질문은 당시의 미결정 이력이며 현재 제품의 착수 조건이 아니다. 상세창·드래그는 현재 공통 UI와 AKD/AKL 계약을 따르고 Codex sandbox 선택은 제품 범위에서 제외한다.
+
+### 전환 전 질문 이력
 
 - ticket detail modal은 중앙 modal로 시작할지, 우측 drawer로 시작할지 결정한다.
 - `Run with Codex`의 기본 sandbox를 `workspace-write`로 둘지 ticket별로 선택하게 할지 결정한다.

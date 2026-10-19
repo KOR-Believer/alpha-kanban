@@ -8,6 +8,9 @@
 - 범위: `apps/web`, `docs`
 - 현재 진행률: `1 / 7 tickets`
 
+- 적용 상태: 2026-10-18 브라우저 전환 후에도 header/sidebar/상세창 배치와 미검증 UI 항목은 유효하다. 앱 내 Workspace Chat 안내·FAB만 폐기하며 과거 체크박스는 당시 검증 이력으로 읽는다.
+- 현재 구현: BrowserConnections, WorkspaceNavigation, ProjectGuide, TicketDetailFrame을 사용한다. 서버형 ProjectSwitcher·Workspace Chat을 복원하지 않는다. AGH-05는 폐기가 아닌 기존 후속 후보 보류다.
+
 ## 티켓 상태
 
 - `TODO`: 아직 시작하지 않음
@@ -31,7 +34,7 @@
 - `/` Start page는 workspace shell 밖 full-page route로 둔다.
 - sidebar는 문서 탐색 단위만 담당한다.
 - content header는 현재 문서 단위만 담당한다.
-- Workspace Chat은 우하단 floating button으로 유지한다.
+- Workspace Chat과 해당 floating button은 폐기했다. AI 논의·구현은 외부 도구에서 하며 앱은 ProjectGuide와 문서 입력만 제공한다.
 - workspace topbar에 `New project`와 workspaceRoots 설정 entry를 상시 노출하지 않는다.
 - `New project`와 workspaceRoots 설정은 Start page 성격의 action으로 유지한다.
 - 기존 route state와 direct URL 복원을 깨지 않는다.
@@ -184,10 +187,10 @@ Depends on:
 
 - `App.tsx` 또는 route-level component에서 selected workspace가 없는 `/` route와 workspace route shell을 분리한다.
 - Start page에는 recent projects, browse project, new project, workspaceRoots settings, auto-open setting, guide만 둔다.
-- Guide는 호환 Markdown이 이미 있는 사용자가 아니라, 빈 프로젝트에서 Workspace Chat으로 스펙을 잡고 plan/ticket/inventory를 생성하는 primary flow를 안내한다.
+- Guide는 빈 프로젝트에서 외부 AI와 범위를 논의하고 implementation-ledger로 티켓을 작성·검토하는 흐름을 안내한다. 공통 안내의 현재 구현·검증은 AKL-05/13에서 추적한다.
 - Start page에는 document sidebar, workspace document header, document placeholder를 렌더링하지 않는다.
 - Start page에서 project를 선택하면 기존 `/w/:workspaceId` route와 selected file 복원 흐름으로 진입한다.
-- 선택한 project에 document set이 없으면 `No document selected` 대신 Workspace Chat으로 시작하는 CTA를 보여준다.
+- 계획 문서가 없는 프로젝트는 ProjectGuide를 기본으로 보여준다. 앱 내 채팅 CTA는 복원하지 않으며 일반 Markdown 직접 선택과 안내로 복귀를 유지한다.
 
 제외 범위:
 
@@ -232,6 +235,7 @@ Depends on:
 - 2026-06-26: Start page Guide 문구를 빈 프로젝트 기준 primary flow로 수정했다. `Select workspace/Open document set` 중심 설명을 제거하고, `Open or create a project -> Discuss the work -> Generate planning docs -> Review, revise, and run` 흐름으로 바꿨다.
 - 2026-06-26: 선택된 project에 document set이 없으면 main content에서 `Start with Workspace Chat` CTA를 보여주고, 버튼으로 기존 Workspace Chat dialog를 열도록 했다.
 - 2026-06-26: 검증 완료: `pnpm --filter @alpha-kanban/web typecheck`, `pnpm --filter @alpha-kanban/web test -- appRoute`, `pnpm build`, `git diff --check`. 남은 것은 사용자 visual smoke다.
+- 2026-10-18: 브라우저 전환에 맞춰 빈 프로젝트 안내를 외부 AI와 implementation-ledger를 사용하는 ProjectGuide로 정리했다. Workspace Chat CTA는 폐기하고 헤더 분리·문서 선택·남은 화면 검증은 유지한다. 기존 진행률과 검증 이력은 변경하지 않았다.
 
 ### AGH-02. Workspace global topbar shell 구현
 
@@ -270,7 +274,7 @@ Depends on:
 
 - ProjectSwitcher dialog 자체의 대대적 redesign
 - WorkspaceRoots settings 전체 redesign
-- Workspace Chat modal 변경
+- 폐기된 Workspace Chat 또는 서버형 ProjectSwitcher 복원
 
 완료 기준:
 
@@ -304,6 +308,7 @@ Depends on:
 - 2026-06-26: current project selector를 topbar 중앙으로 이동했고, selector trigger는 기존 `ProjectSwitcher` dialog를 연다. ProjectSwitcher dialog 자체의 browse/open flow는 유지했다.
 - 2026-06-26: `New project`와 workspaceRoots settings는 workspace topbar에 상시 노출하지 않는다. 해당 기능은 Start page 쪽 action으로 유지한다.
 - 2026-06-26: 검증 완료: `pnpm --filter @alpha-kanban/web typecheck`, `pnpm --filter @alpha-kanban/web test -- appRoute`, `pnpm build`, `git diff --check`. 남은 것은 selected project/project switch visual smoke다.
+- 2026-10-18: 서버형 ProjectSwitcher와 Workspace Chat은 복원하지 않는다. 현재 WorkspaceNavigation과 브라우저 폴더 연결 UI를 기준으로 topbar 범위와 남은 화면 검증을 유지하며 과거 체크박스는 당시 이력으로 보존했다.
 
 ### AGH-03. Document-only sidebar 정리
 
@@ -514,7 +519,7 @@ Depends on:
 
 목표:
 
-- topbar + document sidebar + main content 구조가 narrow viewport, ticket drawer/modal, Workspace Chat FAB와 충돌하지 않도록 최소 responsive fallback을 둔다.
+- topbar + document sidebar + main content 구조가 좁은 화면과 ticket drawer/modal에서 충돌하지 않도록 responsive fallback을 유지한다. 폐기된 Workspace Chat FAB는 대상에서 제외한다.
 
 현재 문제:
 
@@ -527,7 +532,7 @@ Depends on:
 - topbar height를 기준으로 sidebar/main height를 계산한다.
 - narrow viewport에서는 구현 리스크가 낮은 임시 sidebar 접근 방식을 택한다.
 - overlay drawer와 collapsible inline panel 중 최적 형태 확정은 후속 visual polish로 미룬다.
-- Workspace Chat FAB가 drawer/modal과 겹칠 때 숨김 또는 z-index 정책을 정한다.
+- Workspace Chat FAB의 충돌 정책은 폐기한다. 현재 Help·투어·PWA 메뉴와 ticket detail의 focus/overlay 경계는 기존 공통 컴포넌트를 따른다.
 - ticket detail side/modal과 topbar/sidebar가 함께 열리는 direct URL을 확인한다.
 
 제외 범위:
@@ -544,7 +549,7 @@ Depends on:
 - [x] Workspace Chat FAB는 sidebar 내부가 아니라 fixed floating layer로 렌더링된다.
 - [x] Workspace Chat FAB 위치를 화면 가장자리에서 한 단계 안쪽으로 조정했다.
 - [ ] desktop visual smoke에서 topbar/sidebar/main scroll이 안정적으로 보인다.
-- [ ] ticket side drawer와 Workspace Chat FAB가 불쾌하게 겹치지 않는지 visual smoke로 확인한다.
+- N/A: Workspace Chat FAB와 drawer의 겹침 검증은 앱 내 채팅 제거로 적용하지 않는다. 아래 side drawer 자체의 검증은 유지한다.
 - [ ] ticket modal direct URL에서 topbar와 modal z-index가 안정적인지 visual smoke로 확인한다.
 - [ ] narrow viewport에서 임시 sidebar 접근 방식과 layout 파손 여부를 visual smoke로 확인한다.
 
@@ -571,3 +576,4 @@ Depends on:
 - 2026-06-26: Workspace shell을 topbar와 body grid로 분리하면서 topbar 아래에 sidebar/main 영역이 놓이도록 했다. Narrow viewport에서는 body grid를 1열로 접고 sidebar에 `max-height`를 둬 전체 layout이 깨지는 위험을 낮췄다.
 - 2026-06-26: Workspace Chat은 sidebar 내부 block이 아니라 selected workspace에서만 보이는 fixed floating button으로 분리했다. 이후 사용자 피드백에 따라 위치를 `bottom/right 5`에서 `6`으로, narrow viewport에서는 `4`에서 `5`로 조정해 화면 가장자리에서 조금 더 안쪽으로 들어오게 했다.
 - 2026-06-26: 검증 완료: `pnpm --filter @alpha-kanban/web typecheck`, `pnpm build`, `git diff --check`. 남은 것은 desktop/narrow viewport, ticket drawer, ticket modal direct URL visual smoke다.
+- 2026-10-18: 앱 내 채팅 제거로 Workspace Chat FAB 충돌 검증만 N/A로 전환했다. 상세창·좁은 화면·스크롤 검증은 유지하며 기존 체크된 FAB 항목은 과거 증거이지 복원 요구가 아니다. 새 화면 검증을 수행하거나 진행률을 올리지는 않았다.

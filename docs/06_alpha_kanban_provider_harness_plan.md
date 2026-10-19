@@ -1,7 +1,14 @@
-# Alpha Kanban Provider Harness 구현 계획 초안
+# [폐기] Alpha Kanban Provider Harness 구현 계획 초안
 
 작성일: 2026-06-25
-수정일: 2026-06-25
+수정일: 2026-10-18
+
+## 현재 적용 상태
+
+- 브라우저 전용 전환과 AKR-01의 서버 제거에 따라 제품 내부 provider adapter, 실행 계약, 채팅, 모델/권한 설정 계획은 폐기한다. 아래 아키텍처와 운영 원칙은 당시 설계 이력이며 현재 구현 지시가 아니다.
+- AKH-01~08은 DEFERRED로 보관한다. 상태 체계에 폐기 전용 값이 없어 제목의 [폐기]와 사유로 구분하며, 자동 재개나 완료로 취급하지 않는다. AKH-00의 DONE은 당시 방향을 정한 이력으로 유지한다.
+- 외부 AI용 스킬의 호환성은 별개다. Claude 스킬 포팅은 AKL-07, 스킬·문서 형식·설치 버전은 AKL-10~13에서 계속 추적한다. ticket-md와 공용 Markdown 로직은 유지하며 서버 tool bridge만 폐기한다.
+- 현재 기준: [브라우저 전환](13_alpha_kanban_browser_local_plan.md), [서버 제거 완료](18_browser_only_tickets.md), [전환 인벤토리](21_alpha_kanban_browser_transition_inventory.md).
 
 ## 영향 범위
 
@@ -220,6 +227,10 @@ Manual smoke:
 - local/OpenAI-compatible adapter spike에서는 최소 read-only answer까지 확인한다.
 
 ## Open Questions
+
+- 없음. 계획 폐기로 다음 질문은 현재 제품의 결정 대상에서 제외한다. 외부 AI용 스킬 지원과 버전 계약의 미완료 작업은 위 후속 티켓에서 다룬다.
+
+### 폐기된 계획의 질문 이력
 
 - Alpha Kanban native workflow pack은 Markdown 문서, JSON schema, TypeScript source 중 무엇을 source of truth로 둘 것인가?
 - local model adapter의 첫 범위는 read-only answer까지만 둘 것인가, server-mediated patch까지 포함할 것인가?

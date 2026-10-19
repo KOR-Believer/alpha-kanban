@@ -1,13 +1,21 @@
-# Alpha Kanban Autonomous Runs 구현 계획 초안
+# [폐기] Alpha Kanban Autonomous Runs 구현 계획 초안
 
 작성일: 2026-06-26
-수정일: 2026-10-13
+수정일: 2026-10-18
 
-## 현재 우선순위
+## 현재 적용 상태
+
+- 2026-10-18 브라우저 전용 전환과 AKR-01 서버 제거에 따라 앱 내 세션·run queue·coordinator/subagent·자율 실행·Self Tools/MCP 계획을 폐기한다. 단순한 채팅 미노출 또는 잠정 우선순위 하향 상태가 아니다.
+- NVD-01~12는 [폐기]와 DEFERRED로 보관하며 기존 진행률·체크박스·지시는 유지한다. NVD-00의 DONE은 당시 정책 논의 완료 이력이다. 재도입은 별도 제품 결정과 새 계획이 필요하다.
+- 서버 runner/API 보존 의무는 종료했다. 디스크에 남은 개인 실행 로그·상태 파일은 제품 코드가 아니므로 삭제하거나 자동 이전하지 않는다. 폴더 연결·브라우저 설정·PWA 저장소도 보존한다.
+- Markdown 원본·외부 변경 보호·ticket-md는 현재 제품에서도 유효하다. 브라우저 저장 보호는 AKL-02/03, 외부 AI 작업 규칙은 동봉 implementation-ledger가 담당하며 실행 오케스트레이션은 웹의 역할이 아니다.
+- [현재 작업 구분](21_alpha_kanban_browser_transition_inventory.md), [서버 제거 결과](18_browser_only_tickets.md).
+
+### 채팅 미노출 단계의 결정 이력
 
 - 2026-10-13: 앱 내 모든 채팅 입력과 실행 진입점은 잠정 미노출한다. 현재 구현은 칸반 검토와 사용자 지시·상태 변경 사유의 구조화된 Markdown append에 집중한다. AI와의 논의·작업은 외부 Codex에서 문서를 읽고 진행한다.
-- 이 문서의 실행·큐·오케스트레이션 계획은 보관하며, 채팅 재노출 결정 전에는 현재 구현 요구로 간주하지 않는다. 기존 runner API와 로그는 삭제하지 않는다.
-- 현재 작업: `docs/12_alpha_kanban_document_workflow_tickets.md`의 `AKD-01`.
+- 당시에는 실행·큐·오케스트레이션 계획을 보관하고 runner API와 로그를 유지했다. 서버 코드 보존 방침은 이후 AKR-01로 종료했다.
+- 당시 후속 작업: `docs/12_alpha_kanban_document_workflow_tickets.md`의 `AKD-01`.
 
 ## 영향 범위
 
@@ -267,6 +275,10 @@ type WorkerReport = {
   - autonomous mode opt-in and stop
 
 ## Open Questions
+
+- 없음. 실행 계획 폐기에 따라 아래 항목은 현재 제품의 질문이 아니다. worker 권한·운영 DB·NaviDO 명칭을 결정하기 위해 브라우저 또는 스킬 작업을 막지 않는다.
+
+### 폐기된 계획의 질문 이력
 
 - worker/subagent의 Markdown 직접 수정을 prompt 계약으로만 막을지, filesystem/tool restriction까지 둘지 결정해야 한다.
 - operational store는 JSON 확장을 먼저 유지할지, queue/report가 늘어나는 시점에 SQLite로 옮길지 결정해야 한다.

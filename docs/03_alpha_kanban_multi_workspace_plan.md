@@ -1,5 +1,7 @@
 # Alpha Kanban Multi Workspace 구현 계획 초안
 
+> 2026-10-18 적용 상태: 서버형 multi-workspace의 설계 이력이다. 프로젝트 구분·정렬·문서 탐색의 사용자 요구는 유지하지만 서버 allowlist/API·Codex 세션·채팅·실행 로그 UI는 현재 범위가 아니다. 폴더 권한·ID·설정은 AKL-01~06의 브라우저 계약을 따른다. [현재 작업 구분](21_alpha_kanban_browser_transition_inventory.md)
+
 작성일: 2026-06-22
 수정일: 2026-06-23
 
@@ -345,6 +347,10 @@ Manual smoke:
 - Codex run 중 drawer를 닫았다 다시 열어도 run status indicator가 유지되는지 확인한다.
 
 ## Open Questions
+
+- 없음. 이 서버형 계획의 적용은 종료했다. 아래 질문은 당시 이력으로 보존하며 현재 사용자에게 다시 답을 요구하지 않는다. 프로젝트 탐색·권한·재연결의 현재 계약은 docs/13_alpha_kanban_browser_local_plan.md와 AKL-01/03을 따른다.
+
+### 전환 전 질문 이력
 
 - project candidate scan은 allowlist root 아래 1-depth로 시작할지, configured depth를 둘지 결정한다.
 - target workspace별 doc roots override를 UI에서 편집할지, 이번 phase에서는 `defaultDocRoots`만 사용할지 결정한다.

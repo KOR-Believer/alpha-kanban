@@ -1,5 +1,7 @@
 # Alpha Kanban 티켓
 
+> 2026-10-18 적용 상태: 초기 MVP의 완료 이력이다. DONE과 검증 기록은 당시 결과를 뜻하며 현재 제품에 서버·Codex runner가 남아 있다는 뜻이 아니다. 해당 실행 코드는 AKR-01에서 제거했다. 파서·보드·안전한 문서 편집은 현재 브라우저 구현으로 이어진다. [현재 작업 구분](21_alpha_kanban_browser_transition_inventory.md)
+
 ## Status
 
 - 작성일: 2026-06-22
