@@ -3,89 +3,14 @@
 ## Status
 
 - 작성일: 2026-06-22
-- 기준 문서: `examples/sample_plan.md`
-- 목적: Alpha Kanban parser/API/UI smoke fixture
-- 범위: `examples`
+- 기준 문서: 없음
+- 목적: 작은 예제로 Alpha Kanban의 티켓 표시와 Markdown 편집을 확인한다.
+- 범위: `alpha-kanban/examples`
 - 현재 진행률: `0 / 2 tickets`
 
-## 티켓 상태
-
-- `TODO`: 아직 시작하지 않음
-- `READY`: 정책/선행 조건이 충분해 바로 구현 가능
-- `IN_PROGRESS`: 현재 구현 또는 검증 중
-- `BLOCKED`: 정책, schema, infra, upstream 확인 필요
-- `DONE`: 구현 및 검증 완료
-- `DEFERRED`: 의도적으로 후순위 보류
-
-## Progress 기준
-
-- `0%`: 시작 전
-- `25%`: 구현 범위 확정
-- `50%`: 핵심 구현 중
-- `75%`: 검증 중
-- `100%`: 구현 및 검증 완료
-
-## 운영 원칙
-
-- `사용자 지시`와 `진행 메모`는 append-only log로 다룬다.
-- 상태 변경 시 Progress Board와 개별 ticket body를 함께 갱신한다.
-
-## Ticket Template
-
-```md
-### SMP-00. 제목
-
-Status: TODO
-Progress: 0%
-Repository:
-
-- `examples`
-
-Priority: P1
-Type: Example
-Depends on:
+## 확인·결정이 필요한 사항
 
 - 없음
-
-목표:
-
-- 목표를 적는다.
-
-현재 문제:
-
-- 현재 문제를 적는다.
-
-구현 범위:
-
-- 구현 범위를 적는다.
-
-제외 범위:
-
-- 제외 범위를 적는다.
-
-완료 기준:
-
-- [ ] 완료 기준을 적는다.
-
-검증:
-
-- [ ] 검증 기준을 적는다.
-
-사용자 지시:
-
-- 2026-06-22: 사용자 지시 예시.
-
-진행 메모:
-
-- 2026-06-22: 진행 메모 예시.
-```
-
-## Progress Board
-
-| Ticket | Status | Progress | Repository | Depends on |
-| --- | --- | ---: | --- | --- |
-| SMP-01 | READY | 25% | `examples` | - |
-| SMP-02 | TODO | 0% | `examples` | SMP-01 |
 
 ## Ticket List
 
@@ -95,7 +20,7 @@ Status: READY
 Progress: 25%
 Repository:
 
-- `examples`
+- `alpha-kanban`
 
 Priority: P1
 Type: Example
@@ -105,28 +30,31 @@ Depends on:
 
 목표:
 
-- Alpha Kanban이 작은 ticket 문서를 목록과 보드로 렌더링하는지 확인한다.
+- Alpha Kanban이 작은 티켓 문서를 사이드바와 보드에 표시하는지 확인한다.
 
 현재 문제:
 
-- 실제 프로젝트 문서는 커서 테스트에 너무 크거나 변경 중일 수 있다.
+- 실제 작업 문서와 분리된 작은 예제로 문서 탐색과 티켓 표시를 확인할 필요가 있다.
 
 구현 범위:
 
-- file browser에서 `sample_tickets.md`를 선택한다.
-- READY 컬럼에 이 ticket이 보이는지 확인한다.
+- 브라우저에서 이 샘플을 담은 프로젝트 폴더를 연결한다.
+- 사이드바에서 `sample_tickets.md`를 선택한다.
+- 준비됨(`READY`) 열에 `SMP-01`, 할 일(`TODO`) 열에 `SMP-02`가 표시되는지 확인한다.
 
 제외 범위:
 
-- Codex runner 실제 실행
+- 티켓 상태 변경과 문서 저장은 `SMP-02`에서 확인한다.
 
 완료 기준:
 
-- [ ] READY 컬럼에 `SMP-01` 카드가 표시된다.
+- [ ] 문서의 두 티켓이 각각 본문에 기록된 상태의 열에 표시된다.
+- [ ] `SMP-01` 진행률은 25%, `SMP-02` 진행률은 0%로 표시된다.
 
 검증:
 
-- [ ] Playwright smoke
+- [ ] 보드 카드의 ID, 제목, 상태, 진행률을 Markdown 원문과 대조한다.
+- [ ] 각 카드를 열어 목표와 완료 기준이 해당 티켓 내용과 일치하는지 확인한다.
 
 사용자 지시:
 
@@ -142,7 +70,7 @@ Status: TODO
 Progress: 0%
 Repository:
 
-- `examples`
+- `alpha-kanban`
 
 Priority: P2
 Type: Example
@@ -152,31 +80,34 @@ Depends on:
 
 목표:
 
-- detail drawer에서 status/progress 변경과 사용자 지시 append를 재현한다.
+- 티켓 상세에서 상태·진행률을 바꾸고 사용자 지시를 추가했을 때 Markdown에 저장되는지 확인한다.
 
 현재 문제:
 
-- 실제 프로젝트 티켓을 수정하지 않고 편집 flow를 확인할 fixture가 필요하다.
+- 실제 작업 기록을 수정하지 않고 상태 변경과 지시 추가를 확인할 샘플이 필요하다.
 
 구현 범위:
 
-- `SMP-02` 상세를 연다.
-- status를 `IN_PROGRESS`, progress를 `50%`로 바꾼다.
-- 사용자 지시를 append한다.
+- 샘플 복사본을 담은 폴더를 연결하고 `SMP-02` 상세를 연다.
+- 상태를 진행 중(`IN_PROGRESS`), 진행률을 50%로 바꾸고 변경 사유와 함께 저장한다.
+- 하단 입력창에서 수동 지시를 추가한다.
+- 변경한 티켓과 나머지 티켓의 Markdown 원문을 확인한다.
 
 제외 범위:
 
-- 장기 운영 문서 역할
+- 실제 작업 문서 수정
 
 완료 기준:
 
-- [ ] Markdown 원문에 status/progress 변경이 반영된다.
-- [ ] `사용자 지시`에 새 항목이 추가된다.
+- [ ] Markdown 원문의 `Status`와 `Progress`에 변경한 값이 반영된다.
+- [ ] 상태 변경 사유와 `[수동지시]` 항목이 `사용자 지시`에 날짜와 함께 추가된다.
+- [ ] 기존 체크리스트·기록과 다른 티켓의 본문은 보존된다.
 
 검증:
 
-- [ ] API integration smoke
-- [ ] UI smoke
+- [ ] 저장한 파일을 텍스트 편집기로 열어 상태·진행률·사용자 지시를 확인한다.
+- [ ] 문서를 다시 열었을 때 보드와 상세에 저장한 값이 표시되는지 확인한다.
+- [ ] 보드에서 저장한 내용이 `진행 메모`에 추가되지 않았는지 확인한다.
 
 사용자 지시:
 

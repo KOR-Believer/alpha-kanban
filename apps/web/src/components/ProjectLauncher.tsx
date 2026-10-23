@@ -4,6 +4,7 @@ import type { WorkspaceSummary } from "@alpha-kanban/shared";
 import { FolderKanban, LayoutGrid, Search } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { LanguageSelector } from "./LanguageSelector";
+import { ThemeToggle } from "./ThemeToggle";
 import { PwaMenu } from "../pwa/PwaMenu";
 import { WorkspaceButton } from "./WorkspaceNavigation";
 import { Button, buttonVariants } from "./ui/button";
@@ -17,6 +18,7 @@ export function StartPageNavigation({ help }: { help?: ReactNode }) {
     <Link to="/" className="ak-public-brand ak-focus-ring"><FolderKanban aria-hidden="true" />{t("Alpha Kanban")}</Link>
     <nav aria-label={t("Start navigation")}>
       <LanguageSelector />
+      <ThemeToggle />
       <PwaMenu />
       {help}
       <Link to="/all" className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" />{t("All tickets")}</Link>

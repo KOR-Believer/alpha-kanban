@@ -82,6 +82,26 @@ describe("application navigation history", () => {
     await settle();
   }
 
+  it("links the intro header to the repository in a new tab in both languages", async () => {
+    await render(["/intro"]);
+    const link = container.querySelector<HTMLAnchorElement>('.ak-intro-header nav a[href="https://github.com/KOR-Believer/alpha-kanban"]');
+    expect(link).not.toBeNull();
+    expect(link!.previousElementSibling?.getAttribute("href")).toBe("#skill");
+    expect(link!.textContent).toBe("GitHub");
+    expect(link!.target).toBe("_blank");
+    expect(link!.relList.contains("noopener")).toBe(true);
+    expect(link!.relList.contains("noreferrer")).toBe(true);
+    expect(link!.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(link!.getAttribute("aria-label")).toBe("GitHub에서 Alpha Kanban 저장소 열기 (새 탭)");
+
+    await act(async () => setLanguage("en"));
+    expect(link!.getAttribute("aria-label")).toBe("Open Alpha Kanban on GitHub (opens in a new tab)");
+    expect(link!.textContent).toBe("GitHub");
+    expect(link!.isConnected).toBe(true);
+    expect(router.state.location.pathname).toBe("/intro");
+    expect(router.history.length).toBe(1);
+  });
+
   it.each([false, true])("keeps /intro -> / -> project in history with auto-open=%s", async (autoOpen) => {
     localStorage.setItem("alpha-kanban.autoOpenLastWorkspace", String(autoOpen));
     await render(["/intro"]);

@@ -5,6 +5,7 @@ import { BrowserStartPage, BrowserProjectSwitcher, BrowserFilesMenu, BrowserReco
 import { documentRouteId } from "./appRoute";
 import { t, locale, useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { PwaMenu } from "./pwa/PwaMenu";
 import { ProjectGuide } from "@/components/ProjectGuide";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
@@ -706,6 +707,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
             <TourHelp tour={boardTour} />
             <LanguageSelector />
+            <ThemeToggle />
             <PwaMenu />
             <Button data-tour="all-tickets" onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
               <LayoutGrid aria-hidden="true" />
@@ -955,7 +957,7 @@ function SidebarResizeHandle({
       className={[
         "ak-focus-ring group relative h-full w-full cursor-col-resize border-x border-[var(--ak-hairline)] transition-colors max-[860px]:hidden",
         isDragging
-          ? "bg-neutral-100"
+          ? "bg-muted"
           : "bg-[var(--ak-surface)] hover:bg-[var(--ak-canvas-soft)]",
       ].join(" ")}
       onDoubleClick={onReset}
@@ -1196,7 +1198,7 @@ function DocumentTypeButton({
       className={[
         "ak-focus-ring inline-flex h-7 min-w-0 items-center gap-1 rounded-[var(--ak-radius-sm)] border px-1.5 text-[11px] font-medium transition-colors",
         isSelected
-          ? "border-[var(--ak-primary)] bg-blue-50 text-[var(--ak-primary)]"
+          ? "border-[var(--ak-primary)] bg-[var(--ak-primary-soft)] text-foreground"
           : "border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-muted)] hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]",
       ].join(" ")}
       onClick={onSelect}
@@ -1215,7 +1217,7 @@ function SidebarState({ label, tone = "muted" }: { label: string; tone?: "error"
       className={[
         "m-2 rounded-[var(--ak-radius-md)] border px-3 py-2 text-sm",
         tone === "error"
-          ? "border-red-200 bg-red-50 text-red-700"
+          ? "border-destructive/30 bg-[var(--ak-danger-soft)] text-foreground"
           : "border-[var(--ak-hairline)] bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-muted)]",
       ].join(" ")}
     >
@@ -2053,11 +2055,11 @@ function ErrorBanner({
   }
 
   return (
-    <div className="mb-5 rounded-[var(--ak-radius-md)] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+    <div className="mb-5 rounded-[var(--ak-radius-md)] border border-destructive/30 bg-[var(--ak-danger-soft)] px-3 py-2 text-sm text-foreground">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-medium">{isStale ? t("Markdown changed on disk") : t("Request failed")}</p>
-          <p className="mt-1 text-red-700">{errorSummary(error)}</p>
+          <p className="font-medium text-destructive">{isStale ? t("Markdown changed on disk") : t("Request failed")}</p>
+          <p className="mt-1">{errorSummary(error)}</p>
           <details className="mt-1 text-xs"><summary>{t("Technical details")}</summary><p className="break-words">{errorDetails(error)}</p></details>
         </div>
         {isStale ? (
@@ -2097,17 +2099,17 @@ function ExternalFileChangeBanner({
   }
 
   return (
-    <div className="mb-5 rounded-[var(--ak-radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+    <div className="mb-5 rounded-[var(--ak-radius-md)] border border-[color-mix(in_oklch,var(--ak-warning),transparent_60%)] bg-[var(--ak-warning-soft)] px-3 py-2 text-sm text-foreground">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">
             {event.eventType === "removed" ? t("Markdown file was removed") : t("File changed externally")}
           </p>
-          <p className="mt-1 break-words text-xs text-amber-800">
+          <p className="mt-1 break-words text-xs text-muted-foreground">
             {event.workspaceRelativePath} · {formatDateTime(event.observedAt)}
           </p>
           {hasLocalDraft ? (
-            <p className="mt-1 text-xs text-amber-800">
+            <p className="mt-1 text-xs">
               {t("Reload before saving so the draft does not use stale Markdown.")}
             </p>
           ) : null}

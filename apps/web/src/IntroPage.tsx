@@ -3,11 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, FolderKanban } from "lucide-react";
 import { useTranslation } from "./i18n";
 import { LanguageSelector } from "./components/LanguageSelector";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { PwaMenu } from "./pwa/PwaMenu";
 import { SkillInstallPanel } from "./components/SkillGuide";
 import { buttonVariants } from "./components/ui/button";
 import { IntroDemoBoard } from "./components/IntroDemoBoard";
 import { IntroConversation } from "./components/intro/IntroConversation";
+import { GitHubIcon } from "./components/GitHubIcon";
 
 export function IntroPage() {
   const { t } = useTranslation();
@@ -41,7 +43,14 @@ export function IntroPage() {
         <a href="#kanban" className="ak-intro-section-link ak-focus-ring">{t("Board")}</a>
         <a href="#workflow" className="ak-intro-section-link ak-focus-ring">{t("Workflow")}</a>
         <a href="#skill" className="ak-intro-section-link ak-focus-ring">{t("Skill guide")}</a>
-        <LanguageSelector /><PwaMenu />
+        <a
+          href="https://github.com/KOR-Believer/alpha-kanban"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t("Open Alpha Kanban on GitHub (opens in a new tab)")}
+          className={buttonVariants({ variant: "ghost", size: "sm" })}
+        ><GitHubIcon />{t("GitHub")}</a>
+        <LanguageSelector /><ThemeToggle /><PwaMenu />
       </nav>
     </div></header>
     <main>

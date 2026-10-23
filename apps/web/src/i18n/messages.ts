@@ -1,5 +1,7 @@
 // English source strings are translation keys. Keep complete sentences together.
 export const korean: Record<string, string> = {
+  "Switch to light mode": "라이트 모드로 전환",
+  "Switch to dark mode": "다크 모드로 전환",
   "Use $skill-installer to install implementation-ledger from this GitHub path:\n\n{{url}}\n\nInstall the entire folder, including references, assets, scripts, and agents, not only SKILL.md. Find the personal skill location recognized by my Codex environment. If it is already installed, compare the changes first. Back up the entire installation, preserve my customizations, and ask before overwriting. Report the location and whether Codex recognizes it. Do not change project documents or code.": "$skill-installer로 아래 GitHub 경로의 implementation-ledger를 설치해 줘.\n\n{{url}}\n\nSKILL.md만이 아니라 references, assets, scripts, agents를 포함한 폴더 전체를 설치해. 내 Codex 환경이 인식하는 개인 스킬 경로를 찾아 줘. 이미 설치되어 있다면 먼저 차이를 비교해. 설치본 전체를 백업하고 개인 수정 사항을 보존한 뒤, 덮어쓰기 전에 물어봐. 설치 위치와 Codex 인식 여부를 보고해 줘. 프로젝트 문서나 코드는 수정하지 마.",
   "Find the location and source of my installed implementation-ledger and compare it with this official source:\n\n{{url}}\n\nCompare the entire folder, including SKILL.md, references, assets, scripts, and agents. Explain the changes and any conflicts with personal customizations first. Back up the entire installation, preserve my edits, and ask before overwriting. Ask me to resolve conflicts that need a choice. Do not invent versions or release tags. Do not change project documents or code. Report the installation location, applied source, main changes, and whether Codex recognizes it.": "내 implementation-ledger 설치 위치와 출처를 찾고 아래 공식 원본과 비교해 줘.\n\n{{url}}\n\nSKILL.md, references, assets, scripts, agents를 포함한 폴더 전체를 비교해. 변경 내용과 개인 수정 사항의 충돌부터 설명해 줘. 설치본 전체를 백업하고 내 수정을 보존한 뒤, 덮어쓰기 전에 물어봐. 선택이 필요한 충돌은 나에게 확인해. 버전이나 릴리스 태그를 임의로 만들어 내지 마. 프로젝트 문서나 코드는 수정하지 마. 설치 위치, 적용한 원본, 주요 변경점과 Codex 인식 여부를 보고해 줘.",
   "Edit and delete book records": "책 기록 수정·삭제하기",
@@ -74,6 +76,8 @@ export const korean: Record<string, string> = {
   "From an agreed plan to results you can review.": "합의한 계획에서, 직접 검토할 수 있는 결과까지.",
   "Update an existing skill": "기존 스킬 업데이트",
   "GitHub source": "GitHub 원본",
+  "GitHub": "GitHub",
+  "Open Alpha Kanban on GitHub (opens in a new tab)": "GitHub에서 Alpha Kanban 저장소 열기 (새 탭)",
   "Example view": "예시 보기 방식",
   "View by status": "상태별 보기",
   "Read work record for {{ticket}}": "{{ticket}} 작업 기록 읽기",

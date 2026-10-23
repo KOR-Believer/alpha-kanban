@@ -3,6 +3,7 @@ import { BrowserFilesMenu } from "./browser/BrowserConnections";
 import { documentIdentity, documentRouteId } from "./appRoute";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { PwaMenu } from "./pwa/PwaMenu";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { buildAppRoute, type TicketDetailMode } from "./appRoute";
@@ -207,6 +208,7 @@ export function AllProjectsBoard() {
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{t("{{count}} tickets", { count: visible.length })}</span>
           <LanguageSelector />
+          <ThemeToggle />
           <PwaMenu />
           <TourHelp tour={tour} />
           <BrowserFilesMenu />
