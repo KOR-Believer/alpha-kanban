@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { promisify } from "node:util";
 import { chromium } from "playwright";
+import { unzipSync } from "fflate";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "output/playwright/pwa-" + Date.now());
@@ -12,18 +14,23 @@ const exec = promisify(execFile);
 await mkdir(output, { recursive: true });
 await exec("node", ["scripts/package-browser-assets.mjs"], { cwd: root });
 const versions = {};
+const authoredRelease = JSON.parse(await readFile(resolve(root, "apps/web/releases.json"), "utf8")).at(-1);
+const noteA = { id: "smoke-a", sequence: 1, date: "2026-10-25", notify: true, notes: { ko: ["이전 테스트 릴리즈"], en: ["Previous test release"] } };
+const noteB = { ...authoredRelease, id: "smoke-b", sequence: 2, notes: { ko: ["적용 대상 B의 변경 내용", ...authoredRelease.notes.ko], en: ["Changes in prepared release B", ...authoredRelease.notes.en] } };
 for (const [name, mode] of [["a", "app"], ["b", "app"], ["recovery", "recovery"], ["retired", "retired"]]) {
   const dir = resolve(process.env.PWA_SMOKE_BUILD_DIR ?? output, name);
   if (!process.env.PWA_SMOKE_BUILD_DIR) {
+    const notesFile = resolve(output, `notes-${name}.json`);
+    await writeFile(notesFile, JSON.stringify(name === "a" ? [noteA] : [noteA, noteB]));
     const build = await exec("pnpm", ["--filter", "@alpha-kanban/web", "exec", "vite", "build", "--outDir", dir], {
-      cwd: root, env: { ...process.env, AK_PWA_MODE: mode, AK_RELEASE_REVISION: `smoke-${name}` }, maxBuffer: 5 * 1024 * 1024,
+      cwd: root, env: { ...process.env, AK_PWA_MODE: mode, AK_RELEASE_REVISION: `smoke-${name}`, AK_RELEASE_NOTES_FILE: notesFile }, maxBuffer: 5 * 1024 * 1024,
     });
     await writeFile(resolve(output, `build-${name}.log`), build.stdout + build.stderr);
   }
   versions[name] = { dir, release: JSON.parse(await readFile(resolve(dir, "release.json"), "utf8")) };
   if (mode === "app") {
     const { assets } = JSON.parse(await readFile(resolve(dir, "offline-assets.json"), "utf8"));
-    assert.equal(assets.filter((asset) => asset.url.endsWith(".zip")).length, 1);
+    assert.deepEqual(assets.filter((asset) => asset.url.endsWith(".zip")).map((asset) => asset.url), [`downloads/implementation-ledger-${versions[name].release.skillBundle}.zip`]);
     assert(assets.every((asset) => asset.integrity.startsWith("sha256-")));
     assert(!assets.some((asset) => /^(sw\.js|release\.json|repair\.)/.test(asset.url)));
   }
@@ -118,6 +125,45 @@ async function openMenu(page) {
 }
 async function closeMenu(page) { await page.keyboard.press("Escape"); }
 async function appVersion(page) { await openMenu(page); return page.getByText(/빌드 [a-f0-9]{16}/).innerText(); }
+async function downloadSkill(page, version, label) {
+  const archive = `implementation-ledger-${version.release.skillBundle}.zip`;
+  await page.getByRole("button", { name: "설치 요청문 확인·복사", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("summary").filter({ hasText: "직접 설치 안내" }).click();
+  const link = dialog.getByRole("link", { name: "Codex 스킬 다운로드", exact: true });
+  assert.equal(await link.getAttribute("href"), `/downloads/${archive}`);
+  const fetched = page.waitForResponse((response) => response.url() === `${origin}/downloads/${archive}`);
+  const downloaded = page.waitForEvent("download");
+  await link.click();
+  const response = await fetched;
+  assert.equal(response.status(), 200);
+  assert.equal(response.fromServiceWorker(), true, "Offline ZIP must be served by the running worker");
+  const download = await downloaded;
+  assert.equal(await download.failure(), null);
+  assert(download.url().startsWith(`blob:${origin}/`));
+  assert.equal(download.suggestedFilename(), archive);
+  const target = resolve(output, `skill-${label}.zip`);
+  await download.saveAs(target);
+  const bytes = await readFile(target);
+  const expected = await readFile(resolve(version.dir, "downloads", archive));
+  const digest = (content) => createHash("sha256").update(content).digest("hex");
+  assert.equal(digest(bytes), digest(expected), "Downloaded ZIP must match the running build");
+  const files = unzipSync(bytes);
+  const payload = JSON.parse(await readFile(resolve(version.dir, "downloads", `implementation-ledger-${version.release.skillBundle}.json`), "utf8"));
+  assert.deepEqual(Object.keys(files).sort(), ["INSTALL.txt", ...payload.files.map((file) => `implementation-ledger/${file.path}`)].sort());
+  for (const file of payload.files) assert.equal(digest(files[`implementation-ledger/${file.path}`]), file.sha256, file.path);
+  assert(Buffer.from(files["INSTALL.txt"]).toString("utf8").includes(`Bundle version: ${version.release.skillBundle}`));
+  await page.keyboard.press("Escape");
+}
+async function assertThemeColor(page, surface, dark) {
+  await page.waitForFunction(({ surface, dark }) => {
+    const root = document.documentElement;
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+    const color = getComputedStyle(root).getPropertyValue(surface).trim();
+    return root.classList.contains("dark") === dark && metas.length === 1 &&
+      !metas[0].hasAttribute("media") && metas[0].content === color && CSS.supports("color", color);
+  }, { surface, dark });
+}
 async function snapshot(page) {
   return page.evaluate(async () => {
     const db = await new Promise((done, reject) => { const request = indexedDB.open("alpha-kanban.browser.v1", 1); request.onsuccess = () => done(request.result); request.onerror = () => reject(request.error); });
@@ -125,7 +171,7 @@ async function snapshot(page) {
     const rows = await new Promise((done) => { const request = tx.objectStore("records").getAll(); request.onsuccess = () => done(request.result); });
     const keys = await new Promise((done) => { const request = db.transaction("records").objectStore("records").getAllKeys(); request.onsuccess = () => done(request.result); });
     db.close();
-    return { records: keys.map((key, index) => [key, JSON.parse(JSON.stringify(rows[index], (name, value) => name === "lastOpenedAt" ? undefined : value instanceof FileSystemHandle ? { kind: value.kind, name: value.name } : value))]), settings: { ...localStorage } };
+    return { records: keys.map((key, index) => [key, JSON.parse(JSON.stringify(rows[index], (name, value) => name === "lastOpenedAt" ? undefined : value instanceof FileSystemHandle ? { kind: value.kind, name: value.name } : value))]), settings: Object.fromEntries(Object.entries(localStorage).filter(([key]) => !key.startsWith("alpha-kanban.releases.v1."))) };
   });
 }
 async function original(page) { return page.evaluate(async () => {
@@ -161,6 +207,19 @@ try {
     if (installed) { await installCdp.send("PWA.uninstall", { manifestId: origin + "/" }); installed = false; }
   }
   await installCdp.detach();
+  if (installWindow) {
+    await assertThemeColor(installWindow, "--background", false);
+    await installWindow.getByRole("button", { name: "다크 모드로 전환" }).click();
+    await assertThemeColor(installWindow, "--background", true);
+    await assertThemeColor(page, "--background", true);
+    await installWindow.emulateMedia({ colorScheme: "light" });
+    await installWindow.reload();
+    await assertThemeColor(installWindow, "--background", true);
+    await installWindow.screenshot({ path: resolve(output, "installed-dark-content.png") });
+    await installWindow.getByRole("button", { name: "라이트 모드로 전환" }).click();
+    await assertThemeColor(page, "--background", false);
+    record("Installed PWA theme metadata follows explicit preference, reload and cross-window sync, not OS theme");
+  }
   await page.evaluate(() => {
     localStorage.setItem("alpha-kanban.sidebarWidth", "312");
     localStorage.setItem("alpha-kanban.documentFilters", JSON.stringify({ hidePlainMarkdown: true, hideCompletedSets: true }));
@@ -182,6 +241,50 @@ try {
   await page.getByRole("button", { name: "프로젝트 열기", exact: true }).click();
   await page.getByText("Offline smoke ticket", { exact: true }).waitFor();
   const projectUrl = page.url();
+  await page.getByRole("button", { name: "다크 모드로 전환" }).click();
+  await assertThemeColor(page, "--ak-surface", true);
+  if (installWindow) await assertThemeColor(installWindow, "--background", true);
+  await page.goto(origin + "/all");
+  await assertThemeColor(page, "--background", true);
+  await page.goto(projectUrl);
+  await assertThemeColor(page, "--ak-surface", true);
+  await page.getByRole("button", { name: "라이트 모드로 전환" }).click();
+  await assertThemeColor(page, "--ak-surface", false);
+  record("Project and All tickets routes use their own header surface without changing the saved theme");
+  await page.goto(origin + "/intro#updates");
+  const skillRelease = JSON.parse(await readFile(resolve(root, "scripts/skill-releases.json"), "utf8"))[0];
+  const oldFiles = [];
+  for (const file of skillRelease.files) oldFiles.push({ path: file.path, content: (await exec("git", ["show", `${skillRelease.source}:skills/implementation-ledger/${file.path}`], { cwd: root })).stdout });
+  await page.evaluate(async (files) => {
+    const root = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-skill", { create: true });
+    for (const file of files) {
+      const parts = file.path.split("/"); const name = parts.pop(); let dir = root;
+      for (const part of parts) dir = await dir.getDirectoryHandle(part, { create: true });
+      const writable = await (await dir.getFileHandle(name, { create: true })).createWritable(); await writable.write(file.content); await writable.close();
+    }
+    window.showDirectoryPicker = async () => root;
+  }, oldFiles);
+  await page.getByRole("button", { name: "설치된 스킬 등록·관리", exact: true }).click();
+  await page.getByRole("button", { name: "설치된 스킬 폴더 등록", exact: true }).click();
+  await page.getByRole("heading", { name: "이 설치본에 적용할 업데이트가 있습니다" }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "백업 후 스킬 업데이트" }).isDisabled(), true);
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "백업 후 스킬 업데이트" }).click();
+  await page.getByRole("heading", { name: "이 앱에 동봉된 스킬과 일치합니다" }).waitFor();
+  await page.screenshot({ path: resolve(output, "skill-update-verified.png") });
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "백업 내보내기" }).click();
+  await (await downloadEvent).saveAs(resolve(output, "skill-backup.json"));
+  await page.getByRole("button", { name: "백업 복원", exact: true }).click();
+  await page.getByRole("button", { name: "확인 후 복원", exact: true }).click();
+  await page.getByText("원본 스킬 파일을 복원하고 검증했습니다.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(async () => {
+    const root = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-skill");
+    return (await (await root.getFileHandle("SKILL.md")).getFile()).text();
+  }), oldFiles.find((file) => file.path === "SKILL.md").content);
+  await page.keyboard.press("Escape");
+  await page.goto(projectUrl);
+  record("Opt-in registration, confirmation, official skill update, backup export and explicit restore (OPFS)");
   await page.evaluate(async () => {
     localStorage.setItem("alpha-kanban.locale", "ko");
     localStorage.setItem("alpha-kanban.allTickets.filters", JSON.stringify({ projectIds: [], hideDone: false, search: "" }));
@@ -209,6 +312,18 @@ try {
   serving = versions.b;
   await openMenu(page); await page.getByRole("button", { name: "업데이트 확인", exact: true }).click();
   await until(async () => Boolean(await workerInfo(page, "waiting")), "waiting update");
+  const downloadPage = await context.newPage();
+  await downloadPage.goto(origin + "/intro");
+  assert.equal((await workerInfo(downloadPage)).buildId, versions.a.release.buildId);
+  await context.setOffline(true); networkUnavailable = true;
+  await downloadSkill(downloadPage, versions.a, "waiting-update-offline");
+  networkUnavailable = false; await context.setOffline(false);
+  await downloadPage.close();
+  record("Running app downloads its complete, hash-matching skill ZIP offline while another release waits");
+  await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
+  await page.getByRole("heading", { name: "업데이트 내역", exact: true }).waitFor();
+  await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor();
+  await page.screenshot({ path: resolve(output, "release-before-update.png") });
   await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
   await page.getByText(/다른 앱 창의 작성 중인 내용도/).waitFor();
   assert.equal(await second.getByRole("textbox", { name: "수동 지시", exact: true }).inputValue(), "잃으면 안 되는 초안");
@@ -257,11 +372,88 @@ try {
     record("Installed standalone window participates in the coordinated update");
   }
   await closeMenu(page); await closeMenu(second);
+  assert.equal(new URL(page.url()).pathname, new URL(projectUrl).pathname);
+  assert.equal(await page.getByRole("heading", { name: "업데이트 내역", exact: true }).count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.releases.v1.read.smoke-b")), "1");
+  // Simulate an unread automatic update, without changing any real user's release state.
+  await page.evaluate(() => localStorage.removeItem("alpha-kanban.releases.v1.read.smoke-b"));
+  await page.goto(origin + "/all");
+  assert.equal(await page.getByRole("heading", { name: "업데이트 내역", exact: true }).count(), 0);
+  const windowCdp = await context.newCDPSession(page);
+  const newWindow = context.waitForEvent("page");
+  await windowCdp.send("Target.createTarget", { url: origin + "/all", newWindow: true });
+  const selectorWindow = await newWindow;
+  await selectorWindow.waitForLoadState();
+  await Promise.all([page.goto(origin), selectorWindow.goto(origin)]);
+  const releaseHeading = (target) => target.getByRole("heading", { name: "업데이트 내역", exact: true });
+  await until(async () => await releaseHeading(page).count() + await releaseHeading(selectorWindow).count() === 1, "one automatic release modal across two selector windows");
+  const readerWindow = await releaseHeading(page).count() ? page : selectorWindow;
+  await readerWindow.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor();
+  // Give the other window repeated chances to claim the lock while the first reads.
+  await selectorWindow.bringToFront();
+  await selectorWindow.waitForTimeout(2500);
+  assert.equal(await releaseHeading(page).count() + await releaseHeading(selectorWindow).count(), 1);
+  await readerWindow.bringToFront();
+  await readerWindow.screenshot({ path: resolve(output, "release-after-update.png") });
+  await readerWindow.keyboard.press("Escape");
+  await until(async () => await releaseHeading(page).count() + await releaseHeading(selectorWindow).count() === 0, "read release stays closed in both selector windows");
+  await selectorWindow.close(); await windowCdp.detach();
+  record("Two separate project-selector windows show one automatic release modal and share its read state");
+  await page.reload(); await page.getByRole("heading", { name: "프로젝트", exact: true }).waitFor();
+  assert.equal(await page.getByRole("heading", { name: "업데이트 내역", exact: true }).count(), 0);
+  await openMenu(page); await page.getByRole("button", { name: "업데이트 내역", exact: true }).click();
+  await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor();
+  await page.keyboard.press("Escape");
+  for (const locale of ["ko", "en"]) {
+    await page.getByRole("combobox").first().click();
+    await page.getByRole("option", { name: locale === "ko" ? "한국어" : "English", exact: true }).click();
+    for (const dark of [false, true]) {
+      if (await page.evaluate(() => document.documentElement.classList.contains("dark")) !== dark) {
+        await page.getByRole("button", { name: locale === "ko" ? dark ? "다크 모드로 전환" : "라이트 모드로 전환" : dark ? "Switch to dark mode" : "Switch to light mode", exact: true }).click();
+      }
+      for (const width of [1360, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        const trigger = page.getByRole("button", { name: locale === "ko" ? "앱 설치 및 업데이트" : "App installation and updates", exact: true });
+        await trigger.click();
+        await page.getByRole("button", { name: locale === "ko" ? "업데이트 내역" : "Update history", exact: true }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.getByRole("heading", { name: locale === "ko" ? "업데이트 내역" : "Update history", exact: true }).waitFor();
+        const box = await dialog.boundingBox();
+        assert(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= width + 1 && box.y + box.height <= 901);
+        assert.equal(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), true);
+        assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true);
+        await page.screenshot({ path: resolve(output, `release-${locale}-${dark ? "dark" : "light"}-${width}.png`) });
+        await page.keyboard.press("Escape");
+        assert.equal(await trigger.evaluate((el) => el === document.activeElement), true);
+      }
+    }
+  }
+  if (authoredRelease.skill) {
+    await page.getByRole("button", { name: "App installation and updates", exact: true }).click();
+    await page.getByRole("button", { name: "Update history", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Skill updates", exact: true }).click();
+    await page.getByRole("dialog").getByRole("heading", { name: "Skill updates", exact: true }).waitFor();
+    assert.equal(await page.getByRole("dialog").count(), 1);
+    await page.getByRole("dialog").locator('[aria-busy="false"]').waitFor();
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").getByRole("heading", { name: "Update history", exact: true }).waitFor();
+    assert.equal(await page.getByRole("dialog").count(), 1);
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("dark")), true);
+    await page.keyboard.press("Escape");
+    record("Release notes open skill management and return without stacked dialogs, losing language or theme");
+  }
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await page.getByRole("combobox").first().click();
+  await page.getByRole("option", { name: "한국어", exact: true }).click();
+  if (before.settings["alpha-kanban.theme"] === "light") await page.getByRole("button", { name: "라이트 모드로 전환", exact: true }).click();
+  record("Release history fits desktop and narrow viewports in Korean/English and light/dark with focus restored");
+  await page.goto(projectUrl);
+  record("Prepared release notes before apply, route preservation, selector-only once-per-release modal and manual replay");
   assert.deepEqual(await snapshot(page), before);
   assert.equal(await original(page), savedBeforeUpdate);
   record("Two-window update, connection/document IDs, settings and recovery preservation");
 
-  await context.close(); context = await launch(true); page = context.pages()[0];
+  await context.close(); networkUnavailable = true; context = await launch(true); page = context.pages()[0];
   if (installed) {
     const cdp = await context.newCDPSession(page);
     const opened = context.waitForEvent("page");
@@ -269,10 +461,17 @@ try {
     const window = await opened;
     await window.getByRole("heading", { name: "Alpha Kanban", exact: true }).waitFor();
     assert.equal(await window.evaluate(() => matchMedia("(display-mode: standalone)").matches), true);
+    await downloadSkill(window, versions.b, "standalone-cold-offline");
+    record("Installed PWA downloads the app-pinned skill ZIP after a fully offline Chrome restart");
     await window.close(); await cdp.detach();
     record("Installed app cold-launches offline after the Chrome process was closed");
   }
   await page.goto(origin + "/intro"); await page.getByRole("heading", { name: "Alpha Kanban", exact: true }).waitFor();
+  await downloadSkill(page, versions.b, "updated-cold-offline");
+  record("Updated app downloads the complete skill ZIP offline with matching archive and per-file hashes");
+  await openMenu(page); await page.getByRole("button", { name: "업데이트 내역", exact: true }).click();
+  await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor(); await page.keyboard.press("Escape");
+  record("Release history remains readable on an offline cold launch");
   await page.goto(origin + "/all"); await page.getByText("Offline smoke ticket", { exact: true }).waitFor();
   await page.goto(projectUrl); await page.getByText("Offline smoke ticket", { exact: true }).click();
   await page.getByRole("textbox", { name: "수동 지시", exact: true }).fill("오프라인 지시 저장");
@@ -282,7 +481,7 @@ try {
   await page.keyboard.press("Escape");
   await openMenu(page); await page.screenshot({ path: resolve(output, "offline-menu.png") }); await closeMenu(page);
   record("Chrome cold restart offline, previously unvisited routes and verified local write (OPFS)");
-  await context.setOffline(false);
+  networkUnavailable = false; await context.setOffline(false);
   serving = versions.a; badAsset = true;
   await openMenu(page); await page.getByRole("button", { name: "업데이트 확인", exact: true }).click();
   await page.getByText(/새 앱 파일을 준비하지 못했습니다/).waitFor();
@@ -303,6 +502,7 @@ try {
   await openMenu(page); await page.getByText("최신 버전입니다", { exact: true }).waitFor(); await closeMenu(page);
   assert.deepEqual(await snapshot(page), before);
   assert.equal(await original(page), afterWrite);
+  assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.releases.v1.read.smoke-b")), "1");
   record("Standalone repair restores missing app assets, not user data");
 
   brokenWorker = true;

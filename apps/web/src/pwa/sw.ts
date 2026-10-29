@@ -96,6 +96,9 @@ self.addEventListener("message", (event) => {
   const reply = (value: unknown) => event.ports[0]?.postMessage(value);
   if (event.data.type === "AK_INFO") event.waitUntil(ready().then((isReady) => reply({ protocol: PWA_PROTOCOL, buildId, ready: isReady, mode: "app", release: __APP_RELEASE__ })));
   if (event.data.type === "AK_CLIENTS") event.waitUntil(windows().then((clients) => reply({ count: clients.length })));
-  if (event.data.type === "AK_APPLY") event.waitUntil(apply().then(reply));
+  if (event.data.type === "AK_APPLY") {
+    if (event.data.buildId && event.data.buildId !== buildId) reply({ ok: false, reason: "Update target changed." });
+    else event.waitUntil(apply().then(reply));
+  }
   if (event.data.type === "AK_COLLECT") event.waitUntil(collectOldAssets().then(() => reply({ ok: true })));
 });

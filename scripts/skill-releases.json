@@ -1,0 +1,76 @@
+[
+  {
+    "source": "0d48dc929ae5d45f20f258f7036b219450fa491f",
+    "files": [
+      {
+        "path": "SKILL.md",
+        "sha256": "792583da43a8a719d4d200bdb9d7aaf1bdfc51bc307c4f4af54378f9d1aa9069"
+      },
+      {
+        "path": "agents/openai.yaml",
+        "sha256": "d33d7319302d47e0188d8bd903ce32e38bf2c1fff317f2ed7f7eafdb271d7da9"
+      },
+      {
+        "path": "assets/inventory-template.md",
+        "sha256": "31374a3dcccf1254f44e3c4517942401aee6acf51730477e44f2fa5ff67fff17"
+      },
+      {
+        "path": "assets/plan-template.md",
+        "sha256": "12897ea4041f687a7970e595f2d3883988fbfed12b28adb6c3e8ca48d7c906bd"
+      },
+      {
+        "path": "assets/tickets-template.md",
+        "sha256": "41897c46e8567521914ee75763024bd153f0f2cd97378479026ed847a8840234"
+      },
+      {
+        "path": "references/ledger-format.md",
+        "sha256": "4d256eebe9c3e3f2064703a209dcb97a90d019bf787eac1f335ea05cd128de93"
+      },
+      {
+        "path": "scripts/check-ledger.mjs",
+        "sha256": "38d1c985db0361d37decd47633721f2788cebb694f80228ca7d3197529fa0c6f"
+      },
+      {
+        "path": "scripts/ticket-md.mjs",
+        "sha256": "5b11abb1d2f09251dc1ab7fc10d21a7cd5c8b746aa9ad13df84ef9f6d7596029"
+      }
+    ]
+  },
+  {
+    "source": "c00de3bbbb061b5e02c6b05bbdbff7e27e3d312a",
+    "files": [
+      {
+        "path": "agents/openai.yaml",
+        "sha256": "d33d7319302d47e0188d8bd903ce32e38bf2c1fff317f2ed7f7eafdb271d7da9"
+      },
+      {
+        "path": "assets/inventory-template.md",
+        "sha256": "31374a3dcccf1254f44e3c4517942401aee6acf51730477e44f2fa5ff67fff17"
+      },
+      {
+        "path": "assets/plan-template.md",
+        "sha256": "12897ea4041f687a7970e595f2d3883988fbfed12b28adb6c3e8ca48d7c906bd"
+      },
+      {
+        "path": "assets/tickets-template.md",
+        "sha256": "41897c46e8567521914ee75763024bd153f0f2cd97378479026ed847a8840234"
+      },
+      {
+        "path": "references/ledger-format.md",
+        "sha256": "4d256eebe9c3e3f2064703a209dcb97a90d019bf787eac1f335ea05cd128de93"
+      },
+      {
+        "path": "scripts/check-ledger.mjs",
+        "sha256": "38d1c985db0361d37decd47633721f2788cebb694f80228ca7d3197529fa0c6f"
+      },
+      {
+        "path": "scripts/ticket-md.mjs",
+        "sha256": "5b11abb1d2f09251dc1ab7fc10d21a7cd5c8b746aa9ad13df84ef9f6d7596029"
+      },
+      {
+        "path": "SKILL.md",
+        "sha256": "c6894014a86798724b684df9bc411563df37a9a382264f44ea1d0b9b2e1ae8dc"
+      }
+    ]
+  }
+]

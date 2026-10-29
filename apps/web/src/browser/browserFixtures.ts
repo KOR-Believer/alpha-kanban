@@ -107,14 +107,22 @@ export class FakeFile extends FakeEntry {
     file.arrayBuffer = () => { this.bodyReads++; return arrayBuffer(); };
     return file;
   }
-  async createWritable() {
+  async createWritable(options?: FileSystemCreateWritableOptions) {
     this.opens++; this.onOpen?.();
-    let next = "";
+    let next = new TextEncoder().encode(options?.keepExistingData ? this.content : "");
     return {
-      write: async (value: string) => { next = value; },
+      write: async (value: string) => {
+        const bytes = new TextEncoder().encode(value);
+        const updated = new Uint8Array(Math.max(bytes.length, next.length));
+        updated.set(next); updated.set(bytes); next = updated;
+      },
+      truncate: async (size: number) => {
+        const updated = new Uint8Array(size);
+        updated.set(next.subarray(0, size)); next = updated;
+      },
       close: async () => {
         if (this.failClose) throw new Error("Close failed");
-        this.writes++; this.content = next; this.mtime++; this.onClose?.();
+        this.writes++; this.content = new TextDecoder("utf-8", { ignoreBOM: true }).decode(next); this.mtime++; this.onClose?.();
       },
       abort: async () => undefined,
     };
@@ -140,10 +148,14 @@ export class FakeDirectory extends FakeEntry {
     if (!entry && options?.create) return this.directory(name).handle();
     throw new DOMException("Missing directory", "NotFoundError");
   }
-  async getFileHandle(name: string) {
+  async getFileHandle(name: string, options?: FileSystemGetFileOptions) {
     const entry = this.children.get(name);
     if (entry instanceof FakeFile) return entry.handle();
+    if (!entry && options?.create) return this.file(name, "").handle();
     throw new DOMException("Missing file", "NotFoundError");
+  }
+  async removeEntry(name: string) {
+    if (!this.children.delete(name)) throw new DOMException("Missing file", "NotFoundError");
   }
   async resolve(target: FileSystemHandle): Promise<string[] | null> {
     if (await this.isSameEntry(target)) return [];

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -12,10 +12,17 @@ describe("display theme", () => {
   let stop: () => void;
   let container: HTMLDivElement;
   let root: Root;
+  let styles: HTMLStyleElement;
+  const meta = () => document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')!;
+  const surface = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   beforeEach(async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     window.localStorage.clear();
+    const css = readFileSync(resolve(import.meta.dirname, "styles.css"), "utf8");
+    styles = document.createElement("style");
+    styles.textContent = `:root {${css.match(/:root\s*\{([^}]+)\}/)![1]}} .dark {${css.match(/\.dark\s*\{([^}]+)\}/)![1]}}`;
+    document.head.append(styles);
     await setLanguage("ko");
     stop = initializeTheme();
     container = document.createElement("div");
@@ -28,6 +35,8 @@ describe("display theme", () => {
     stop();
     container.remove();
     document.documentElement.classList.remove("dark");
+    styles.remove();
+    document.head.querySelectorAll('meta[name="theme-color"]').forEach((element) => element.remove());
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -35,16 +44,19 @@ describe("display theme", () => {
   it("defaults to light and restores only a valid saved theme before mounting", () => {
     expect(readTheme()).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(meta().content).toBe(surface("--background"));
     stop();
     window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
     stop = initializeTheme();
     expect(readTheme()).toBe("dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(meta().content).toBe(surface("--background"));
     stop();
     window.localStorage.setItem(THEME_STORAGE_KEY, "invalid");
     stop = initializeTheme();
     expect(readTheme()).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(meta().content).toBe(surface("--background"));
   });
 
   it("toggles both ways, localizes its action, and preserves mounted drafts and preferences", async () => {
@@ -59,6 +71,7 @@ describe("display theme", () => {
     await act(async () => buttons()[0]!.click());
     expect(readTheme()).toBe("dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(meta().content).toBe(surface("--background"));
     expect(buttons().every((button) => button.getAttribute("aria-label") === "라이트 모드로 전환")).toBe(true);
     await act(async () => { await setLanguage("en"); });
     expect(buttons()[0]!.getAttribute("aria-label")).toBe("Switch to light mode");
@@ -66,6 +79,7 @@ describe("display theme", () => {
     await act(async () => buttons()[1]!.click());
     expect(readTheme()).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(meta().content).toBe(surface("--background"));
     expect(buttons()[0]!.title).toBe("Switch to dark mode");
     expect(container.querySelector("textarea")).toBe(draft);
     expect(draft.value).toBe("unsaved direction");
@@ -81,29 +95,70 @@ describe("display theme", () => {
     expect(readTheme()).toBe("light");
     expect(() => setTheme("dark")).not.toThrow();
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(meta().content).toBe(surface("--background"));
     setTheme("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(meta().content).toBe(surface("--background"));
   });
 
   it("syncs across tabs without responding to unrelated preference changes", async () => {
-    await act(async () => root.render(<ThemeToggle />));
+    await act(async () => root.render(<ThemeToggle surface="--ak-surface" />));
     await act(async () => {
       window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
       window.dispatchEvent(new StorageEvent("storage", { key: THEME_STORAGE_KEY, newValue: "dark" }));
     });
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(meta().content).toBe(surface("--card"));
     expect(container.querySelector("button")!.title).toBe("라이트 모드로 전환");
     window.localStorage.removeItem(THEME_STORAGE_KEY);
     window.dispatchEvent(new StorageEvent("storage", { key: "unrelated" }));
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     await act(async () => window.dispatchEvent(new StorageEvent("storage", { key: THEME_STORAGE_KEY, newValue: null })));
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(meta().content).toBe(surface("--card"));
     await act(async () => setTheme("dark"));
     await act(async () => {
       window.localStorage.clear();
       window.dispatchEvent(new StorageEvent("storage", { key: null }));
     });
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(meta().content).toBe(surface("--card"));
+  });
+
+  it("matches each header surface through route changes without replacing the meta tag or drafts", async () => {
+    const original = meta();
+    await act(async () => setTheme("dark"));
+    const render = (project: boolean) => <StrictMode>
+      <ThemeToggle surface={project ? "--ak-surface" : "--background"} />
+      <textarea defaultValue="unsaved direction" />
+    </StrictMode>;
+    await act(async () => root.render(render(true)));
+    const draft = container.querySelector("textarea");
+    expect(meta().content).toBe(surface("--card"));
+    expect(meta().content).not.toBe(surface("--background"));
+    await act(async () => root.render(render(false)));
+    expect(meta().content).toBe(surface("--background"));
+    expect(meta()).toBe(original);
+    expect(container.querySelector("textarea")).toBe(draft);
+    expect(draft!.value).toBe("unsaved direction");
+    await act(async () => root.render(null));
+    expect(meta().content).toBe(surface("--background"));
+  });
+
+  it("reuses one unconditional meta tag with a light startup fallback", () => {
+    const html = readFileSync(resolve(import.meta.dirname, "../index.html"), "utf8");
+    expect(html.match(/<meta[^>]+name="theme-color"[^>]*>/g)).toEqual([
+      '<meta name="theme-color" content="#ffffff" />',
+    ]);
+    const original = meta();
+    original.media = "(prefers-color-scheme: light)";
+    setTheme("dark");
+    expect(meta()).toBe(original);
+    expect(meta().hasAttribute("media")).toBe(false);
+    expect(meta().content).toBe(surface("--background"));
+    setTheme("light");
+    setTheme("dark");
+    expect(document.head.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1);
   });
 
   it("removes its cross-tab listener when stopped", () => {

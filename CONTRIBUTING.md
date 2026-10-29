@@ -48,6 +48,18 @@ pnpm test:pwa
 
 PWA smoke tests cover installation, offline operation, updates, recovery, and retirement with test filesystem handles. They do not establish native OS folder permissions or deployed hosting behavior. See [PWA operations](docs/pwa_operations.md) for preservation requirements and recovery build commands.
 
+## Release and skill changes
+
+Add end-user changes in Korean and English to `apps/web/releases.json`. Records use a stable logical `id`, increasing `sequence`, ISO `date`, `notify`, and `notes.ko`/`notes.en`. Preserve published records. Rebuilding a release keeps its ID; a later public change gets a new record. Use `notify: false` for internal-only changes that should remain in manual history without an automatic notice. Local records are not evidence of deployment.
+
+Builds validate this history and embed the same current notes in the page, worker and `release.json`. Applying an update binds to the prepared worker, not a more recent network response. Test that distinction whenever the update protocol changes.
+
+Skill packaging creates the complete ZIP and a JSON payload with per-file hashes and a build-pinned payload SHA-256. `scripts/skill-releases.json` lists known official snapshots by full commit and every file hash. Add a snapshot only after comparing that commit's complete skill tree and confirming the intended upgrade; do not add personal installations to this allowlist. Content hashes are not semantic skill or document-format versions.
+
+The browser supports confirmed updates of existing known installations, not first installation. Keep custom files untouched, persist a full backup before writes, and exercise explicit recovery after partial failure. `pnpm install:skill` refuses existing destinations. Installer tests use disposable `CODEX_HOME` directories; never point tests at a personal installation.
+
+See [release and skill validation](docs/release_skill_validation.md) for completed automated checks and the native-folder/Codex gates that remain before merging or publishing this feature.
+
 For ticket document changes, inspect the affected ticket and validate the document:
 
 ```sh

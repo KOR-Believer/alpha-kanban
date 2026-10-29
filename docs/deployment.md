@@ -32,6 +32,14 @@ Serve the app over HTTPS with SPA routing for `/`, `/intro`, `/all`, and `/w/:id
 3. Verify installation and offline readiness in desktop Chrome. Test an update with multiple windows, drafts, and a dedicated local test folder; confirm connections, preferences, and recovery records survive.
 4. Check that the skill installation guide points to the intended official source. A web deployment does not update users' installed personal skills.
 
+## Release records
+
+- Before authorizing a release, review `apps/web/releases.json`: bilingual user-facing notes, stable logical ID, increasing sequence, actual release date and automatic-notice policy. Do not rewrite published records to describe a different release. The pending local record is not a deployment receipt.
+- `pnpm build` validates history and produces matching `release.json`, compiled notes and worker information. Publish the complete output together. Preserve no-store handling for `/release.json` and `/sw.js`; do not introduce a second-origin notes endpoint.
+- Ship the versioned skill JSON, payload digest and complete ZIP together. The browser compares against its own build's pinned payload, not mutable GitHub master. Distinguish changes to skill rules from changes to installation or update management; unknown compatibility must route to agent review, not direct replacement. Meaningful skill/format version policy remains a separate tracked contract.
+- Before enabling confirmed skill updates for users, review the native-folder, link/attribute and isolated-Codex results in [release and skill validation](release_skill_validation.md). Record any explicit owner-approved handoff of remaining checks without marking them passed. Passing OPFS tests alone is not release approval.
+- Verify the notes for the actual waiting build before applying it, then the one-time project-selector modal and manual history. Preserve folder connections, preferences, release-read markers, skill connections and recovery journals through update, repair and retirement. Browser updates never imply approval to replace a user's skill.
+
 Local previews establish application behavior, not production DNS, edge routing, headers, or OS installation behavior. Record deployment checks separately from local test results.
 
 ## Recovery and retirement

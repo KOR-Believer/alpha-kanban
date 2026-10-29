@@ -41,7 +41,7 @@ function useBrowserActions() {
   };
   // Call the picker synchronously from the click handler; permission prompts need user activation.
   const pick = (kind: Connection["kind"], onSelect?: SelectProject) => run(async () => {
-    const handle = await window.showDirectoryPicker({ mode: "read", id: "alpha-kanban-" + kind });
+    const handle = await window.showDirectoryPicker({ mode: "readwrite", id: "alpha-kanban-" + kind });
     const connection = await browserRepository.connect(handle, kind);
     if (kind === "project" && onSelect) {
       const { workspaces } = await browserRepository.workspaces();
@@ -70,7 +70,7 @@ export function BrowserStartPage({ autoOpen, onAutoOpen, onSelect, workspaces, e
     enabled: supported && !actions.busy,
     eligible: connections.isSuccess && !isLoading && !error && !actions.error && connections.data.length === 0 && workspaces.length === 0,
   });
-  return <div className="ak-start-page">
+  return <div className="ak-start-page" data-release-start={!isLoading && !error && connections.isSuccess ? "ready" : undefined}>
     <StartPageNavigation help={<TourHelp tour={tour} />} />
     <div className="ak-start-content">
     <StartPageHeader autoOpen={autoOpen} onAutoOpen={onAutoOpen}>
@@ -133,7 +133,7 @@ export function BrowserReconnect({ workspaceId }: { workspaceId: string }) {
   const connection = useQuery({ queryKey: ["browser-project-connection", workspaceId], queryFn: () => browserRepository.projectConnection(workspaceId), retry: false });
   return <div className="grid gap-2">
     {connection.data ? <Button size="sm" variant="outline" disabled={actions.busy} onClick={() => void actions.run(async () => {
-      if (await connection.data!.handle.requestPermission({ mode: "read" }) !== "granted") throw new Error("Folder access was not granted.");
+      if (await connection.data!.handle.requestPermission({ mode: "readwrite" }) !== "granted") throw new Error("Folder access was not granted.");
     })}><Link2 />{t("Reconnect folder")}</Button> : <p className="text-xs text-muted-foreground">{t("Reconnect the original folder from Start.")}</p>}
     <ErrorText message={actions.error} />
   </div>;
@@ -159,10 +159,9 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
           <ErrorText message={actions.error || (connections.error instanceof Error ? connections.error.message : "") || (recoveries.error instanceof Error ? recoveries.error.message : "")} />
           {connections.data?.map((connection) => <div key={connection.id} className="flex flex-wrap items-center gap-2 border-b border-border py-2">
             <span className="min-w-0 flex-1 break-all text-sm">{connection.name} <span className="text-muted-foreground">({t(connection.kind === "root" ? "Workspace root" : "Project")})</span></span>
-            <FolderPermission connection={connection} />
-            <Button variant="outline" size="sm" disabled={actions.busy} onClick={() => void actions.run(async () => {
+            <FolderPermission connection={connection} busy={actions.busy} onAllow={() => void actions.run(async () => {
               if (await connection.handle.requestPermission({ mode: "readwrite" }) !== "granted") throw new Error("Folder access was not granted.");
-            })}><Link2 />{t("Allow editing")}</Button>
+            })} />
             <Button variant="ghost" size="icon" aria-label={t("Disconnect folder")} title={t("Disconnect folder")} onClick={() => setRemoving(connection)}><Trash2 /></Button>
           </div>)}
           <h3 className="text-sm font-semibold">{t("Recovery records")}</h3>
@@ -180,14 +179,17 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
   </>;
 }
 
-function FolderPermission({ connection }: { connection: Connection }) {
+function FolderPermission({ connection, busy, onAllow }: { connection: Connection; busy: boolean; onAllow: () => void }) {
   const { t } = useTranslation();
   const permission = useQuery({
     queryKey: ["browser-folder-permission", connection.id],
     queryFn: () => connection.handle.queryPermission({ mode: "readwrite" }),
     retry: false,
   });
-  return <Badge variant="muted">{t(permission.data === "granted" ? "Editing allowed" : "Read-only")}</Badge>;
+  return <>
+    <Badge variant="muted">{t(permission.data === "granted" ? "Editing allowed" : "Read-only")}</Badge>
+    {!permission.isPending && permission.data !== "granted" ? <Button variant="outline" size="sm" disabled={busy || permission.isFetching} onClick={onAllow}><Link2 />{t("Allow editing")}</Button> : null}
+  </>;
 }
 
 function downloadText(text: string, name: string) {

@@ -22,6 +22,10 @@ Find and use the personal skill location recognized by my Codex environment.
 If a skill with the same name is already installed, compare it and explain the changes first.
 Back up the existing installation and preserve my customizations. Ask before overwriting it.
 Report the installation location and whether Codex recognizes it. Do not change project documents or code.
+Only after success, print the actual installed directory as copyable text in the final response.
+Explain that registering this folder for confirmed web updates is optional:
+https://kanban.giveit2.me/intro#updates
+Do not include my personal path in the URL.
 ```
 
 After installation, check that you can select `$implementation-ledger`. If it does not appear, reopen Codex and ask it to check that `SKILL.md`, references, and templates were installed together.
@@ -71,7 +75,11 @@ Usually start with tickets; add a plan or inventory when needed. Related documen
 
 Review the request in the [skill update guide](https://kanban.giveit2.me/intro#updates) and send it to Codex. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.
 
-**Web app updates and personal skill updates are separate.** Reopening the website or updating its PWA does not update your installed skill. Ask Codex to check the location and contents of your installation.
+**Web app updates and personal skill updates are separate.** Reopening the website or updating its PWA never replaces your installed skill automatically.
+
+Optionally choose **Register or manage an installed skill** in the update guide and select the folder reported by Codex. Registration requests read and write access but does not change files. For recognized official installations, the app lists changes and waits for your confirmation before making a full backup, writing files, and verifying them. Personal or unrecognized files are not overwritten; use the Codex comparison request instead. Registration is not required to use agent requests or Kanban.
+
+Stop using the skill in Codex during an update or restore, and keep the app window open. Use **Skill backups** to export or restore the original files. Disconnecting leaves files and backups intact, but clearing browser data can remove backups, so export first. Saved files and recognition by Codex are verified separately.
 
 ## Optional: view documents and progress on the web
 
@@ -94,6 +102,7 @@ Documents are read from the local folder you choose; confirmed edits are saved t
 - A different address or browser profile needs its own connections and settings. Clearing site data also removes saved connections, settings, and recovery records.
 - If a save result is uncertain, inspect **Local folders → Recovery records** and the actual file before saving again.
 - Use **App installation and updates** to install the PWA. Once **Ready to use offline** appears, you can read and edit local files already downloaded to your device offline. External AI tools and GitHub need their own connections.
+- When an update is ready, open its notification or **App installation and updates → Update history** to read the changes before choosing to apply it. Unread notes appear once on the project selector after updating; the same menu lets you revisit them.
 - Before an app update, save or discard drafts in all app windows. If the app will not open, use [app repair](https://kanban.giveit2.me/repair.html) while online.
 
 `/` is the project workspace; `/intro` is the introduction and installation guide. The PWA also starts at `/`.

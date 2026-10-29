@@ -1,6 +1,7 @@
-import { useSyncExternalStore } from "react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
+export type HeaderSurface = "--background" | "--ak-surface";
 export const THEME_STORAGE_KEY = "alpha-kanban.theme";
 
 export function readTheme(): Theme {
@@ -9,12 +10,39 @@ export function readTheme(): Theme {
 }
 
 let theme = readTheme();
+let headerSurface: HeaderSurface = "--background";
 const listeners = new Set<() => void>();
+
+function syncThemeColor() {
+  const color = getComputedStyle(document.documentElement).getPropertyValue(headerSurface).trim();
+  if (!color) return;
+  let meta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = "theme-color";
+    document.head.append(meta);
+  }
+  // The app's explicit theme wins over the operating system's color scheme.
+  meta.removeAttribute("media");
+  meta.content = color;
+}
 
 function applyTheme(next: Theme) {
   theme = next;
   document.documentElement.classList.toggle("dark", next === "dark");
+  syncThemeColor();
   listeners.forEach((listener) => listener());
+}
+
+export function useThemeColor(surface: HeaderSurface) {
+  useLayoutEffect(() => {
+    headerSurface = surface;
+    syncThemeColor();
+    return () => {
+      headerSurface = "--background";
+      syncThemeColor();
+    };
+  }, [surface]);
 }
 
 export function initializeTheme() {

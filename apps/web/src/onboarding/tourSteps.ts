@@ -7,7 +7,7 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   const step = (anchor: string, title: string, description: string): DriveStep => ({
     element: `[data-tour="${anchor}"]`, popover: { title: t(title), description: t(description) },
   });
-  const folders = () => step("local-folders", "Manage folder access", "Allow editing when you want to save changes. Reconnect folders when access expires, or inspect recovery records if a save could not be verified.");
+  const folders = () => step("local-folders", "Manage folder access", "Folder registration includes read and write access. If access expires, allow it again here. Inspect recovery records if a save could not be verified.");
   const status = () => step("board-status", "Read progress by status", "Each column groups tickets by their current status. Moving a card to another column asks for confirmation and records your reason in Markdown. You can also just read the board.");
   const card = () => step("board-card", "Open a ticket for the details", "Read the ticket ID, priority, and progress here. Select the card to review its scope, completion criteria, and history. The detail window has its own tour.");
   if (kind === "start") return [

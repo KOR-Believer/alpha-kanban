@@ -14,7 +14,7 @@ export interface BrowserStorage {
 export class IndexedDbStorage implements BrowserStorage {
   private database?: Promise<IDBDatabase>;
 
-  constructor(private readonly name = BROWSER_DATABASE_NAME) {}
+  constructor(private readonly name = BROWSER_DATABASE_NAME, private readonly durability: IDBTransactionDurability = "default") {}
 
   private open(): Promise<IDBDatabase> {
     this.database ??= new Promise((resolve, reject) => {
@@ -44,7 +44,7 @@ export class IndexedDbStorage implements BrowserStorage {
   ): Promise<T> {
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction("records", mode);
+      const transaction = db.transaction("records", mode, { durability: this.durability });
       const request = operation(transaction.objectStore("records"));
       // Wait for commit, not request success: quota or I/O can abort the transaction afterwards.
       transaction.oncomplete = () => resolve(request.result);

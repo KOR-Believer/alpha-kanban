@@ -7,6 +7,7 @@ import { FolderKanban } from "lucide-react";
 import { Resvg } from "@resvg/resvg-js";
 import type { Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { parseHistory, type ReleaseInfo } from "./src/pwa/releases";
 
 const web = import.meta.dirname;
 export const appManifest = {
@@ -17,12 +18,15 @@ export const appManifest = {
 };
 
 export function releaseInfo(mode: "app" | "recovery" | "retired" = "app") {
+  const history = parseHistory(JSON.parse(readFileSync(process.env.AK_RELEASE_NOTES_FILE || resolve(web, "releases.json"), "utf8")));
+  const current = history.at(-1)!;
   const hash = createHash("sha256");
   const downloads = resolve(web, "public-browser/downloads");
   const skill = JSON.parse(readFileSync(resolve(downloads, "manifest.json"), "utf8"));
   function add(path: string) {
     for (const item of readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (path === downloads && item.name.endsWith(".zip") && item.name !== skill.archive) continue;
+      if (path === downloads && /^implementation-ledger-.*\.json$/.test(item.name) && item.name !== `implementation-ledger-${skill.version}.json`) continue;
       const file = resolve(path, item.name);
       if (item.isDirectory()) add(file);
       else { hash.update(file.slice(web.length)); hash.update(readFileSync(file)); }
@@ -33,20 +37,19 @@ export function releaseInfo(mode: "app" | "recovery" | "retired" = "app") {
   add(resolve(web, "../../packages/shared/src"));
   for (const file of ["vite.config.ts", "pwa.config.ts", "pwa-rescue.js", "package.json", "../../pnpm-lock.yaml"]) hash.update(readFileSync(resolve(web, file)));
   hash.update(mode);
+  hash.update(JSON.stringify(history));
   hash.update(process.env.AK_RELEASE_REVISION ?? "");
   return {
     app: "alpha-kanban", mode, protocol: 1, buildId: hash.digest("hex").slice(0, 16), storageSchema: 1,
     skillBundle: skill.version as string,
+    skillPayload: skill.payloadSha256 as string,
     // Semantic skill/format contracts belong to AKL-10..13, not a guessed PWA version.
     skillVersion: null, documentFormat: null,
-    notes: {
-      ko: ["앱 설치와 오프라인 실행", "작업을 보호하는 업데이트와 앱 복구"],
-      en: ["App installation and offline access", "Updates and app repair that protect your work"],
-    },
+    releaseId: current.id, history, notes: current.notes,
   };
 }
 
-export function browserPwa(release: ReturnType<typeof releaseInfo>): Plugin[] {
+export function browserPwa(release: ReleaseInfo): Plugin[] {
   let outDir = resolve(web, "dist-browser");
   const assets: Plugin = {
     name: "alpha-kanban-pwa-assets", apply: "build",
@@ -67,7 +70,7 @@ export function browserPwa(release: ReturnType<typeof releaseInfo>): Plugin[] {
     injectRegister: false, manifest: appManifest, devOptions: { enabled: false },
     includeManifestIcons: false,
     injectManifest: {
-      globPatterns: ["index.html", "manifest.webmanifest", "assets/**/*.{js,css,woff2}", "icons/*.png", "fonts/OFL.txt", `downloads/implementation-ledger-${release.skillBundle}.zip`, "downloads/manifest.json", "downloads/INSTALL.txt"],
+      globPatterns: ["index.html", "manifest.webmanifest", "assets/**/*.{js,css,woff2}", "icons/*.png", "fonts/OFL.txt", `downloads/implementation-ledger-${release.skillBundle}.zip`, `downloads/implementation-ledger-${release.skillBundle}.json`, "downloads/manifest.json", "downloads/INSTALL.txt"],
       maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       rollupFormat: "iife",
       manifestTransforms: [async (entries) => {

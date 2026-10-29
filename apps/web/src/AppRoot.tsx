@@ -5,6 +5,7 @@ import { App } from "./App";
 import { AllProjectsBoard } from "./AllProjectsBoard";
 import { IntroPage } from "./IntroPage";
 import { browserRepository } from "./browser/repository";
+import { ReleaseCenter } from "./pwa/ReleaseCenter";
 
 export function AppRoot() {
   const queryClient = useQueryClient();
@@ -22,6 +23,8 @@ export function AppRoot() {
     });
   }, [pathname, queryClient]);
   // Do not mount App on /intro: its startup queries and automatic reopening belong to the launcher.
-  if (pathname === "/intro") return <IntroPage />;
-  return pathname === "/all" ? <AllProjectsBoard /> : <App allowStartupAutoOpen={allowStartupAutoOpen} />;
+  return <>
+    {pathname === "/intro" ? <IntroPage /> : pathname === "/all" ? <AllProjectsBoard /> : <App allowStartupAutoOpen={allowStartupAutoOpen} />}
+    <ReleaseCenter />
+  </>;
 }

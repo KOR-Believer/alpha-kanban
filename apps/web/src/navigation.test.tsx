@@ -261,7 +261,10 @@ describe("application navigation history", () => {
     expect(container.querySelector('[data-tour="ticket-project"]')).not.toBeNull();
     await travel("forward");
     expect(router.state.location.href).toBe(href);
-    expect(document.querySelector(".ak-ticket-detail-shell")).not.toBeNull();
+    await vi.waitFor(async () => {
+      await settle();
+      expect(document.querySelector(".ak-ticket-detail-shell")).not.toBeNull();
+    }, { timeout: 5000, interval: 10 });
     expect(router.history.length).toBe(2);
   });
 

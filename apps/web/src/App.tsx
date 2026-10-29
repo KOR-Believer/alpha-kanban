@@ -707,7 +707,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
             <TourHelp tour={boardTour} />
             <LanguageSelector />
-            <ThemeToggle />
+            <ThemeToggle surface="--ak-surface" />
             <PwaMenu />
             <Button data-tour="all-tickets" onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
               <LayoutGrid aria-hidden="true" />

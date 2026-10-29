@@ -9,7 +9,7 @@ export default defineConfig(({ command }) => {
   const pwa = command === "build";
   const pwaMode = process.env.AK_PWA_MODE ?? "app";
   if (!["app", "recovery", "retired"].includes(pwaMode)) throw new Error("Invalid AK_PWA_MODE");
-  const release = pwa ? releaseInfo(pwaMode as "app" | "recovery" | "retired") : { app: "alpha-kanban", mode: "app" as const, protocol: 1, buildId: "development", storageSchema: 1, skillBundle: "", skillVersion: null, documentFormat: null, notes: { ko: [], en: [] } };
+  const release = releaseInfo(pwaMode as "app" | "recovery" | "retired");
   return ({
   plugins: [react(), tailwindcss(), {
     name: "font-licenses",

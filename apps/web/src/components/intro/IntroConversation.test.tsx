@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLanguage } from "../../i18n";
-import { INTRO_INSTALL_REQUEST, SKILL_SOURCE_URL, SkillInstallPanel, UPDATE_REQUEST } from "../SkillGuide";
+import { INSTALL_COMPLETION, INTRO_INSTALL_REQUEST, SKILL_SOURCE_URL, SkillInstallPanel, UPDATE_REQUEST } from "../SkillGuide";
 import { english, korean } from "../../i18n/messages";
 import { IntroConversation } from "./IntroConversation";
 import { INTRO_DURATION, INTRO_MESSAGES } from "./demo";
@@ -90,7 +90,9 @@ describe("intro interaction", () => {
     await clickText("업데이트 요청문 확인·복사");
     const dialog = document.querySelector('[role="dialog"]')!;
     const request = dialog.querySelector("textarea")!;
-    expect(request.value).toBe(korean[UPDATE_REQUEST]!.replace("{{url}}", SKILL_SOURCE_URL));
+    expect(request.value).toContain(korean[UPDATE_REQUEST]!.replace("{{url}}", SKILL_SOURCE_URL));
+    expect(request.value).toContain("https://kanban.giveit2.me/intro#updates");
+    expect(request.value).toContain("실제 설치 디렉터리");
     const clipboard = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
     await clickText("요청문 복사", dialog);
     expect(document.activeElement).toBe(request);
@@ -98,7 +100,8 @@ describe("intro interaction", () => {
     expect(dialog.querySelector('[role="status"]')?.textContent).toBe(korean["Text selected. Copy it manually."]);
     await act(async () => setLanguage("en"));
     expect(dialog.isConnected).toBe(true);
-    expect(request.value).toBe(UPDATE_REQUEST.replace("{{url}}", SKILL_SOURCE_URL));
+    expect(request.value).toContain(UPDATE_REQUEST.replace("{{url}}", SKILL_SOURCE_URL));
+    expect(request.value).toContain("actual installed directory");
     expect(dialog.querySelector('[role="status"]')?.textContent).toBe("");
     clipboard.mockResolvedValue(undefined);
     await clickText("Copy request", dialog);
@@ -109,7 +112,7 @@ describe("intro interaction", () => {
       window.history.replaceState({}, "", "/intro#skill"); window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
     await clickText("Review and copy install request");
-    expect(document.querySelector("textarea")?.value).toBe(INTRO_INSTALL_REQUEST.replace("{{url}}", SKILL_SOURCE_URL));
+    expect(document.querySelector("textarea")?.value).toBe(INTRO_INSTALL_REQUEST.replace("{{url}}", SKILL_SOURCE_URL) + "\n\n" + INSTALL_COMPLETION);
     for (const key of [UPDATE_REQUEST, INTRO_INSTALL_REQUEST]) expect(english[key]).toBe(key);
   });
 
@@ -123,6 +126,21 @@ describe("intro interaction", () => {
     await act(async () => copied());
     expect(document.querySelector('[role="dialog"] [role="status"]')?.textContent).toBe("");
     expect(document.querySelector("textarea")?.value).toBe(INTRO_MESSAGES[0].text);
+  });
+
+  it.each(["compact", "intro"] as const)("pins the %s manual download to this app's bundled skill across languages", async (variant) => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    await render(<SkillInstallPanel variant={variant} />);
+    await clickText("설치 요청문 확인·복사");
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const download = dialog.querySelector<HTMLAnchorElement>("a[download]")!;
+    expect(download.getAttribute("href")).toBe(`/downloads/implementation-ledger-${__APP_RELEASE__.skillBundle}.zip`);
+    expect(download.textContent).toBe("Codex 스킬 다운로드");
+    await act(async () => setLanguage("en"));
+    expect(dialog.querySelector("a[download]")).toBe(download);
+    expect(download.getAttribute("href")).toBe(`/downloads/implementation-ledger-${__APP_RELEASE__.skillBundle}.zip`);
+    expect(download.textContent).toBe("Download Codex skill");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("keeps mode buttons and anchor destinations aligned", async () => {

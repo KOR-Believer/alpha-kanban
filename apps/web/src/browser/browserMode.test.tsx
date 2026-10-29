@@ -13,7 +13,8 @@ import { AllProjectsBoard } from "../AllProjectsBoard";
 import { buildAppRoute, parseAppRouteState } from "../appRoute";
 import { browserRepository } from "./repository";
 import { BrowserMarkdownImage } from "./MarkdownResources";
-import { BrowserSkillGuide, BrowserStartPage } from "./BrowserConnections";
+import { BrowserFilesMenu, BrowserReconnect, BrowserSkillGuide, BrowserStartPage } from "./BrowserConnections";
+import { FakeDirectory } from "./browserFixtures";
 import { tourStorageKey } from "../onboarding/tourState";
 import { ProjectGuide } from "../components/ProjectGuide";
 import { setLanguage } from "../i18n";
@@ -201,6 +202,93 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector("[data-tour-offer]")).toBeNull();
     await act(async () => { resolve([]); await new Promise((done) => setTimeout(done, 20)); });
     expect(container.querySelector("[data-tour-offer]")).not.toBeNull();
+  });
+
+  it.each(["root", "project"] as const)("requests read/write access when connecting a %s without modifying files or preferences", async (kind) => {
+    const directory = new FakeDirectory("workspace");
+    const file = directory.file("notes.md", "Keep this document");
+    const connection = { id: "existing", name: directory.name, kind, handle: directory.handle() };
+    const picker = vi.fn().mockResolvedValue(directory.handle());
+    vi.stubGlobal("isSecureContext", true); vi.stubGlobal("showDirectoryPicker", picker); vi.stubGlobal("indexedDB", {});
+    vi.spyOn(navigator, "locks", "get").mockReturnValue({} as LockManager);
+    const connect = vi.spyOn(browserRepository, "connect").mockResolvedValue(connection);
+    vi.spyOn(browserRepository, "projectConnection").mockResolvedValue(connection);
+    const onSelect = vi.fn();
+    localStorage.setItem("alpha-kanban.theme", "dark");
+    localStorage.setItem("alpha-kanban.autoOpenLastWorkspace", "true");
+    await render(<BrowserStartPage autoOpen onAutoOpen={vi.fn()} onSelect={onSelect} workspaces={[workspace]} error={null} />);
+    expect(picker).not.toHaveBeenCalled();
+    const selector = kind === "root" ? '[data-tour="register-workspace"]' : '[data-tour="open-project"]';
+    await act(async () => container.querySelector<HTMLButtonElement>(selector)!.click());
+    expect(picker).toHaveBeenCalledExactlyOnceWith({ mode: "readwrite", id: `alpha-kanban-${kind}` });
+    expect(connect).toHaveBeenCalledExactlyOnceWith(directory.handle(), kind);
+    if (kind === "project") expect(onSelect).toHaveBeenCalledWith(workspace.id);
+    else expect(onSelect).not.toHaveBeenCalled();
+    expect(file.opens).toBe(0); expect(file.content).toBe("Keep this document");
+    expect(localStorage.getItem("alpha-kanban.theme")).toBe("dark");
+    expect(localStorage.getItem("alpha-kanban.autoOpenLastWorkspace")).toBe("true");
+  });
+
+  it.each(["AbortError", "NotAllowedError"])("preserves existing connections when registration ends with %s", async (name) => {
+    const directory = new FakeDirectory("existing workspace");
+    const connection = { id: "existing", name: directory.name, kind: "root" as const, handle: directory.handle() };
+    vi.mocked(browserRepository.connections).mockResolvedValue([connection]);
+    vi.stubGlobal("isSecureContext", true); vi.stubGlobal("indexedDB", {});
+    vi.stubGlobal("showDirectoryPicker", vi.fn().mockRejectedValue(new DOMException("Folder access was not granted.", name)));
+    vi.spyOn(navigator, "locks", "get").mockReturnValue({} as LockManager);
+    const connect = vi.spyOn(browserRepository, "connect");
+    const disconnect = vi.spyOn(browserRepository, "disconnect");
+    await render(<BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()} workspaces={[workspace]} error={null} />);
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-tour="register-workspace"]')!.click());
+    expect(connect).not.toHaveBeenCalled(); expect(disconnect).not.toHaveBeenCalled();
+    expect(container.textContent).toContain(connection.name);
+    expect(await browserRepository.connections()).toEqual([connection]);
+    expect(Boolean(container.querySelector('[role="alert"]'))).toBe(name !== "AbortError");
+  });
+
+  it("only offers editing permission for existing connections that need it, and hides it after approval", async () => {
+    const directory = new FakeDirectory("existing workspace");
+    const file = directory.file("notes.md", "Keep this document");
+    const connection = { id: "existing", name: directory.name, kind: "root" as const, handle: directory.handle() };
+    vi.mocked(browserRepository.connections).mockResolvedValue([connection]);
+    const request = vi.spyOn(directory, "requestPermission");
+    const connect = vi.spyOn(browserRepository, "connect");
+    await render(<BrowserFilesMenu />);
+    await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+    const dialog = await waitForElement('[role="dialog"]', document);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
+    const permissionButton = () => [...dialog.querySelectorAll("button")].find((button) => button.textContent === "편집 권한 허용");
+    expect(dialog.textContent).toContain("편집 허용");
+    expect(permissionButton()).toBeUndefined(); expect(request).not.toHaveBeenCalled();
+    directory.write = "prompt";
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: ["browser-folder-permission"] }); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    expect(permissionButton()).toBeDefined(); expect(request).not.toHaveBeenCalled();
+    request.mockResolvedValueOnce("denied");
+    await act(async () => permissionButton()!.click());
+    expect(dialog.querySelector('[role="alert"]')).not.toBeNull();
+    expect(permissionButton()).toBeDefined();
+    request.mockImplementation(async () => { directory.write = "granted"; return "granted"; });
+    await act(async () => { permissionButton()!.click(); await new Promise((resolve) => setTimeout(resolve, 40)); });
+    expect(request).toHaveBeenLastCalledWith({ mode: "readwrite" });
+    expect(permissionButton()).toBeUndefined();
+    expect(dialog.textContent).toContain("편집 허용");
+    expect(connect).not.toHaveBeenCalled(); expect(file.opens).toBe(0);
+    expect((await browserRepository.connections())[0]).toBe(connection);
+    await act(async () => { await setLanguage("en"); });
+    expect(dialog.textContent).toContain("Editing allowed");
+    expect(dialog.textContent).not.toContain("Allow editing");
+  });
+
+  it("reconnects the saved folder with read/write access instead of registering a new identity", async () => {
+    const directory = new FakeDirectory("saved project");
+    const connection = { id: "saved", name: directory.name, kind: "project" as const, handle: directory.handle() };
+    vi.spyOn(browserRepository, "projectConnection").mockResolvedValue(connection);
+    const request = vi.spyOn(directory, "requestPermission");
+    const connect = vi.spyOn(browserRepository, "connect");
+    await render(<BrowserReconnect workspaceId={workspace.id} />);
+    await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ mode: "readwrite" });
+    expect(connect).not.toHaveBeenCalled();
   });
 
   it("replays from Help on the populated board and keeps all-project guidance independent", async () => {
