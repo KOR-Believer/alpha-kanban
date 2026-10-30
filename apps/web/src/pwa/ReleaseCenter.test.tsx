@@ -8,11 +8,17 @@ import { setLanguage } from "../i18n";
 import { appActivity } from "./activity";
 import { openReleaseNotes, ReleaseCenter } from "./ReleaseCenter";
 import { observeRelease, unreadReleases, wasNotified } from "./releases";
+import type { PreparedSkillUpdate } from "../skills/useAppSkillUpdate";
+import type { SkillReview } from "../skills/repository";
 
 const mock = vi.hoisted(() => ({ path: "/", state: { status: "current", offlineReady: true } as PwaState, listeners: new Set<() => void>(), apply: vi.fn() }));
+const skills = vi.hoisted(() => ({ state: "none" as PreparedSkillUpdate["state"], approve: vi.fn(), cancel: vi.fn(), error: "", review: undefined as SkillReview | undefined }));
 vi.mock("@tanstack/react-router", () => ({ useLocation: () => mock.path }));
 vi.mock("./client", () => ({ pwaClient: { getSnapshot: () => mock.state, subscribe: (listener: () => void) => { mock.listeners.add(listener); return () => mock.listeners.delete(listener); }, apply: mock.apply } }));
-vi.mock("../skills/repository", () => ({ skillRepository: { connection: async () => undefined, recoveries: async () => [] } }));
+vi.mock("../skills/repository", async (original) => ({ ...await original<typeof import("../skills/repository")>(), skillRepository: { connection: async () => undefined, recoveries: async () => [] } }));
+vi.mock("../skills/useAppSkillUpdate", () => ({ useAppSkillUpdate: (_: ReleaseInfo, target?: ReleaseInfo) => ({
+  prepared: target ? { buildId: target.buildId, state: skills.state, review: skills.review, error: skills.error, repository: { approveAppUpdate: skills.approve, cancelAppUpdate: skills.cancel } } : undefined,
+}) }));
 function release(n: number): ReleaseInfo {
   const history = Array.from({ length: n }, (_, index) => ({ id: `notes-${index + 1}`, sequence: index + 1, date: "2026-10-26", notify: true, notes: { ko: [`릴리즈 ${index + 1}`], en: [`Release ${index + 1}`] } }));
   return { app: "alpha-kanban", mode: "app", protocol: 1, storageSchema: 1, buildId: String(n).repeat(16), skillBundle: "1234567890ab", skillVersion: null, documentFormat: null, releaseId: history.at(-1)!.id, history, notes: history.at(-1)!.notes };
@@ -25,7 +31,9 @@ const dialog = () => document.querySelector('[role="dialog"]');
 async function click(text: string) { await act(async () => { [...document.querySelectorAll("button")].find((button) => button.textContent === text)!.click(); }); }
 beforeEach(async () => {
   vi.useFakeTimers(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  localStorage.clear(); mock.path = "/"; mock.state = { status: "current", offlineReady: true }; mock.apply.mockClear();
+  localStorage.clear(); mock.path = "/"; mock.state = { status: "current", offlineReady: true }; mock.apply.mockReset().mockResolvedValue(true);
+  skills.state = "none"; skills.error = ""; skills.review = undefined;
+  skills.approve.mockReset().mockResolvedValue("approval"); skills.cancel.mockReset().mockResolvedValue(undefined);
   await setLanguage("ko"); appActivity.resume();
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
   const held = new Set<string>();
@@ -95,7 +103,7 @@ describe("release reading timing", () => {
     expect(dialog()?.textContent).toContain("The prepared update changed");
     expect([...document.querySelectorAll("button")].some((button) => button.textContent === "Apply update")).toBe(false);
     await click("View update"); expect(dialog()?.textContent).toContain("Release 3");
-    await click("Close"); await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    await click("Later"); await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     expect(document.activeElement).toBe(trigger); trigger.remove();
   });
   it("does not mark a hidden or route-dismissed automatic dialog as read", async () => {
@@ -122,5 +130,53 @@ describe("release reading timing", () => {
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(dialog()?.textContent).toContain("Release 2");
     expect(dialog()?.textContent).toContain("Skill improvement");
+  });
+});
+
+describe("one confirmation for app and registered skill", () => {
+  async function open() {
+    mock.path = "/intro"; mock.state = { status: "ready", offlineReady: true, prepared: release(2) };
+    skills.state = "update";
+    skills.review = { connection: { name: "test-skill" }, bundle: { version: "1234567890ab" }, changes: [{ path: "SKILL.md", kind: "change" }] } as SkillReview;
+    await render(release(1)); await act(async () => openReleaseNotes());
+  }
+  it("shows files and an advisory, with no stopped-task checkbox or writes on dismissal", async () => {
+    await open();
+    expect(dialog()?.textContent).toContain("SKILL.md");
+    expect(dialog()?.textContent).toContain("끝난 뒤 업데이트");
+    expect(document.querySelector('[role="checkbox"]')).toBeNull();
+    await click("나중에");
+    expect(skills.approve).not.toHaveBeenCalled(); expect(mock.apply).not.toHaveBeenCalled();
+  });
+  it("durably approves the exact target before applying, and cancels when the app is blocked", async () => {
+    await open(); mock.apply.mockResolvedValue(false);
+    await click("백업 후 함께 업데이트");
+    expect(skills.approve).toHaveBeenCalledWith(skills.review, release(1).buildId, release(2).buildId);
+    expect(mock.apply).toHaveBeenCalledWith(release(2).buildId);
+    expect(skills.approve.mock.invocationCallOrder[0]).toBeLessThan(mock.apply.mock.invocationCallOrder[0]!);
+    expect(skills.cancel).toHaveBeenCalledWith("approval");
+  });
+  it("never applies the app when saving consent or the fresh skill check fails", async () => {
+    await open(); skills.approve.mockRejectedValue(new Error("The skill changed outside this app. Compare it again before updating."));
+    await click("백업 후 함께 업데이트");
+    expect(mock.apply).not.toHaveBeenCalled(); expect(document.querySelector('[role="alert"]')).not.toBeNull();
+  });
+  it("allows an explicitly app-only update when the skill cannot be replaced", async () => {
+    await open(); skills.state = "blocked"; skills.error = "Personal or unrecognized files will not be overwritten. Ask your agent to compare them.";
+    await render(release(1)); await click("앱만 업데이트");
+    expect(skills.approve).not.toHaveBeenCalled(); expect(mock.apply).toHaveBeenCalledWith(release(2).buildId);
+  });
+  it("cannot confirm before comparison finishes or approve twice during a pending apply", async () => {
+    await open(); skills.state = "checking"; await render(release(1));
+    expect([...document.querySelectorAll("button")].find((button) => button.textContent === "업데이트 적용")?.disabled).toBe(true);
+    skills.state = "update"; await render(release(1));
+    let finish!: (value: boolean) => void;
+    mock.apply.mockImplementation(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    mock.state = { ...mock.state, status: "blocked" }; await render(release(1));
+    await click("백업 후 함께 업데이트"); await click("백업 후 함께 업데이트");
+    expect(skills.approve).toHaveBeenCalledTimes(1);
+    expect(dialog()?.textContent).not.toContain("다른 앱 창의 작성 중인 내용도");
+    expect([...document.querySelectorAll("button")].find((button) => button.textContent === "나중에")?.disabled).toBe(true);
+    await act(async () => finish(true)); expect(skills.cancel).not.toHaveBeenCalled();
   });
 });

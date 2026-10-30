@@ -75,7 +75,7 @@ Usually start with tickets; add a plan or inventory when needed. Related documen
 
 Review the request in the [skill update guide](https://kanban.giveit2.me/intro#updates) and send it to Codex. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.
 
-**Web app updates and personal skill updates are separate.** Reopening the website or updating its PWA never replaces your installed skill automatically.
+**A registered skill can be updated with the app.** Review the skill's changed files in the PWA update dialog and choose **Back up skill and update both**. After the new app loads, it backs up and replaces the skill. Finish any Codex task using the skill first. Without a registered folder, or when the installed skill already matches, only the app is updated. Personal or unrecognized changes are never overwritten: choose **Update app only** and ask Codex to compare them. Backups remain available under **Skill updates** for explicit restoration.
 
 Optionally choose **Register or manage an installed skill** in the update guide and select the folder reported by Codex. Registration requests read and write access but does not change files. For recognized official installations, the app lists changes and waits for your confirmation before making a full backup, writing files, and verifying them. Personal or unrecognized files are not overwritten; use the Codex comparison request instead. Registration is not required to use agent requests or Kanban.
 

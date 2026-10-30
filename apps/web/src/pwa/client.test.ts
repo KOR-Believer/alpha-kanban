@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PwaClient } from "./client";
 import type { ReleaseInfo } from "./releases";
+import { skillHash } from "../skills/bundle";
+import { appActivity } from "./activity";
 
 const workerCall = vi.hoisted(() => vi.fn());
 vi.mock("./protocol", async (original) => ({ ...await original<typeof import("./protocol")>(), requestWorker: workerCall }));
@@ -22,7 +24,36 @@ beforeEach(async () => {
   await vi.waitFor(() => expect(client.getSnapshot().status).toBe("ready"));
   workerCall.mockClear();
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe("prepared skill payload", () => {
+  async function prepared() {
+    const content = "---\nname: implementation-ledger\n---\nTest";
+    const bundle = { schema: 1, name: "implementation-ledger", version: (await skillHash("implementation-ledger/SKILL.md" + content)).slice(0, 12), files: [{ path: "SKILL.md", content, sha256: await skillHash(content) }], known: [] };
+    const target = { ...release(2), skillBundle: bundle.version, skillPayload: await skillHash(JSON.stringify(bundle)) };
+    workerCall.mockImplementation(async () => ({ protocol: 1, mode: "app", ready: true, buildId: target.buildId, release: target }));
+    const match = vi.fn(async () => new Response(JSON.stringify(bundle), { headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("caches", { match });
+    return { target, bundle, match };
+  }
+  it("reads only waiting B's hash-bound precache even offline with C on the network", async () => {
+    const { target, bundle, match } = await prepared();
+    vi.mocked(fetch).mockClear();
+    expect(await client.preparedSkillBundle(target)).toEqual(bundle);
+    expect(match).toHaveBeenCalledWith(`https://app.test/downloads/implementation-ledger-${bundle.version}.json`, { cacheName: "alpha-kanban-app-v1-" + target.buildId, ignoreSearch: true });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("rejects replaced workers, missing assets and invalid hashes without a network fallback", async () => {
+    const { target, match } = await prepared();
+    match.mockResolvedValueOnce(undefined as unknown as Response);
+    await expect(client.preparedSkillBundle(target)).rejects.toThrow("unavailable");
+    match.mockResolvedValueOnce(new Response('{"tampered":true}', { headers: { "content-type": "application/json" } }));
+    await expect(client.preparedSkillBundle(target)).rejects.toThrow("Invalid");
+    const normal = match.getMockImplementation()!;
+    match.mockImplementationOnce(async () => { registration.waiting = worker(3); return normal(); });
+    await expect(client.preparedSkillBundle(target)).rejects.toThrow("prepared update changed");
+  });
+});
+afterEach(() => { appActivity.resume(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe("prepared release binding", () => {
   it("uses waiting B even when release.json reports C, online or offline", async () => {
     expect(client.getSnapshot().prepared?.buildId).toBe(release(2).buildId);
@@ -46,5 +77,19 @@ describe("prepared release binding", () => {
     workerCall.mockClear();
     await Promise.all([client.apply(release(2).buildId), client.apply(release(2).buildId)]);
     expect(workerCall.mock.calls.filter((call) => call[1] === "AK_APPLY")).toHaveLength(1);
+  });
+  it("waits for the session lease to resume before callers can cancel durable skill consent", async () => {
+    const normal = workerCall.getMockImplementation()!;
+    workerCall.mockImplementation(async (target, type) => {
+      if (type === "AK_APPLY") { appActivity.prepare(); return { ok: false }; }
+      return normal(target, type);
+    });
+    let returned = false;
+    const applying = client.apply(release(2).buildId).then((value) => { returned = true; return value; });
+    await vi.waitFor(() => expect(appActivity.frozen).toBe(true));
+    expect(returned).toBe(false);
+    appActivity.resume();
+    expect(await applying).toBe(false);
+    expect(appActivity.frozen).toBe(false);
   });
 });

@@ -7,7 +7,7 @@ import { setLanguage } from "../i18n";
 import { appActivity } from "../pwa/activity";
 import * as bundles from "./bundle";
 import { SkillRepository, skillRepository } from "./repository";
-import { SkillUpdates } from "./SkillUpdates";
+import { SkillUpdates, SkillUpdatesButton } from "./SkillUpdates";
 
 let root: Root, container: HTMLDivElement;
 let folder: FakeDirectory, storage: MemoryStorage, repository: SkillRepository;
@@ -64,6 +64,41 @@ afterEach(async () => {
 });
 
 describe("skill folder permission flow", () => {
+  it("opens the toolbar manager in place, keeps it open across language changes and returns focus without requesting access", async () => {
+    await setLanguage("ko");
+    const request = vi.spyOn(folder, "requestPermission");
+    const initialUrl = location.href;
+    await act(async () => root.render(<SkillUpdatesButton placement="toolbar" />));
+    const trigger = button("스킬 업데이트")!;
+    expect(trigger).toBeDefined();
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(skillRepository.connection).not.toHaveBeenCalled();
+    expect(bundles.loadSkillBundle).not.toHaveBeenCalled();
+    trigger.focus();
+    await click("스킬 업데이트");
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.querySelector("h2")?.textContent).toBe("스킬 업데이트");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => { await setLanguage("en"); });
+    expect(trigger.textContent).toBe("Skill updates");
+    expect(dialog.isConnected).toBe(true);
+    expect(dialog.querySelector("h2")?.textContent).toBe("Skill updates");
+    await click("Close");
+    await waitFor(() => {
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(location.href).toBe(initialUrl);
+    expect(window.showDirectoryPicker).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(skillRepository.apply).not.toHaveBeenCalled();
+    expect(skillRepository.connect).not.toHaveBeenCalled();
+    expect(await repository.recoveries()).toHaveLength(0);
+  });
+
   it("requests read/write at registration but does not update or back up until explicitly confirmed", async () => {
     const request = vi.spyOn(folder, "requestPermission");
     await render();

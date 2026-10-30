@@ -1,5 +1,7 @@
-import { CHECK_INTERVAL, FOCUS_INTERVAL, SW_PATH, isOwnedRegistration, requestWorker, type Reply, type WorkerInfo } from "./protocol";
+import { CACHE_PREFIX, CHECK_INTERVAL, FOCUS_INTERVAL, SW_PATH, isOwnedRegistration, requestWorker, type Reply, type WorkerInfo } from "./protocol";
 import { parseHistory } from "./releases";
+import { readSkillBundle } from "../skills/bundle";
+import { appActivity } from "./activity";
 
 export type Release = typeof __APP_RELEASE__;
 type UpdateState = "idle" | "checking" | "downloading" | "ready" | "restart" | "current" | "offline" | "failed" | "blocked" | "applying";
@@ -109,21 +111,38 @@ export class PwaClient {
     finally { this.checking = false; }
   }
 
-  async apply(expectedBuild?: string) {
+  async preparedSkillBundle(expected: Release) {
     const waiting = this.registration?.waiting;
-    if (!waiting || this.applying || this.state.status === "applying") return;
+    const changed = "The prepared update changed. Review its notes again before applying.";
+    if (!waiting) throw new Error(changed);
+    const info = await requestWorker<WorkerInfo>(waiting, "AK_INFO");
+    const release = workerRelease(info);
+    if (!info.ready || release?.mode !== "app" || release.buildId !== expected.buildId || release.skillBundle !== expected.skillBundle || release.skillPayload !== expected.skillPayload || this.registration?.waiting !== waiting) throw new Error(changed);
+    if (!/^[a-f0-9]{12}$/.test(release.skillBundle) || !release.skillPayload) throw new Error("Skill information is unavailable. Use the agent request instead.");
+    // Read the waiting worker's complete release, never the network's newer deployment.
+    const response = await caches.match(new URL(`/downloads/implementation-ledger-${release.skillBundle}.json`, location.origin).href, { cacheName: CACHE_PREFIX + release.buildId, ignoreSearch: true });
+    if (!response) throw new Error("Skill information is unavailable. Use the agent request instead.");
+    const bundle = await readSkillBundle(response, release.skillBundle, release.skillPayload);
+    if (this.registration?.waiting !== waiting) throw new Error(changed);
+    return bundle;
+  }
+
+  async apply(expectedBuild?: string): Promise<boolean> {
+    const waiting = this.registration?.waiting;
+    if (!waiting || this.applying || this.state.status === "applying") return false;
     this.applying = true;
     try {
       const info = await requestWorker<WorkerInfo>(waiting, "AK_INFO");
       const release = workerRelease(info);
       if (!info.ready || !release || (expectedBuild && info.buildId !== expectedBuild) || this.registration?.waiting !== waiting) {
         await this.refresh();
-        return;
+        return false;
       }
       this.update({ status: "applying", next: release });
       const result = await requestWorker<Reply>(waiting, "AK_APPLY", { buildId: info.buildId }, 15_000);
-      if (!result.ok) this.update({ status: "blocked" });
-    } catch { this.update({ status: "blocked" }); }
+      if (!result.ok) { await appActivity.whenResumed(); this.update({ status: "blocked" }); }
+      return result.ok;
+    } catch { await appActivity.whenResumed(); this.update({ status: "blocked" }); return false; }
     finally { this.applying = false; }
   }
 

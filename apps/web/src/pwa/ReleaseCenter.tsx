@@ -7,6 +7,8 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { pwaClient } from "./client";
 import { appActivity } from "./activity";
 import { SkillUpdates } from "../skills/SkillUpdates";
+import { useAppSkillUpdate } from "../skills/useAppSkillUpdate";
+import { skillError } from "../skills/repository";
 import { markNotified, markReleasesRead, observeRelease, releaseRecords, unreadReleases, wasNotified, type ReleaseInfo, type ReleaseRecord } from "./releases";
 
 const OPEN_EVENT = "alpha-kanban:release-notes";
@@ -34,6 +36,12 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
   const releaseLock = useRef<(() => void) | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const waiting = app.prepared?.mode === "app" ? app.prepared : undefined;
+  const changed = reading?.pending && waiting?.buildId !== reading.release.buildId;
+  const skill = useAppSkillUpdate(release, reading?.pending && !changed ? reading.release : undefined, enabled);
+  const [confirming, setConfirming] = useState(false);
+  const confirmingRef = useRef(false);
+  const [applyError, setApplyError] = useState("");
+  const prepared = skill.prepared?.buildId === reading?.release.buildId ? skill.prepared : undefined;
 
   useEffect(() => {
     if (enabled) observeRelease(release);
@@ -45,6 +53,7 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
       if (currentReading.current) return;
       returnFocus.current = (event as CustomEvent<HTMLElement | null>).detail;
       setNotice(null);
+      setApplyError("");
       const target = waiting ?? release;
       setReading({ release: target, records: releaseRecords(target).slice().reverse(), pending: Boolean(waiting), automatic: false });
     }
@@ -90,18 +99,38 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
   }, [pathname, reading]);
 
   function close() {
+    if (confirmingRef.current) return;
     if (reading && document.visibilityState === "visible") markReleasesRead(reading.records);
     setReading(null); releaseLock.current?.(); releaseLock.current = null;
   }
-  const changed = reading?.pending && waiting?.buildId !== reading.release.buildId;
+  async function apply() {
+    if (!reading?.pending || changed || confirmingRef.current || !prepared || prepared.state === "checking") return;
+    confirmingRef.current = true; setConfirming(true); setApplyError("");
+    let approval: string | undefined;
+    try {
+      if (prepared.state === "update" && prepared.review) approval = await prepared.repository.approveAppUpdate(prepared.review, release.buildId, reading.release.buildId);
+      else await prepared.repository.cancelAppUpdate();
+      markReleasesRead(reading.records);
+      if (!await pwaClient.apply(reading.release.buildId) && approval) await prepared.repository.cancelAppUpdate(approval);
+    } catch (error) {
+      setApplyError(skillError(error));
+      if (approval) await prepared.repository.cancelAppUpdate(approval).catch(() => undefined);
+    } finally { confirmingRef.current = false; setConfirming(false); }
+  }
   const locale = i18n.language === "ko" ? "ko" : "en";
   return <>
-    {notice && !reading && waiting?.buildId === notice.buildId ? <aside role="status" className="fixed bottom-4 right-4 z-40 grid max-w-[calc(100vw-2rem)] gap-2 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-[var(--ak-shadow-soft)]">
+    {(skill.result || skill.error || skill.finishing) && !reading && !skillOpen ? <aside role="status" className="fixed bottom-4 right-4 z-40 grid w-96 max-w-[calc(100vw-2rem)] gap-2 rounded-lg border border-border bg-popover p-4 text-sm text-popover-foreground shadow-[var(--ak-shadow-soft)]">
+      <div className="flex items-start justify-between gap-3"><p>{t(skill.finishing ? "Checking the approved skill update…" : skill.result?.state === "applied" ? "Your registered skill was backed up and updated." : skill.result ? "The app is up to date. Your skill update needs attention." : "Skill updates")}</p>
+        {!skill.finishing ? <Button size="iconSm" variant="ghost" aria-label={t("Close")} onClick={() => void skill.dismissResult()}><X /></Button> : null}</div>
+      {skill.result?.error || skill.error ? <p>{t(skill.result?.error || skill.error, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
+      {!skill.finishing ? <Button size="sm" variant="outline" onClick={() => setSkillOpen(true)}>{t("Skill updates")}</Button> : null}
+    </aside> : null}
+    {notice && !reading && !skill.result && !skill.error && !skill.finishing && waiting?.buildId === notice.buildId ? <aside role="status" className="fixed bottom-4 right-4 z-40 grid max-w-[calc(100vw-2rem)] gap-2 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-[var(--ak-shadow-soft)]">
       <div className="flex items-center justify-between gap-4"><p className="text-sm font-medium">{t("An update is ready")}</p><Button size="iconSm" variant="ghost" aria-label={t("Close")} onClick={() => setNotice(null)}><X /></Button></div>
       <Button size="sm" variant="outline" onClick={(event) => openReleaseNotes(event.currentTarget)}><BookOpen />{t("View update")}</Button>
     </aside> : null}
     <Dialog open={Boolean(reading)} onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]" onCloseAutoFocus={(event) => {
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]" onEscapeKeyDown={(event) => { if (confirming) event.preventDefault(); }} onInteractOutside={(event) => { if (confirming) event.preventDefault(); }} onCloseAutoFocus={(event) => {
         event.preventDefault();
         if (resumeReading.current) { setSkillOpen(true); return; }
         const destination = returnFocus.current?.isConnected ? returnFocus.current : document.querySelector<HTMLElement>("[data-pwa-menu]");
@@ -117,16 +146,33 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
               {record.skill.compatibility === "unknown" ? <p className="text-muted-foreground">{t("Ask Codex to review compatibility before changing your skill or documents.")}</p> : null}</div> : null}
           </section>) : <ul className="list-disc space-y-2 pl-5 text-sm">{reading?.release.notes[locale].map((note, index) => <li key={index}>{note}</li>)}</ul>}
           {changed ? <p role="status" className="text-sm text-muted-foreground">{t("The prepared update changed. Review its notes again before applying.")}</p> : null}
-          {reading?.pending && reading.release.skillBundle !== release.skillBundle ? <p className="text-sm text-muted-foreground">{t("This update includes a different skill bundle. After updating the app, compare your installation in Skill updates. Your skill files will not change automatically.")}</p> : null}
+          {reading?.pending && !changed ? <section className="space-y-3 border-t border-border pt-4" aria-busy={!prepared || prepared.state === "checking"}>
+            <h3 className="text-sm font-semibold">{t("Skill updates")}</h3>
+            {!prepared || prepared.state === "checking" ? <p className="text-sm text-muted-foreground">{t("Checking the registered skill for this update…")}</p> : null}
+            {prepared?.state === "none" ? <p className="text-sm text-muted-foreground">{t("No skill folder is registered. Only the app will be updated.")}</p> : null}
+            {prepared?.state === "current" ? <p className="text-sm text-muted-foreground">{t("Your registered skill already matches this update. Its files will stay unchanged.")}</p> : null}
+            {prepared?.state === "update" && prepared.review ? <>
+              <p className="break-all text-sm">{t("Registered folder")}: <strong>{prepared.review.connection.name}</strong></p>
+              <p className="text-xs text-muted-foreground">{t("Target bundle")}: <code>{prepared.review.bundle.version}</code></p>
+              <ul className="divide-y divide-border text-sm">{prepared.review.changes.map((change) => <li key={change.path} className="flex items-start justify-between gap-4 py-2"><code className="min-w-0 break-all">{change.path}</code><span className="shrink-0 text-muted-foreground">{t(change.kind === "add" ? "Add file" : change.kind === "remove" ? "Remove file" : "Change file")}</span></li>)}</ul>
+              <p className="text-sm text-muted-foreground">{t("After the app reloads, your skill will be backed up in this browser and updated. Keep the window open until it finishes. You can restore the backup in Skill updates.")}</p>
+            </> : null}
+            {prepared?.state === "blocked" ? <>
+              <p role="status" className="text-sm">{t(prepared.error!, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p>
+              <p className="text-sm text-muted-foreground">{t("You can update only the app and manage your skill separately.")}</p>
+              <Button size="sm" variant="outline" disabled={confirming} onClick={() => { resumeReading.current = reading; close(); }}>{t("Skill updates")}</Button>
+            </> : null}
+          </section> : null}
           {!reading?.pending && reading?.records.some((record) => record.skill) ? <Button size="sm" variant="outline" onClick={() => { resumeReading.current = reading; close(); }}>{t("Skill updates")}</Button> : null}
-          {app.status === "blocked" ? <p role="status" className="text-sm">{t("Save or discard unfinished changes in other app windows too, and wait for saves to finish. Close any unresponsive windows, then try again.")}</p> : null}
         </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" onClick={close}>{t("Close")}</Button>
-          {reading?.pending ? changed ? <Button disabled={!waiting} onClick={() => waiting && setReading({ release: waiting, records: releaseRecords(waiting).slice().reverse(), pending: true, automatic: false })}><RefreshCw />{t("View update")}</Button> : <Button disabled={app.status === "applying"} onClick={() => {
-            markReleasesRead(reading.records);
-            void pwaClient.apply(reading.release.buildId);
-          }}><RefreshCw />{t("Apply update")}</Button> : null}
+        <DialogFooter className="flex-col items-stretch">
+          {reading?.pending && !changed && prepared?.state === "update" ? <p className="text-sm">{t("Finish any Codex task using this skill before updating.")}</p> : null}
+          {!confirming && app.status === "blocked" ? <p role="status" className="text-sm">{t("Save or discard unfinished changes in other app windows too, and wait for saves to finish. Close any unresponsive windows, then try again.")}</p> : null}
+          {applyError ? <p role="alert" className="text-sm text-destructive">{t(applyError, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
+          <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" disabled={confirming} onClick={close}>{t(reading?.pending ? "Later" : "Close")}</Button>
+          {reading?.pending ? changed ? <Button disabled={!waiting || confirming} onClick={() => { setApplyError(""); if (waiting) setReading({ release: waiting, records: releaseRecords(waiting).slice().reverse(), pending: true, automatic: false }); }}><RefreshCw />{t("View update")}</Button> : <Button disabled={confirming || app.status === "applying" || !prepared || prepared.state === "checking"} onClick={() => void apply()}><RefreshCw />{t(prepared?.state === "update" ? "Back up skill and update both" : prepared?.state === "blocked" ? "Update app only" : "Apply update")}</Button> : null}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -13,8 +13,16 @@ export type SkillRecovery = {
   createdAt: string; state: "pending" | "applied" | "restored";
   created?: Array<{ path: string; handle: FileSystemFileHandle }>;
 };
+type Fingerprint = Pick<SnapshotFile, "path" | "sha256" | "mtime">;
+export type AppSkillUpdate = {
+  id: string; fromBuild: string; buildId: string; version: string; digest: string;
+  connectionId: string; files: Fingerprint[];
+  state: "approved" | "writing" | "applied" | "blocked";
+  error?: string; recoveryId?: string; acknowledged?: boolean;
+};
 const CONNECTION = "skill-update:connection";
 const RECOVERY = "skill-update:recovery:";
+const APP_UPDATE = "skill-update:app-update";
 const LOCK = "alpha-kanban:skill-update-v1";
 const CHANGED = "The skill changed outside this app. Compare it again before updating.";
 type Lock = <T>(name: string, action: () => Promise<T>) => Promise<T>;
@@ -71,12 +79,18 @@ async function snapshot(root: FileSystemDirectoryHandle, requireSkill = true) {
 function same(a: Array<Pick<SkillFile, "path" | "sha256">>, b: Array<Pick<SkillFile, "path" | "sha256">>) {
   return a.length === b.length && a.every((file) => b.some((other) => other.path === file.path && other.sha256 === file.sha256));
 }
-function unchanged(a: SnapshotFile[], b: SnapshotFile[]) { return same(a, b) && a.every((file) => b.find((other) => other.path === file.path)?.mtime === file.mtime); }
+function unchanged(a: Fingerprint[], b: Fingerprint[]) { return same(a, b) && a.every((file) => b.find((other) => other.path === file.path)?.mtime === file.mtime); }
+export function skillError(error: unknown) {
+  if (error instanceof DOMException && error.name === "NotAllowedError") return "Allow access to the registered skill folder to continue.";
+  if (error instanceof DOMException && error.name === "QuotaExceededError") return "The backup could not be saved. Free browser storage before trying again.";
+  return error instanceof Error ? error.message : "Skill operation failed. Review the backup before trying again.";
+}
 
 export class SkillRepository {
   constructor(private readonly storage: BrowserStorage = new IndexedDbStorage(BROWSER_DATABASE_NAME, "strict"), private readonly lock: Lock = browserLock,
     private readonly target: { version: string; digest?: string; compatible?: boolean } = { version: __APP_RELEASE__.skillBundle, digest: __APP_RELEASE__.skillPayload, compatible: __APP_RELEASE__.history?.at(-1)?.skill?.compatibility !== "unknown" }) {}
   connection() { return this.storage.get<SkillConnection>(CONNECTION); }
+  appUpdate() { return this.storage.get<AppSkillUpdate>(APP_UPDATE); }
   async recoveries() { return (await this.storage.entries<SkillRecovery>(RECOVERY)).map((row) => row.value); }
   async connect(handle: FileSystemDirectoryHandle) {
     return this.lock(LOCK, () => appActivity.run(async () => {
@@ -105,21 +119,80 @@ export class SkillRepository {
     return { connection, bundle, files, state, changes };
   }
   async apply(review: SkillReview) {
+    return this.lock(LOCK, () => appActivity.run(() => this.applyReview(review), true));
+  }
+  private async checkReview(review: SkillReview) {
+    await validateBundle(review.bundle, this.target.version, this.target.digest);
+    await permission(review.connection.handle, "readwrite");
+    const connection = await this.connection();
+    if (!connection || connection.id !== review.connection.id || !await connection.handle.isSameEntry(review.connection.handle)) throw new Error(CHANGED);
+    if ((await this.recoveries()).some((record) => record.state === "pending")) throw new Error("Review the unfinished skill update before changing its connection.");
+    const current = await this.inspect(connection, review.bundle);
+    if (!unchanged(current.files, review.files)) throw new Error(CHANGED);
+    if (current.state !== "update") throw new Error("Personal or unrecognized files will not be overwritten. Ask your agent to compare them.");
+    return current;
+  }
+  private async applyReview(review: SkillReview, id: string = crypto.randomUUID()) {
+    const current = await this.checkReview(review);
+    const connection = current.connection;
+    const recovery: SkillRecovery = { id, connection, before: current.files, intended: review.bundle.files, createdAt: new Date().toISOString(), state: "pending" };
+    await this.storage.set(RECOVERY + recovery.id, recovery);
+    if (!unchanged(await snapshot(connection.handle), recovery.before)) throw new Error(CHANGED);
+    await this.replace(recovery, false);
+    await this.storage.set(RECOVERY + recovery.id, { ...recovery, state: "applied" });
+    return recovery.id;
+  }
+  async approveAppUpdate(review: SkillReview, fromBuild: string, buildId: string) {
     return this.lock(LOCK, () => appActivity.run(async () => {
-      await validateBundle(review.bundle, this.target.version, this.target.digest);
-      await permission(review.connection.handle, "readwrite");
-      const connection = await this.connection();
-      if (!connection || connection.id !== review.connection.id || !await connection.handle.isSameEntry(review.connection.handle)) throw new Error(CHANGED);
-      if ((await this.recoveries()).some((record) => record.state === "pending")) throw new Error("Review the unfinished skill update before changing its connection.");
-      const current = await this.inspect(connection, review.bundle);
-      if (!unchanged(current.files, review.files)) throw new Error(CHANGED);
-      if (current.state !== "update") throw new Error("Personal or unrecognized files will not be overwritten. Ask your agent to compare them.");
-      const recovery: SkillRecovery = { id: crypto.randomUUID(), connection, before: current.files, intended: review.bundle.files, createdAt: new Date().toISOString(), state: "pending" };
-      await this.storage.set(RECOVERY + recovery.id, recovery);
-      if (!unchanged(await snapshot(connection.handle), recovery.before)) throw new Error(CHANGED);
-      await this.replace(recovery, false);
-      await this.storage.set(RECOVERY + recovery.id, { ...recovery, state: "applied" });
-      return recovery.id;
+      if (this.target.compatible !== true || !this.target.digest || !/^[a-f0-9]{16}$/.test(buildId) || !/^[a-f0-9]{16}$/.test(fromBuild) || buildId === fromBuild) throw new Error("Ask Codex to review compatibility before changing your skill or documents.");
+      const previous = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
+      if (previous?.state === "writing") throw new Error("Review the unfinished skill update before changing its connection.");
+      const current = await this.checkReview(review);
+      const approval: AppSkillUpdate = { id: crypto.randomUUID(), fromBuild, buildId, version: this.target.version, digest: this.target.digest,
+        connectionId: current.connection.id, files: current.files.map(({ path, sha256, mtime }) => ({ path, sha256, mtime })), state: "approved" };
+      await this.storage.set(APP_UPDATE, approval);
+      return approval.id;
+    }));
+  }
+  async cancelAppUpdate(id?: string) {
+    await this.lock(LOCK, async () => {
+      await appActivity.whenResumed();
+      // Hold activity through the read as well: a late AK_PREPARE must not freeze the subsequent deletion.
+      await appActivity.run(async () => {
+        const approval = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
+        if (approval && (!id || approval.id === id) && approval.state === "approved") await this.storage.delete(APP_UPDATE);
+      });
+    });
+  }
+  async acknowledgeAppUpdate(id: string) {
+    await this.lock(LOCK, async () => {
+      const approval = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
+      if (approval?.id === id && ["applied", "blocked"].includes(approval.state)) await this.storage.set(APP_UPDATE, { ...approval, acknowledged: true });
+    });
+  }
+  async completeAppUpdate(buildId: string, load: () => Promise<SkillBundle>): Promise<AppSkillUpdate | undefined> {
+    return this.lock(LOCK, () => appActivity.run(async () => {
+      let approval = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
+      if (!approval || approval.fromBuild === buildId || approval.acknowledged) return;
+      if (["applied", "blocked"].includes(approval.state)) return approval;
+      try {
+        if (approval.state === "writing") throw new Error("Skill files could not be verified. Review the saved backup before retrying.");
+        if (approval.state !== "approved" || approval.buildId !== buildId || approval.version !== this.target.version || approval.digest !== this.target.digest || this.target.compatible !== true) throw new Error("The prepared update changed. Review its notes again before applying.");
+        const connection = await this.connection();
+        if (!connection || connection.id !== approval.connectionId) throw new Error(CHANGED);
+        const review = await this.inspect(connection, await load());
+        if (!unchanged(review.files, approval.files)) throw new Error(CHANGED);
+        await this.checkReview(review);
+        // Claim once under the shared skill lock. A crash here requires explicit review, never an automatic retry.
+        approval = { ...approval, state: "writing", recoveryId: crypto.randomUUID() };
+        await this.storage.set(APP_UPDATE, approval);
+        await this.applyReview(review, approval.recoveryId);
+        approval = { ...approval, state: "applied" };
+      } catch (error) {
+        approval = { ...approval, state: "blocked", error: skillError(error) };
+      }
+      await this.storage.set(APP_UPDATE, approval);
+      return approval;
     }, true));
   }
   async restore(id: string) {

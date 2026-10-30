@@ -3,6 +3,7 @@ export class AppActivity {
   private pending = 0;
   private fileWrites = 0;
   private paused = false;
+  private resumeWaiters = new Set<() => void>();
   get busy() { return this.pending > 0 || this.drafts.size > 0; }
   get frozen() { return this.paused; }
   get unloadRisk() { return this.fileWrites > 0 || this.drafts.size > 0; }
@@ -20,7 +21,10 @@ export class AppActivity {
     this.paused = true;
     return true;
   }
-  resume() { this.paused = false; }
+  whenResumed(): Promise<void> {
+    return this.paused ? new Promise((resolve) => this.resumeWaiters.add(resolve)) : Promise.resolve();
+  }
+  resume() { this.paused = false; this.resumeWaiters.forEach((resolve) => resolve()); this.resumeWaiters.clear(); }
 }
 
 export const appActivity = new AppActivity();

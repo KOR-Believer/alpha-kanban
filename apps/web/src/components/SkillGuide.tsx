@@ -72,7 +72,7 @@ export function SkillInstallPanel({ variant = "compact" }: { variant?: "compact"
     if (window.location.hash !== hash) window.location.hash = hash;
   }
   if (variant === "intro") return <div className="ak-intro-skill" id="updates">
-    <div><p className="ak-intro-eyebrow">{t("Skill installation and updates")}</p><h2>{"implementation-ledger"}</h2><p>{t("Give your AI a shared structure for scope, decisions, implementation results, and verification in Markdown.")}</p><p>{t("Install with Codex first. Register the installed folder only if you want to compare and confirm skill updates here. App updates never replace your skill automatically.")}</p></div>
+    <div><p className="ak-intro-eyebrow">{t("Skill installation and updates")}</p><h2>{"implementation-ledger"}</h2><p>{t("Give your AI a shared structure for scope, decisions, implementation results, and verification in Markdown.")}</p><p>{t("Install with Codex first. Register the installed folder to include a backed-up skill update when you confirm an app update. Personal changes are never overwritten.")}</p></div>
     <div><div className="ak-intro-skill-modes" role="group" aria-label={t("Installation mode")}>
       <Button variant={mode === "install" ? "secondary" : "ghost"} aria-pressed={mode === "install"} onClick={() => selectMode("install")}>{t("First installation")}</Button>
       <Button variant={mode === "update" ? "secondary" : "ghost"} aria-pressed={mode === "update"} onClick={() => selectMode("update")}>{t("Update an existing skill")}</Button>

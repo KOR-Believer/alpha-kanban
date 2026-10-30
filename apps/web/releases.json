@@ -29,5 +29,30 @@
         "en": ["This release adds management of installed skills without changing the bundled skill's rules or plan, ticket, and inventory document formats. Updating skill files requires separate confirmation from app updates."]
       }
     }
+  },
+  {
+    "id": "2026-10-30-skill-with-app",
+    "sequence": 2,
+    "date": "2026-10-30",
+    "notify": true,
+    "notes": {
+      "ko": [
+        "프로젝트 선택 화면과 보드 상단에서 스킬 업데이트를 바로 열 수 있습니다.",
+        "PWA 업데이트 모달에서 변경 파일을 확인하고 한 번 승인하면, 새 앱을 불러온 뒤 등록된 스킬도 백업하고 업데이트합니다. Codex에서 해당 스킬을 사용하는 작업이 끝난 뒤 눌러주세요.",
+        "개인 수정이나 권한 문제가 있는 스킬은 교체하지 않고 앱만 업데이트할 수 있습니다. 백업은 스킬 업데이트에서 복원할 수 있습니다."
+      ],
+      "en": [
+        "Open Skill updates directly from the project selector and board headers.",
+        "Review changed files and confirm once in the PWA update dialog. After the new app loads, your registered skill is backed up and updated too. Finish any Codex task using the skill first.",
+        "When personal changes or permission issues prevent a skill update, you can update only the app. Backups can be restored from Skill updates."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": ["동봉 스킬의 규칙과 문서 형식은 그대로입니다. 설치본이 이번 묶음과 이미 같으면 스킬 파일을 변경하지 않습니다."],
+        "en": ["The bundled skill's rules and document formats are unchanged. Skill files already matching this bundle are left untouched."]
+      }
+    }
   }
 ]

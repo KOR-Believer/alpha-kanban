@@ -6,6 +6,7 @@ import { useTranslation } from "../i18n";
 import { LanguageSelector } from "./LanguageSelector";
 import { ThemeToggle } from "./ThemeToggle";
 import { PwaMenu } from "../pwa/PwaMenu";
+import { SkillUpdatesButton } from "../skills/SkillUpdates";
 import { WorkspaceButton } from "./WorkspaceNavigation";
 import { Button, buttonVariants } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -20,6 +21,7 @@ export function StartPageNavigation({ help }: { help?: ReactNode }) {
       <LanguageSelector />
       <ThemeToggle />
       <PwaMenu />
+      <SkillUpdatesButton placement="toolbar" />
       {help}
       <Link to="/all" className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" />{t("All tickets")}</Link>
     </nav>

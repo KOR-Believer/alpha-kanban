@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, FolderOpen, RefreshCw, RotateCcw, Unplug } from "lucide-react";
+import { Copy, Download, FolderOpen, PackageCheck, RefreshCw, RotateCcw, Unplug } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -9,12 +9,15 @@ import { usePwaDraft } from "../pwa/usePwaDraft";
 import { loadSkillBundle } from "./bundle";
 import { skillRepository, type SkillConnection, type SkillRecovery, type SkillReview } from "./repository";
 
-export function SkillUpdatesButton() {
+export function SkillUpdatesButton({ placement = "panel" }: { placement?: "panel" | "toolbar" }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const toolbar = placement === "toolbar";
   return <>
-    <Button ref={trigger} size="sm" variant="outline" onClick={() => setOpen(true)}><FolderOpen />{t("Register or manage an installed skill")}</Button>
+    <Button ref={trigger} data-skill-updates="" size="sm" variant={toolbar ? "ghost" : "outline"} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+      {toolbar ? <PackageCheck aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}{t(toolbar ? "Skill updates" : "Register or manage an installed skill")}
+    </Button>
     <SkillUpdates open={open} onOpenChange={setOpen} returnFocus={trigger.current} />
   </>;
 }

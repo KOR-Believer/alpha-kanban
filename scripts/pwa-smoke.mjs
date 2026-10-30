@@ -294,7 +294,7 @@ try {
     const cache = await caches.open("unrelated-app-cache"); await cache.put("/unrelated", new Response("kept"));
     await navigator.serviceWorker.register("/other/sw.js", { scope: "/other/" });
   });
-  const before = await snapshot(page);
+  let before = await snapshot(page);
   record("Initial precache and persisted real FileSystem handles (OPFS, not OS picker)");
   await openMenu(page);
   await page.getByText("오프라인 사용 준비 완료", { exact: true }).waitFor();
@@ -320,12 +320,24 @@ try {
   networkUnavailable = false; await context.setOffline(false);
   await downloadPage.close();
   record("Running app downloads its complete, hash-matching skill ZIP offline while another release waits");
+  await context.setOffline(true); networkUnavailable = true;
   await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
   await page.getByRole("heading", { name: "업데이트 내역", exact: true }).waitFor();
   await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).waitFor();
+  assert.equal(await page.getByRole("checkbox").count(), 0);
+  await page.getByText("Codex에서 이 스킬을 사용하는 작업이 있다면 끝난 뒤 업데이트하세요.", { exact: true }).waitFor();
   await page.screenshot({ path: resolve(output, "release-before-update.png") });
-  await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: resolve(output, "release-combined-narrow.png") });
+  const combinedBounds = await page.getByRole("dialog").boundingBox();
+  assert(combinedBounds && combinedBounds.x >= 0 && combinedBounds.x + combinedBounds.width <= 390);
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).click();
   await page.getByText(/다른 앱 창의 작성 중인 내용도/).waitFor();
+  networkUnavailable = false; await context.setOffline(false);
+  await until(async () => await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).isEnabled(), "blocked approval cancelled after session resumes");
+  assert.deepEqual(await snapshot(page), before, "Blocked app update must not leave skill consent or change existing backups");
   assert.equal(await second.getByRole("textbox", { name: "수동 지시", exact: true }).inputValue(), "잃으면 안 되는 초안");
   assert.equal((await workerInfo(page)).buildId, versions.a.release.buildId);
   record("Other-tab draft prevents activation without losing its contents");
@@ -342,7 +354,7 @@ try {
   await second.getByRole("textbox", { name: "수동 지시", exact: true }).fill("업데이트 중 저장 보호");
   await second.getByRole("button", { name: "문서에 추가", exact: true }).click();
   await until(() => second.evaluate(() => Boolean(window.finishSmokeSave)), "write in progress");
-  await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
+  await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).click();
   await page.getByText(/다른 앱 창의 작성 중인 내용도/).waitFor();
   assert.equal((await workerInfo(page)).buildId, versions.a.release.buildId);
   await second.evaluate(() => window.finishSmokeSave());
@@ -355,14 +367,42 @@ try {
   const unresponsiveCdp = await context.newCDPSession(unresponsive);
   await unresponsiveCdp.send("Network.setBypassServiceWorker", { bypass: true });
   await unresponsive.goto(origin + "/?smoke-unresponsive");
-  await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
+  await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).click();
   await page.getByText(/다른 앱 창의 작성 중인 내용도/).waitFor();
   assert.equal((await workerInfo(page)).buildId, versions.a.release.buildId);
   await unresponsive.close();
   record("Unresponsive app client refuses activation instead of discarding work");
-  await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
+  await context.setOffline(true); networkUnavailable = true;
+  await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).click();
   await until(async () => (await workerInfo(page))?.buildId === versions.b.release.buildId, "controlled activation");
   await until(async () => (await page.locator("body").getAttribute("inert")) === null && await page.getByRole("button", { name: "앱 설치 및 업데이트" }).count() === 1, "updated page mounted");
+  await page.getByText("등록된 스킬을 백업하고 업데이트했습니다.", { exact: true }).waitFor();
+  const afterCombined = await snapshot(page);
+  assert.deepEqual(afterCombined.settings, before.settings);
+  const newRows = afterCombined.records.filter(([key]) => !before.records.some(([oldKey]) => key === oldKey));
+  assert.equal(newRows.length, 2);
+  const approval = newRows.find(([key]) => key === "skill-update:app-update")?.[1];
+  const backup = newRows.find(([key]) => key.startsWith("skill-update:recovery:"))?.[1];
+  assert.equal(approval?.state, "applied"); assert.equal(approval?.buildId, versions.b.release.buildId);
+  assert.equal(backup?.state, "applied"); assert.equal(backup?.id, approval?.recoveryId);
+  assert.deepEqual(afterCombined.records.filter(([key]) => before.records.some(([oldKey]) => key === oldKey)), before.records);
+  const installedFiles = await page.evaluate(async () => {
+    const root = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-skill");
+    const files = [];
+    async function walk(dir, prefix = "") {
+      for await (const entry of dir.values()) {
+        if (entry.kind === "directory") await walk(entry, prefix + entry.name + "/");
+        else files.push({ path: prefix + entry.name, content: await (await entry.getFile()).text() });
+      }
+    }
+    await walk(root); return files.sort((a, b) => a.path.localeCompare(b.path));
+  });
+  const approvedPayload = JSON.parse(await readFile(resolve(versions.b.dir, "downloads", `implementation-ledger-${versions.b.release.skillBundle}.json`), "utf8"));
+  assert.deepEqual(installedFiles, approvedPayload.files.map(({ path, content }) => ({ path, content })).sort((a, b) => a.path.localeCompare(b.path)));
+  await page.screenshot({ path: resolve(output, "release-combined-success.png") });
+  networkUnavailable = false; await context.setOffline(false);
+  before = afterCombined;
+  record("One confirmation updates the app then backs up and updates its exact registered skill once across windows, fully offline; blocked activation leaves files and backups unchanged");
   assert.match(await appVersion(page), new RegExp(versions.b.release.buildId));
   assert.match(await appVersion(second), new RegExp(versions.b.release.buildId));
   if (installWindow) {

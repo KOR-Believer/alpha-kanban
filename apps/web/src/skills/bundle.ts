@@ -47,6 +47,9 @@ export async function validateBundle(value: unknown, expected: string, digest?: 
 export async function loadSkillBundle(version = __APP_RELEASE__.skillBundle, digest = __APP_RELEASE__.skillPayload) {
   if (!/^[a-f0-9]{12}$/.test(version) || !digest) throw new Error("Skill information is unavailable. Use the agent request instead.");
   const response = await fetch(`/downloads/implementation-ledger-${version}.json`, { signal: AbortSignal.timeout(15_000) });
+  return readSkillBundle(response, version, digest);
+}
+export async function readSkillBundle(response: Response, version: string, digest: string) {
   if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw new Error("Skill information is unavailable. Use the agent request instead.");
   const reader = response.body?.getReader();
   if (!reader) throw new Error("Invalid skill bundle.");

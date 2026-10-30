@@ -7,6 +7,7 @@ import { t, locale, useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PwaMenu } from "./pwa/PwaMenu";
+import { SkillUpdatesButton } from "./skills/SkillUpdates";
 import { ProjectGuide } from "@/components/ProjectGuide";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { errorSummary, errorDetails } from "@/i18n/errors";
@@ -705,6 +706,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           <BrowserProjectSwitcher workspaces={workspacesQuery.data?.workspaces ?? []} selectedWorkspaceId={selectedWorkspaceId} onSelect={handleWorkspaceSelect} />
 
           <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+            <SkillUpdatesButton placement="toolbar" />
             <TourHelp tour={boardTour} />
             <LanguageSelector />
             <ThemeToggle surface="--ak-surface" />

@@ -20,6 +20,7 @@ import { ProjectGuide } from "../components/ProjectGuide";
 import { setLanguage } from "../i18n";
 import { projectFixture, documentFixture } from "../allProjectsFixtures";
 import { buildDocumentSets } from "@alpha-kanban/shared/documents";
+import { skillRepository } from "../skills/repository";
 
 const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>() }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -343,6 +344,37 @@ describe("browser mode UI boundaries", () => {
     vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: { ...response.document, tickets: [] } });
     selectDocument(); await render(<App />);
     expect(container.querySelector("[data-tour-offer]")).toBeNull();
+  });
+
+  it.each(["start", "project", "all"])("exposes skill updates directly in the %s header without navigating or requesting folder access", async (surface) => {
+    const picker = vi.fn();
+    vi.stubGlobal("showDirectoryPicker", picker);
+    vi.spyOn(skillRepository, "connection").mockResolvedValue(undefined);
+    vi.spyOn(skillRepository, "recoveries").mockResolvedValue([]);
+    const apply = vi.spyOn(skillRepository, "apply");
+    const patch = vi.spyOn(browserRepository, "patch");
+    const append = vi.spyOn(browserRepository, "append");
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    if (surface === "project") selectDocument();
+    await render(surface === "start"
+      ? <BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()} workspaces={[]} error={null} isLoading={false} />
+      : surface === "project" ? <App /> : <AllProjectsBoard />);
+    const selector = "header [data-skill-updates], .ak-start-navigation [data-skill-updates]";
+    const trigger = await waitForElement<HTMLButtonElement>(selector);
+    expect(container.querySelectorAll(selector)).toHaveLength(1);
+    expect(trigger.textContent).toBe("스킬 업데이트");
+    expect(skillRepository.connection).not.toHaveBeenCalled();
+    await act(async () => trigger.click());
+    const dialog = await waitForElement('[role="dialog"]', document);
+    expect(dialog.querySelector("h2")?.textContent).toBe("스킬 업데이트");
+    await act(async () => { await setLanguage("en"); });
+    expect(trigger.textContent).toBe("Skill updates");
+    expect(routing.navigate).not.toHaveBeenCalled();
+    expect(picker).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
+    expect(append).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it.each(["start", "project", "all"])("unifies Help on %s and opens the AI guide without navigation or document writes", async (surface) => {

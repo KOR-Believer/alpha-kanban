@@ -5,6 +5,7 @@ import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PwaMenu } from "./pwa/PwaMenu";
+import { SkillUpdatesButton } from "./skills/SkillUpdates";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { buildAppRoute, type TicketDetailMode } from "./appRoute";
 import type {
@@ -210,6 +211,7 @@ export function AllProjectsBoard() {
           <LanguageSelector />
           <ThemeToggle />
           <PwaMenu />
+          <SkillUpdatesButton placement="toolbar" />
           <TourHelp tour={tour} />
           <BrowserFilesMenu />
           {isWriting ? <Loader2 aria-label={t("Saving")} className="size-4 animate-spin" /> : null}

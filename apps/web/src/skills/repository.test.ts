@@ -20,7 +20,7 @@ async function fixture() {
   root.file("obsolete.md", "old file");
   const storage = new MemoryStorage();
   const lock = testLocks();
-  const config = { version: bundle.version, digest };
+  const config = { version: bundle.version, digest, compatible: true };
   const repository = new SkillRepository(storage, lock, config);
   const connection = await repository.connect(root.handle());
   return { before, bundle, digest, root, existing, reference, storage, lock, config, repository, connection };
@@ -194,5 +194,112 @@ describe("skill payload validation", () => {
       await expect(validateBundle(invalid, bundle.version)).rejects.toThrow("Invalid");
     }
     expect(isLedgerSkill("---\nname: other\n---\nname: implementation-ledger")).toBe(false);
+  });
+});
+
+describe("PWA-bound skill consent", () => {
+  const a = "a".repeat(16), b = "b".repeat(16), c = "c".repeat(16);
+  async function approved() {
+    const value = await fixture();
+    const review = await value.repository.inspect(value.connection, value.bundle);
+    const id = await value.repository.approveAppUpdate(review, a, b);
+    return { ...value, id, review };
+  }
+  it("does not write on approval, the old app, cancellation, or without consent", async () => {
+    const { repository, bundle, id, existing } = await approved();
+    const load = vi.fn(async () => bundle);
+    expect(await repository.completeAppUpdate(a, load)).toBeUndefined();
+    expect(load).not.toHaveBeenCalled(); expect(existing.opens).toBe(0);
+    expect(await repository.recoveries()).toHaveLength(0);
+    await repository.cancelAppUpdate(id);
+    expect(await repository.completeAppUpdate(b, load)).toBeUndefined();
+    expect(existing.opens).toBe(0);
+  });
+  it("backs up and updates exactly once after the approved app starts, including concurrent windows", async () => {
+    const { repository, bundle, existing, storage, lock, config, id } = await approved();
+    const restarted = new SkillRepository(storage, lock, config);
+    const results = await Promise.all([restarted.completeAppUpdate(b, async () => bundle), repository.completeAppUpdate(b, async () => bundle)]);
+    expect(results.map((result) => result?.state)).toEqual(["applied", "applied"]);
+    expect(existing.writes).toBe(1); expect(await repository.recoveries()).toHaveLength(1);
+    await repository.acknowledgeAppUpdate(id);
+    expect(await restarted.completeAppUpdate(b, async () => bundle)).toBeUndefined();
+    await repository.restore(results[0]!.recoveryId!);
+    expect(existing.content).toBe(skill + "old");
+    expect(await restarted.completeAppUpdate(b, async () => bundle)).toBeUndefined();
+  });
+  it("waits for resume and protects the entire consent cancellation against a late prepare message", async () => {
+    const { repository, storage, id } = await approved();
+    const get = storage.get.bind(storage);
+    vi.spyOn(storage, "get").mockImplementation(async (key) => {
+      expect(appActivity.prepare()).toBe(false);
+      return get(key);
+    });
+    appActivity.prepare();
+    const cancelled = repository.cancelAppUpdate(id);
+    await Promise.resolve();
+    expect(storage.get).not.toHaveBeenCalled();
+    appActivity.resume();
+    await cancelled;
+    expect(storage.records.has("skill-update:app-update")).toBe(false);
+  });
+  it.each(["content", "mtime", "extra", "permission", "connection", "build", "payload", "compatibility"])("preserves the installation when %s changes after consent", async (kind) => {
+    const { repository, bundle, existing, root, storage, lock, config } = await approved();
+    if (kind === "content") existing.content += " personal";
+    if (kind === "mtime") existing.mtime++;
+    if (kind === "extra") root.file("personal.md", "my rules");
+    if (kind === "permission") root.write = "denied";
+    if (kind === "connection") await repository.disconnect();
+    const restarted = new SkillRepository(storage, lock, { ...config, ...(kind === "payload" ? { digest: "f".repeat(64) } : {}), ...(kind === "compatibility" ? { compatible: false } : {}) });
+    const result = await restarted.completeAppUpdate(kind === "build" ? c : b, async () => bundle);
+    expect(result?.state).toBe("blocked"); expect(existing.opens).toBe(0);
+    expect(await repository.recoveries()).toHaveLength(0);
+    root.write = "granted";
+    expect((await repository.completeAppUpdate(b, async () => bundle))?.state).toBe("blocked");
+    expect(existing.opens).toBe(0);
+  });
+  it("stops before touching files when durable consent or the backup cannot be stored", async () => {
+    const { repository, bundle, connection, existing, storage } = await fixture();
+    const review = await repository.inspect(connection, bundle);
+    const set = storage.set.bind(storage);
+    vi.spyOn(storage, "set").mockRejectedValueOnce(new DOMException("Full", "QuotaExceededError"));
+    await expect(repository.approveAppUpdate(review, a, b)).rejects.toThrow("Full");
+    expect(await repository.appUpdate()).toBeUndefined();
+    await repository.approveAppUpdate(review, a, b);
+    vi.spyOn(storage, "set").mockImplementation(async (key, value) => {
+      if (key.startsWith("skill-update:recovery:")) throw new DOMException("Full", "QuotaExceededError");
+      return set(key, value);
+    });
+    expect((await repository.completeAppUpdate(b, async () => bundle))?.state).toBe("blocked");
+    expect(existing.opens).toBe(0);
+  });
+  it("keeps partial backups, never retries an interrupted write and allows explicit restoration", async () => {
+    const { repository, bundle, existing, reference, storage, lock, config } = await approved();
+    reference.failClose = true;
+    const result = await repository.completeAppUpdate(b, async () => bundle);
+    expect(result?.state).toBe("blocked");
+    expect((await repository.recoveries())[0]?.state).toBe("pending");
+    const writes = existing.writes;
+    reference.failClose = false;
+    const restarted = new SkillRepository(storage, lock, config);
+    await restarted.completeAppUpdate(b, async () => bundle);
+    expect(existing.writes).toBe(writes);
+    await restarted.restore(result!.recoveryId!);
+    expect(existing.content).toBe(skill + "old");
+    expect(reference.content).toBe("old rules");
+  });
+  it("does not retry when a page ended after claiming the operation", async () => {
+    const { repository, bundle, storage, existing } = await approved();
+    const intent = await repository.appUpdate();
+    await storage.set("skill-update:app-update", { ...intent, state: "writing" });
+    expect((await repository.completeAppUpdate(b, async () => bundle))?.state).toBe("blocked");
+    expect(existing.opens).toBe(0);
+  });
+  it("rejects custom and incompatible installations before storing consent", async () => {
+    const { repository, bundle, connection, existing, storage, lock, config } = await fixture();
+    existing.content += " my rule";
+    await expect(repository.approveAppUpdate(await repository.inspect(connection, bundle), a, b)).rejects.toThrow("Personal");
+    const unknown = new SkillRepository(storage, lock, { ...config, compatible: undefined });
+    await expect(unknown.approveAppUpdate(await unknown.inspect(connection, bundle), a, b)).rejects.toThrow("compatibility");
+    expect(await repository.appUpdate()).toBeUndefined(); expect(existing.opens).toBe(0);
   });
 });
