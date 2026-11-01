@@ -1,4 +1,5 @@
 import { ContextError } from "./context-error.mjs";
+import { headerField, scanDocumentHeader } from "./document-header.mjs";
 
 // Pure helpers: no filesystem, Git, user lookup or document writes.
 export function normalizeOwner(value) {
@@ -20,30 +21,14 @@ export function ownerFromPath(projectRelativePath) {
 }
 
 export function readOwnerHeader(markdown) {
-  const lines = markdown.replace(/^\uFEFF/, "").split(/\r?\n/);
-  let at = 0;
-  if (lines[0] === "---") {
-    const end = lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)$/.test(line));
-    if (end < 0) throw new ContextError("INVALID_HEADER", "Unclosed front matter; the Owner header cannot be identified.");
-    at = end + 1;
-  }
-  while (lines[at]?.trim() === "") at++;
-  if (!/^#\s+\S/.test(lines[at] ?? "")) throw new ContextError("INVALID_HEADER", "A document title must precede its metadata header.");
-  let owner = null;
-  let ownerLine = null;
-  for (at++; at < lines.length; at++) {
-    const line = lines[at];
-    if (!line.trim()) continue;
-    const field = /^([\p{L}][\p{L}\p{N} _-]*):[ \t]*(.*)$/u.exec(line);
-    if (!field) break;
-    if (field[1].trim().toLowerCase() !== "owner") continue;
-    if (field[1] !== "Owner") throw new ContextError("INVALID_OWNER_FIELD", "Spell the document header field exactly Owner:.", { line: at + 1 });
-    if (ownerLine !== null) throw new ContextError("DUPLICATE_OWNER", "The document header must contain only one Owner field.", { line: at + 1 });
-    try { owner = normalizeOwner(field[2]); }
-    catch (error) { throw new ContextError(error.diagnostic.code, error.message, { line: at + 1 }); }
-    ownerLine = at + 1;
-  }
-  return { value: owner, line: ownerLine };
+  const header = scanDocumentHeader(markdown);
+  if (header.error) throw new ContextError("INVALID_HEADER", "A complete front matter and document title must precede the metadata header.");
+  const owner = headerField(header, "Owner");
+  if (owner.error === "DUPLICATE_FIELD") throw new ContextError("DUPLICATE_OWNER", "The document header must contain only one Owner field.");
+  if (owner.error) throw new ContextError("INVALID_OWNER_FIELD", "Spell the document header field exactly Owner:.", { line: owner.field?.line });
+  if (owner.value === null) return { value: null, line: null };
+  try { return { value: normalizeOwner(owner.value), line: owner.field.line }; }
+  catch (error) { throw new ContextError(error.diagnostic.code, error.message, { line: owner.field.line }); }
 }
 
 export function checkNewOwner(markdown, expectedOwner) {

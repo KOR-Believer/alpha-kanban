@@ -1,6 +1,12 @@
 ---
 name: implementation-ledger
 description: Write and maintain Alpha Kanban-compatible work records for user participation. Use for requested plans, tickets, investigation records, or progress updates to tracked work. Keep discussion-only requests read-only.
+metadata:
+  version: "1"
+  read-formats: "unversioned,1"
+  write-formats: "unversioned,1"
+  new-document-format: "unversioned"
+  update-url: "https://kanban.giveit2.me/intro#updates"
 ---
 
 # Implementation Ledger
@@ -49,6 +55,8 @@ For user-applied status changes and `[수동지시]` records, follow [User Direc
 Normally update once when handing work back. Write earlier for changed user direction, a blocker, or an outcome the user needs during a long task. Omit tool-call diaries, retries, raw logs, and repeated summaries. Link detailed evidence once.
 
 ## Preserve Alpha Kanban Compatibility
+
+Preserve the existing document format. Unknown or invalid `Ledger-Format` declarations permit raw reading only, not structural edits; do not guess or downgrade. For a compatibility problem or an installation/update request, read [versions and compatibility](references/compatibility.md). Check official updates only then; offline means unverified. A skill update never authorizes document conversion or overwriting a personal installation.
 
 Before the first ticket write, read [the format reference](references/ledger-format.md). For new files, use only the matching template under `assets/`. Replace placeholders and omit empty optional sections; retain ticket fields and the required question section. Exact suffixes are `_tickets.md`, `_plan.md`, and `_inventory.md`; follow local directory/numbering conventions and share a slug across related files.
 

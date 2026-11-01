@@ -18,6 +18,7 @@ import { usePwaDraft } from "../../pwa/usePwaDraft";
 export type TicketMove = { ticket: TicketItem; targetStatus: TicketStatus; guard: TicketWriteGuard };
 
 export function prepareTicketMove(document: TicketDocumentResponse, ticketId: string, targetStatus: TicketStatus): TicketMove | undefined {
+  if (document.document.compatibility?.writable === false) return undefined;
   const ticket = document.document.tickets.find((item) => item.id === ticketId);
   if (!ticket || ticket.status === targetStatus) return undefined;
   return {

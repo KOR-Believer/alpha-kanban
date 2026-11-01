@@ -2,6 +2,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { assertTicketCompatibility, structuralLedgerLines } from "./lib/ledger-format.mjs";
 
 const VALID_STATUSES = new Set(["TODO", "READY", "IN_PROGRESS", "BLOCKED", "DONE", "DEFERRED"]);
 const VALID_PROGRESS = new Set(["0", "25", "50", "75", "100"]);
@@ -168,8 +169,12 @@ function optionalString(value) {
 }
 
 function readDocument(filePath) {
-  const markdown = readFileSync(filePath, "utf8");
-  const normalized = markdown.replace(/\r\n/g, "\n");
+  const markdown = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(filePath));
+  try { assertTicketCompatibility(markdown); }
+  catch (error) { throw new CliError(error.message); }
+  const bom = markdown.startsWith("\uFEFF");
+  const lineEnding = markdown.includes("\r\n") ? "\r\n" : "\n";
+  const normalized = markdown.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
   const trailingNewline = normalized.endsWith("\n");
   const lines = normalized.split("\n");
   if (trailingNewline) {
@@ -180,6 +185,8 @@ function readDocument(filePath) {
     filePath,
     lines,
     trailingNewline,
+    bom,
+    lineEnding,
   };
 }
 
@@ -191,7 +198,7 @@ function cloneDocument(document) {
 }
 
 function serializeDocument(document) {
-  return `${document.lines.join("\n")}${document.trailingNewline ? "\n" : ""}`;
+  return `${document.bom ? "\uFEFF" : ""}${document.lines.join(document.lineEnding)}${document.trailingNewline ? document.lineEnding : ""}`;
 }
 
 function writeIfNeeded(filePath, document, dryRun) {
@@ -204,35 +211,29 @@ function writeIfNeeded(filePath, document, dryRun) {
 }
 
 function findTicketHeadings(lines) {
+  lines = structuralLedgerLines(lines.join("\n"));
   const headings = [];
-  let inFence = false;
+  const start = lines.findIndex((line) => line.trim() === "## Ticket List");
+  const nextSection = lines.findIndex((line, index) => index > start && /^##\s+/.test(line));
+  const end = nextSection < 0 ? lines.length : nextSection;
 
-  for (let index = 0; index < lines.length; index += 1) {
+  for (let index = start + 1; index < end; index += 1) {
     const line = lines[index] ?? "";
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) {
-      continue;
-    }
 
-    const match = line.match(/^###\s+([A-Za-z][A-Za-z0-9]*-\d+[A-Za-z0-9-]*)\.\s*(.*?)\s*$/);
-    if (!match) {
-      continue;
-    }
+    if (!/^ {0,3}###(?:[ \t]+|$)/.test(line)) continue;
+    const match = line.match(/^ {0,3}###\s+([A-Za-z0-9]+-\d+[A-Za-z]*)\.\s+(.+?)\s*$/);
 
     headings.push({
-      id: match[1],
+      id: match?.[1],
       lineIndex: index,
-      title: match[2] ?? "",
+      title: match?.[2] ?? "",
     });
   }
 
   return headings.map((heading, index) => ({
     ...heading,
-    endLineIndex: headings[index + 1]?.lineIndex ?? lines.length,
-  }));
+    endLineIndex: headings[index + 1]?.lineIndex ?? end,
+  })).filter((heading) => heading.id);
 }
 
 function locateTicket(document, ticketId) {
@@ -258,6 +259,7 @@ function locateTicket(document, ticketId) {
 }
 
 function parseFields(lines, startLineIndex, endLineIndex) {
+  lines = structuralLedgerLines(lines.join("\n"));
   const starts = [];
   let inFence = false;
 
@@ -417,14 +419,12 @@ function updateTopLevelProgress(document) {
 }
 
 function findTopLevelProgressLine(lines) {
-  let inFence = false;
-  for (let index = 0; index < lines.length; index += 1) {
+  lines = structuralLedgerLines(lines.join("\n"));
+  const start = lines.findIndex((line) => line.trim() === "## Status");
+  for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (!inFence && line.startsWith("- 현재 진행률:")) {
+    if (/^##\s+/.test(line)) return undefined;
+    if (line.startsWith("- 현재 진행률:")) {
       return index;
     }
   }
@@ -481,7 +481,7 @@ function checkDocument(document) {
   } else {
     const expected = countTicketStatuses(document);
     const actualLine = document.lines[progressLine] ?? "";
-    const actual = actualLine.match(/`(\d+)\s*\/\s*(\d+)\s+tickets`/);
+    const actual = actualLine.match(/`?(\d+)\s*\/\s*(\d+)\s+tickets`?/);
     if (!actual) {
       errors.push("Top-level 현재 진행률 line is malformed.");
     } else if (Number(actual[1]) !== expected.done || Number(actual[2]) !== expected.total) {

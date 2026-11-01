@@ -254,6 +254,18 @@ export function AllProjectsBoard() {
         </label>
       </div>
       <div aria-live="polite">
+        {boardData?.documents.some(({ response }) => response.document.compatibility?.readable === false) ? (
+          <details className="ak-all-board-notice block text-sm text-muted-foreground">
+            <summary className="cursor-pointer">{t("Some documents need a supported format or repair. Open their Markdown to review them.")}</summary>
+            <ul className="ak-scroll-area max-h-28 overflow-auto">
+              {boardData.documents.filter(({ response }) => response.document.compatibility?.readable === false).map(({ response, workspace }) => (
+                <li key={response.file.id}><a className="underline" href={buildAppRoute({ workspaceId: workspace.id, filePath: documentRouteId(response.file) })}>
+                  {workspace.label}: {response.file.relativePath}
+                </a></li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         {moveError || boardOrderQuery.error || ticketsQuery.error ? (
           <div className="ak-all-board-notice text-destructive" role="alert">
             <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
@@ -314,7 +326,7 @@ export function AllProjectsBoard() {
           </div>
         )}
       </main>
-      {detail && detailTicket ? (
+      {detail && detailTicket && detail.document.response.document.compatibility?.writable !== false ? (
         <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`} ticket={detailTicket}
           file={currentDetail?.response.file ?? detail.document.response.file}
           presentation={presentation}

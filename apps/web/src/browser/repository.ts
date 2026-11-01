@@ -4,6 +4,7 @@ import type {
 } from "@alpha-kanban/shared";
 import { buildDocumentSets, inferDocumentPathOwner, inferMarkdownFileType, inferSequenceNumber, inferSlug, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
 import { appendUserInstruction, parseTicketDocument, updateTicketStatusAndProgress } from "@alpha-kanban/shared/ticketMarkdown";
+import { readDocumentMetadata, indexDocumentIds } from "@alpha-kanban/shared/documentMetadata";
 import { IndexedDbStorage, type BrowserStorage } from "./storage";
 import { appActivity } from "../pwa/activity";
 
@@ -74,7 +75,8 @@ export class BrowserRepository {
       while (this.snapshotBytes + bytes > this.cacheBytes && this.snapshots.size) this.forgetSnapshot(this.snapshots.keys().next().value!);
       this.snapshots.set(snapshot.file.id, snapshot); this.snapshotBytes += bytes;
     }
-    const ticketProgress = snapshot.file.type === "tickets" ? parseTicketDocument(snapshot.markdown).status : undefined;
+    const document = snapshot.file.type === "tickets" ? parseTicketDocument(snapshot.markdown) : undefined;
+    const ticketProgress = document?.compatibility?.readable === false ? undefined : document?.status;
     this.index.set(snapshot.file.id, { file: snapshot.file, size: snapshot.size, ticketProgress });
   }
 
@@ -375,11 +377,13 @@ export class BrowserRepository {
     }
     // Fatal decoding refuses non-UTF-8 input rather than corrupting it on the next save; preserve BOM.
     const markdown = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await blob.arrayBuffer());
+    const metadata = readDocumentMetadata(markdown);
     const file: MarkdownFileSummary = {
       id: record.id, workspaceId: record.workspaceId, type: inferMarkdownFileType(record.path), filename: blob.name,
       directory: record.path.split("/").slice(0, -1).join("/"), relativePath: record.path, workspaceRelativePath: record.path,
       hash: await contentHash(markdown), mtimeMs: blob.lastModified, slug: inferSlug(record.path), sequenceNumber: inferSequenceNumber(record.path),
       pathOwner: inferDocumentPathOwner(record.path),
+      ...(metadata.format.readable && metadata.documentId.status === "valid" ? { documentId: metadata.documentId.value! } : {}),
     };
     const result = { file, markdown, size: blob.size };
     this.cache(result);
@@ -396,6 +400,12 @@ export class BrowserRepository {
   async tickets(workspaceId: string, id: string, force = true): Promise<TicketDocumentResponse> {
     const snapshot = await this.snapshot(await this.document(workspaceId, id), force);
     return { file: snapshot.file, document: parseTicketDocument(snapshot.markdown) };
+  }
+  async documentIdIndex(workspaceId: string) {
+    // A tickets-only discovery cannot establish uniqueness across all Markdown.
+    return indexDocumentIds((await this.files(workspaceId, true)).map((file) => ({
+      projectId: workspaceId, localId: file.id, path: file.relativePath, documentId: file.documentId,
+    })));
   }
   async documentSets(workspaceId: string): Promise<DocumentSetsResponse> {
     const sets = buildDocumentSets(await this.files(workspaceId));
@@ -428,6 +438,12 @@ export class BrowserRepository {
       if (before.file.hash !== guard.expectedHash || before.file.mtimeMs !== guard.expectedMtimeMs) throw new BrowserFileError("STALE_FILE", "The Markdown file changed externally. Reload it before saving.");
       const intended = transform(before.markdown);
       if (intended === before.markdown) return { file: before.file, document: parseTicketDocument(intended) };
+      if (before.file.documentId) {
+        const identity = (await this.documentIdIndex(workspaceId)).find((entry) => entry.documentId === before.file.documentId);
+        if (!identity || identity.status !== "unique" || identity.documents[0]?.localId !== fileId) {
+          throw new BrowserFileError("DUPLICATE_DOCUMENT_ID", "The document ID is shared by multiple files. Resolve the duplicate IDs before editing.");
+        }
+      }
       const recovery: RecoveryRecord = {
         id: newId("r_"), fileId, workspaceId, path: record.path, ticketId, before: before.markdown, intended,
         beforeHash: before.file.hash, intendedHash: await contentHash(intended), createdAt: new Date().toISOString(),

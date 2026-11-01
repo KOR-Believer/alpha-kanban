@@ -73,6 +73,13 @@ describe("all-projects document workflow", () => {
     }
     expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(expectedCards);
   }
+  it("excludes unsupported formats from cards and links to the raw document instead", async () => {
+    documents[first.id]!.document.compatibility = { status: "unsupported", version: "99", readable: false, writable: false, code: "UNSUPPORTED_FORMAT" };
+    await mount(1);
+    expect(container.textContent).toContain(t("Some documents need a supported format or repair. Open their Markdown to review them."));
+    expect(container.querySelector('details a')?.getAttribute("href")).toContain("d_first");
+    expect(api.patch).not.toHaveBeenCalled(); expect(api.append).not.toHaveBeenCalled();
+  });
   function card(id = first.id) {
     return [...document.querySelectorAll<HTMLElement>("[data-ticket-key]")].find((element) => element.textContent?.includes(`Fixture ${id}`))!;
   }

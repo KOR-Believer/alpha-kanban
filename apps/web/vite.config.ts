@@ -28,6 +28,7 @@ export default defineConfig(({ command }) => {
   build: { outDir: "dist-browser" },
   resolve: {
     alias: {
+      "@alpha-kanban/shared/documentMetadata": fileURLToPath(new URL("../../packages/shared/src/documentMetadata.ts", import.meta.url)),
       "@alpha-kanban/shared/ticketMarkdown": fileURLToPath(new URL("../../packages/shared/src/ticketMarkdown.ts", import.meta.url)),
       "@alpha-kanban/shared/documents": fileURLToPath(new URL("../../packages/shared/src/documents.ts", import.meta.url)),
       "@": fileURLToPath(new URL("./src", import.meta.url)),

@@ -2,6 +2,8 @@
 
 ## Renderer Contract
 
+The default is the existing unversioned grammar. Optional `Ledger-Format: 1` uses the document header; unsupported/invalid declarations are read-only. See [versions and compatibility](compatibility.md) for the shared contract. Ordinary edits preserve declarations and do not add one.
+
 - Ticket documents contain exactly one `## Status` and one `## Ticket List`. Every `### PREFIX-00. Title` belongs inside `Ticket List`; the prefix is alphanumeric. Another `##` ends that section.
 - Place the document-level `## 확인·결정이 필요한 사항` between `Status` and `Ticket List`, never between individual tickets. Keep this section (or its existing equivalent) when its questions are resolved, replacing the pending items with `- 없음` after review.
 - Preserve every field and its order in [tickets-template.md](../assets/tickets-template.md). Keep block labels on their own lines. Use `없음` for empty dependencies/exclusions and `기준 문서: 없음` when no plan is needed. Name the repository or workspace-relative package; never use `.` as its identity.

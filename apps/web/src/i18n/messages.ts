@@ -1,5 +1,9 @@
 // English source strings are translation keys. Keep complete sentences together.
 export const korean: Record<string, string> = {
+  "The document ID is shared by multiple files. Resolve the duplicate IDs before editing.": "여러 파일이 같은 문서 ID를 사용하고 있습니다. 중복된 ID를 정리한 뒤 수정하세요.",
+  "This document format is not supported. View the Markdown and use a tool that supports its format to edit it.": "지원하지 않는 문서 형식입니다. Markdown 원문을 확인하고 이 형식을 지원하는 도구에서 수정하세요.",
+  "The document format needs repair. View the Markdown and correct the format before editing tickets.": "문서 형식에 문제가 있습니다. Markdown 원문에서 형식을 바로잡은 뒤 티켓을 수정하세요.",
+  "Some documents need a supported format or repair. Open their Markdown to review them.": "지원하지 않거나 손상된 형식의 문서가 있습니다. Markdown 원문을 열어 확인하세요.",
   "Document owner": "문서 소유자",
   "Document owner: {{owner}}": "문서 소유자: {{owner}}",
   "All": "전체",

@@ -81,6 +81,21 @@ describe("browser mode UI boundaries", () => {
     const url = new URL(href, "http://localhost");
     routing.location = { pathname: url.pathname, searchStr: url.search, hash: url.hash.slice(1), href };
   }
+  it("renders unsupported ticket documents as Markdown without a board or editable deep-link detail", async () => {
+    vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: { ...response.document,
+      compatibility: { status: "unsupported", version: "99", readable: false, writable: false, code: "UNSUPPORTED_FORMAT" } } });
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    selectDocument(response.document.tickets[0]!.id);
+    await render(<App allowStartupAutoOpen={false} />);
+    expect((await waitForElement(".ak-markdown")).textContent).toContain("Original body");
+    expect(container.textContent).toContain("지원하지 않는 문서 형식입니다.");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector(".ak-project-board")).toBeNull();
+    expect(container.textContent).not.toContain("티켓 0개");
+    expect(container.querySelector('[aria-label="티켓 문서 보기 방식"]')).toBeNull();
+    await act(async () => { await setLanguage("en"); });
+    expect(container.textContent).toContain("This document format is not supported.");
+  });
 
   async function typeInto(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
     await act(async () => {

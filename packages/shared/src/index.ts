@@ -138,12 +138,21 @@ export const ticketItemSchema = z.object({
 
 export type TicketItem = z.infer<typeof ticketItemSchema>;
 
+export const ledgerCompatibilitySchema = z.object({
+  status: z.enum(["legacy", "supported", "unsupported", "invalid"]),
+  version: z.string().nullable(),
+  readable: z.boolean(),
+  writable: z.boolean(),
+  code: z.enum(["UNSUPPORTED_FORMAT", "INVALID_FORMAT", "NEEDS_REPAIR"]).nullable(),
+});
+
 export const ticketDocumentSchema = z.object({
   title: z.string(),
   status: ticketDocumentStatusSchema,
   tickets: z.array(ticketItemSchema),
   lineCount: z.number().int().nonnegative(),
   missingSections: z.array(z.string()),
+  compatibility: ledgerCompatibilitySchema.optional(),
 });
 
 export type TicketDocument = z.infer<typeof ticketDocumentSchema>;
@@ -200,6 +209,7 @@ export const markdownFileSummarySchema = z.object({
   slug: z.string().min(1),
   sequenceNumber: z.number().int().nonnegative().optional(),
   pathOwner: documentPathOwnerSchema.optional(),
+  documentId: z.string().optional(),
 });
 
 export type MarkdownFileSummary = z.infer<typeof markdownFileSummarySchema>;

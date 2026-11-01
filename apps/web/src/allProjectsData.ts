@@ -106,7 +106,7 @@ export async function loadBoard(api: {
 }
 
 export function boardTickets(data?: BoardData): BoardTicket[] {
-  return (data?.documents ?? []).flatMap(({ response, workspace }) => response.document.tickets.map((ticket) => ({
+  return (data?.documents ?? []).flatMap(({ response, workspace }) => (response.document.compatibility?.readable === false ? [] : response.document.tickets).map((ticket) => ({
     ...ticket,
     file: response.file,
     projectId: workspace.project?.id ?? workspace.id,

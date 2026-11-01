@@ -349,7 +349,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       canLoadWorkspace &&
         resolvedSelectedFileId &&
         selectedFile &&
-        (!isTicketsDocument || ticketViewMode === "markdown"),
+        (!isTicketsDocument || ticketViewMode === "markdown" || ticketQuery.data?.document.compatibility?.readable === false),
     ),
     queryFn: () => fetchMarkdownDocument(selectedWorkspaceId ?? "", resolvedSelectedFileId ?? ""),
     queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
@@ -359,7 +359,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       BOARD_STATUSES.map((status) => [status, []]),
     );
 
-    for (const ticket of ticketQuery.data?.document.tickets ?? []) {
+    for (const ticket of ticketQuery.data?.document.compatibility?.readable === false ? [] : ticketQuery.data?.document.tickets ?? []) {
       grouped.get(ticket.status)?.push(ticket);
     }
 
@@ -372,7 +372,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     }
 
     return grouped;
-  }, [ticketQuery.data?.document.tickets]);
+  }, [ticketQuery.data?.document.tickets, ticketQuery.data?.document.compatibility]);
   const selectedTicket =
     isTicketsDocument && ticketViewMode === "board"
       ? ticketQuery.data?.document.tickets.find((ticket) => ticket.id === selectedTicketId)
@@ -676,7 +676,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
 
   const boardTour = useScreenTour("project", {
     enabled: canLoadWorkspace && !isTicketDetailOpen,
-    eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
+    eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && ticketQuery.data?.document.compatibility?.readable !== false && Boolean(ticketQuery.data?.document.tickets.length),
     scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}`,
   });
   const tourFile = allFiles.find((file) => file.id === lastBoardFile.current?.id && file.type === "tickets") ?? allFiles.find((file) => file.type === "tickets");
@@ -840,7 +840,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 ) : null}
               </div>
               {!isProjectGuideVisible ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
-                {selectedFile?.type === "tickets" ? (
+                {selectedFile?.type === "tickets" && ticketQuery.data?.document.compatibility?.readable !== false ? (
                   <TicketDocumentViewToggle
                     mode={ticketViewMode}
                     onChange={handleTicketViewChange}
@@ -855,13 +855,13 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                       : markdownQuery.isLoading
                   }
                   markdownDocument={markdownQuery.data}
-                  selectedDocumentSet={selectedDocumentSet}
-                  ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
+                  selectedDocumentSet={ticketQuery.data?.document.compatibility?.readable === false ? undefined : selectedDocumentSet}
+                  ticketCount={ticketQuery.data?.document.compatibility?.readable === false ? undefined : ticketQuery.data?.document.tickets.length ?? 0}
                 />
               </div> : null}
             </header>
 
-            <div className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" ? "ak-project-board-scroll" : "p-5"}`}>
+            <div className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" && ticketQuery.data?.document.compatibility?.readable !== false ? "ak-project-board-scroll" : "p-5"}`}>
               <DocumentContent
                 documentSetsError={documentSetsQuery.error}
                 documentSetsIsError={documentSetsQuery.isError}
@@ -900,7 +900,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         </div>
       </main>
 
-      {selectedTicket && resolvedSelectedFileId && ticketQuery.data ? (
+      {selectedTicket && resolvedSelectedFileId && ticketQuery.data && ticketQuery.data.document.compatibility?.writable !== false ? (
         <TicketDetailDrawer
           key={`${selectedWorkspaceId}:${resolvedSelectedFileId}:${selectedTicket.id}`}
           presentation={ticketPresentation}
@@ -1311,7 +1311,7 @@ function DocumentSummary({
   isLoading: boolean;
   markdownDocument?: MarkdownDocumentResponse;
   selectedDocumentSet?: DocumentSetSummary;
-  ticketCount: number;
+  ticketCount?: number;
 }) {
   const { t } = useTranslation();
   if (isLoading) {
@@ -1333,7 +1333,7 @@ function DocumentSummary({
     <div className="flex flex-wrap justify-end gap-2 max-[720px]:justify-start">
 
       <DocumentTypeBadge type={displayFile.type} />
-      {displayFile.type === "tickets" ? (
+      {displayFile.type === "tickets" && ticketCount !== undefined ? (
         <Badge variant="outline">{t("{{count}} tickets", { count: ticketCount })}</Badge>
       ) : null}
       {selectedDocumentSet?.ticketProgress?.totalTickets !== undefined ? (
@@ -1464,6 +1464,18 @@ function DocumentContent({
     return <BoardState title={t("Document unavailable")} />;
   }
 
+  if (ticketDocument?.document.compatibility?.readable === false) {
+    return <div className="flex min-h-0 flex-1 flex-col">
+      <div role="status" className="ak-all-board-notice text-sm text-muted-foreground">
+        {t(ticketDocument.document.compatibility.code === "UNSUPPORTED_FORMAT"
+          ? "This document format is not supported. View the Markdown and use a tool that supports its format to edit it."
+          : "The document format needs repair. View the Markdown and correct the format before editing tickets.")}
+      </div>
+      <MarkdownDocumentReader document={markdownDocument} documentSet={selectedDocumentSet} error={markdownError}
+        file={selectedFile} isError={markdownIsError} isLoading={markdownIsLoading} onFileSelect={onFileSelect} />
+    </div>;
+  }
+
   if (selectedFile.type !== "tickets" || ticketViewMode === "markdown") {
     return (
       <MarkdownDocumentReader
@@ -1538,8 +1550,8 @@ export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByS
             file={document.file}
             onTicketSelect={onTicketSelect}
             status={status}
-            tickets={ticketsByStatus.get(status) ?? []}
-            dragDisabled={Boolean(pendingMove)}
+            tickets={document.document.compatibility?.readable === false ? [] : ticketsByStatus.get(status) ?? []}
+            dragDisabled={Boolean(pendingMove) || document.document.compatibility?.writable === false}
             isDragOver={overStatus === status}
             onDragStart={(event, ticketId) => {
               event.dataTransfer.setData("application/x-alpha-kanban-ticket", ticketId);

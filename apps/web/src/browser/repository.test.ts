@@ -19,6 +19,18 @@ async function fixture(content = ledger) {
 }
 
 describe("path owners without personal settings or migration", () => {
+  it.each(["Ledger-Format: 99", "Ledger-Format: 1\nLedger-Format: 1"])("refuses all browser writes for %s without a recovery write", async (header) => {
+    const source = ledger.replace(/^(# .+\n)/, `$1\n${header}\n`);
+    const f = await fixture(source);
+    expect((await f.repository.tickets(f.workspaceId, f.fileId)).document.compatibility?.writable).toBe(false);
+    expect((await f.repository.documentSets(f.workspaceId)).sets[0]?.ticketProgress).toBeUndefined();
+    expect((await f.repository.markdown(f.workspaceId, f.fileId)).markdown).toBe(source);
+    const code = header.includes("99") ? "UNSUPPORTED_FORMAT" : "INVALID_FORMAT";
+    await expect(f.repository.patch(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, status: "DONE", progress: 100 })).rejects.toMatchObject({ code });
+    await expect(f.repository.append(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, kind: "manual", text: "No write" })).rejects.toMatchObject({ code });
+    expect(f.file.writes).toBe(0); expect(f.file.content).toBe(source);
+    expect(await f.repository.recoveries()).toEqual([]);
+  });
   it("discovers owners and separates equal filenames/IDs while leaving configuration and Markdown untouched", async () => {
     const f = await fixture();
     const docs = f.project.children.get("docs") as FakeDirectory;
@@ -122,6 +134,62 @@ describe("path owners without personal settings or migration", () => {
     expect(reopened.markdown).toContain("Review next");
     expect((await f.repository.tickets(workspaceId, file.id)).document.tickets[0]).toMatchObject({ status: "IN_PROGRESS", progress: 50 });
     expect([...f.project.children.keys()]).toEqual(["docs"]);
+  });
+});
+
+describe("project-scoped UUID analysis without replacing browser handle identity", () => {
+  const id = "33cfe3fc-a0ab-4d1e-9b8b-f30501a2bac1";
+  const withId = ledger.replace("\n", `\nDocument-ID: ${id}\n`);
+
+  it("preserves local ID, deep-link lookup and order through ID addition and handle-preserving moves", async () => {
+    const f = await fixture();
+    const order = { keys: [`${f.fileId}#TEST-01`] };
+    await f.repository.saveBoardOrder(order, { keys: [] });
+    f.file.content = withId; f.file.mtime++;
+    expect((await f.repository.files(f.workspaceId, true))[0]).toMatchObject({ id: f.fileId, documentId: id });
+    const docs = f.project.children.get("docs") as FakeDirectory;
+    const owner = docs.directory("@alice");
+    docs.children.delete(f.file.name); owner.children.set(f.file.name, f.file); f.file.parent = owner;
+    f.repository.invalidateListings();
+    expect((await f.repository.files(f.workspaceId))[0]).toMatchObject({ id: f.fileId, documentId: id });
+    expect((await f.repository.tickets(f.workspaceId, f.fileId)).file.relativePath).toContain("@alice");
+    expect(await f.repository.boardOrder()).toEqual(order);
+    expect(f.file.content).toBe(withId); expect(f.file.writes).toBe(0);
+  });
+
+  it("refuses writes when a duplicate is outside a tickets-only scan, then recovers after explicit resolution", async () => {
+    const f = await fixture(withId);
+    const plan = f.project.directory("notes").file("copy_plan.md", `# Copy\nDocument-ID: ${id.toUpperCase()}\n`);
+    await f.repository.ticketFiles(f.workspaceId);
+    expect(plan.bodyReads).toBe(0);
+    for (const action of [
+      () => f.repository.patch(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, status: "DONE", progress: 100 }),
+      () => f.repository.append(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, kind: "manual", text: "No write" }),
+    ]) await expect(action()).rejects.toMatchObject({ code: "DUPLICATE_DOCUMENT_ID" });
+    expect(f.file.writes).toBe(0); expect(plan.writes).toBe(0); expect(await f.repository.recoveries()).toEqual([]);
+    expect((await f.repository.documentIdIndex(f.workspaceId))[0]).toMatchObject({ status: "duplicate" });
+    plan.content = "# Explicitly resolved copy\n"; plan.mtime++;
+    await expect(f.repository.patch(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, status: "IN_PROGRESS", progress: 50 })).resolves.toBeDefined();
+    expect(f.file.content).toContain(`Document-ID: ${id}`);
+  });
+
+  it("does not merge another checkout or a copy-delete replacement using the UUID", async () => {
+    const f = await fixture(withId);
+    const other = f.root.directory("other-checkout"); other.file("01_test_tickets.md", withId);
+    const otherProject = (await f.repository.workspaces()).workspaces.find((workspace) => workspace.label === "other-checkout")!;
+    const otherFile = (await f.repository.files(otherProject.id))[0]!;
+    expect(otherFile.id).not.toBe(f.fileId); expect(otherFile.documentId).toBe(id);
+    expect((await f.repository.documentIdIndex(f.workspaceId))[0]?.status).toBe("unique");
+    const docs = f.project.children.get("docs") as FakeDirectory;
+    docs.children.delete(f.file.name);
+    docs.file("02_moved_tickets.md", withId);
+    f.repository.invalidateListings();
+    const replacement = (await f.repository.files(f.workspaceId))[0]!;
+    expect(replacement.id).not.toBe(f.fileId);
+    await expect(f.repository.tickets(f.workspaceId, f.fileId)).rejects.toMatchObject({ code: "FILE_NOT_FOUND" });
+    expect((await f.repository.tickets(f.workspaceId, replacement.id)).file.documentId).toBe(id);
+    expect(await f.storage.get("document:" + f.fileId)).toBeDefined();
+    expect(f.file.writes).toBe(0);
   });
 });
 

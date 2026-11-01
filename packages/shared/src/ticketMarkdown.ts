@@ -12,10 +12,14 @@ import {
   type TicketProgress,
   type TicketStatus,
 } from "./index.js";
+import { inspectTicketCompatibility, structuralLedgerLines } from "../../../skills/implementation-ledger/scripts/lib/ledger-format.mjs";
+export { inspectLedgerFormat, inspectTicketCompatibility } from "../../../skills/implementation-ledger/scripts/lib/ledger-format.mjs";
 
 export const TICKET_WRITE_ERROR = {
   NEEDS_REPAIR: "NEEDS_REPAIR",
   TICKET_NOT_FOUND: "TICKET_NOT_FOUND",
+  UNSUPPORTED_FORMAT: "UNSUPPORTED_FORMAT",
+  INVALID_FORMAT: "INVALID_FORMAT",
 } as const;
 
 export type TicketWriteErrorCode =
@@ -116,7 +120,18 @@ const FIELD_NAME_SET = new Set<string>([
 ]);
 
 export function parseTicketDocument(markdown: string): TicketDocument {
-  return toPublicDocument(parseTicketDocumentInternal(markdown));
+  const compatibility = inspectTicketCompatibility(markdown);
+  const document = toPublicDocument(parseTicketDocumentInternal(markdown));
+  return { ...document, compatibility,
+    ...(!compatibility.readable ? { status: {} } : {}),
+    ...(compatibility.status === "unsupported" || compatibility.status === "invalid" ? { tickets: [] } : {}),
+  };
+}
+
+function assertWritableFormat(markdown: string) {
+  const compatibility = inspectTicketCompatibility(markdown);
+  if (!compatibility.writable) throw new TicketMarkdownWriteError(compatibility.code ?? TICKET_WRITE_ERROR.NEEDS_REPAIR,
+    "Structural editing is unavailable. Inspect the original Markdown and use a supporting tool or repair the format explicitly.");
 }
 
 export function updateTicketStatusAndProgress(
@@ -124,6 +139,7 @@ export function updateTicketStatusAndProgress(
   ticketId: string,
   update: StatusProgressUpdate,
 ): string {
+  assertWritableFormat(markdown);
   if (update.status === undefined && update.progress === undefined) {
     return markdown;
   }
@@ -178,6 +194,7 @@ export function appendUserInstruction(
   instruction: string,
   options: AppendLogOptions & { kind?: TicketInstructionKind } = {},
 ): string {
+  assertWritableFormat(markdown);
   const parsed = parseTicketDocumentInternal(markdown);
   const ticket = findWritableTicket(parsed, ticketId);
   assertTicketHasCanonicalFields(ticket);
@@ -207,6 +224,7 @@ export function appendProgressNote(
   note: string,
   options: AppendLogOptions = {},
 ): string {
+  assertWritableFormat(markdown);
   const parsed = parseTicketDocumentInternal(markdown);
   const ticket = findWritableTicket(parsed, ticketId);
   assertTicketHasCanonicalFields(ticket);
@@ -268,16 +286,7 @@ function joinMarkdown(markdown: SplitMarkdown): string {
 
 // Preserve source line numbers while excluding fenced examples from structural parsing.
 function structuralLines(lines: string[]): string[] {
-  let fence = "";
-  return lines.map((line) => {
-    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
-    if (fence) {
-      if (marker && marker[0] === fence[0] && marker.length >= fence.length && line.trim() === marker) fence = "";
-      return "";
-    }
-    if (marker) { fence = marker; return ""; }
-    return line;
-  });
+  return structuralLedgerLines(lines.join("\n"));
 }
 
 function parseTitle(lines: string[]): string {

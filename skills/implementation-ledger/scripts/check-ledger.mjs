@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { assertTicketCompatibility, structuralLedgerLines } from "./lib/ledger-format.mjs";
 
 const REQUIRED_FIELDS = [
   "Status",
@@ -39,8 +40,10 @@ if (!filePath) {
   process.exit(2);
 }
 
-const source = readFileSync(filePath, "utf8");
-const lines = source.replace(/\r\n/g, "\n").split("\n");
+const source = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(filePath));
+try { assertTicketCompatibility(source); }
+catch (error) { console.error(error.message); process.exit(1); }
+const lines = structuralLedgerLines(source);
 const errors = [];
 const warnings = [];
 const statusSections = findSections(lines, "Status");
@@ -113,14 +116,15 @@ function findTickets(documentLines, start = 0, end = documentLines.length) {
     }
     if (fence) continue;
 
-    const match = documentLines[index].match(/^###\s+([A-Za-z0-9]+-\d+)\.\s+(.+?)\s*$/);
-    if (match) headings.push({ id: match[1], start: index, title: match[2] });
+    if (!/^ {0,3}###(?:[ \t]+|$)/.test(documentLines[index])) continue;
+    const match = documentLines[index].match(/^ {0,3}###\s+([A-Za-z0-9]+-\d+[A-Za-z]*)\.\s+(.+?)\s*$/);
+    headings.push({ id: match?.[1], start: index, title: match?.[2] });
   }
 
   return headings.map((heading, index) => ({
     ...heading,
     end: headings[index + 1]?.start ?? end,
-  }));
+  })).filter((heading) => heading.id);
 }
 
 function findSections(documentLines, title) {

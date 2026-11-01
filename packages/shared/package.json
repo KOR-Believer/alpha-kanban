@@ -6,6 +6,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./documentMetadata": {
+      "types": "./dist/documentMetadata.d.ts",
+      "import": "./dist/documentMetadata.js"
+    },
     "./ticketMarkdown": {
       "types": "./dist/ticketMarkdown.d.ts",
       "import": "./dist/ticketMarkdown.js"

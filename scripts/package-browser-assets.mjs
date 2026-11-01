@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { zipSync, strToU8 } from "fflate";
 import { validateBundle } from "../apps/web/src/skills/bundle.ts";
+import { LEDGER_CONTRACT } from "../skills/implementation-ledger/scripts/lib/ledger-contract.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const source = path.join(root, "skills/implementation-ledger");
@@ -19,7 +20,16 @@ async function collect(directory, relative = "") {
   }
 }
 await collect(source);
-for (const required of ["SKILL.md", "references/ledger-format.md", "references/document-context.md", "assets/tickets-template.md", "scripts/check-ledger.mjs", "scripts/ticket-md.mjs", "scripts/document-context.mjs", "scripts/lib/document-context.mjs", "scripts/lib/document-owner.mjs", "scripts/lib/document-settings.mjs", "scripts/lib/context-error.mjs"]) {
+const skillText = new TextDecoder().decode(files["implementation-ledger/SKILL.md"]);
+const skillHeader = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(skillText)?.[1];
+if (!skillHeader) throw new Error("Missing skill front matter.");
+for (const [key, value] of Object.entries({ version: LEDGER_CONTRACT.skillRevision,
+  "read-formats": LEDGER_CONTRACT.readFormats.join(","), "write-formats": LEDGER_CONTRACT.writeFormats.join(","),
+  "new-document-format": LEDGER_CONTRACT.newDocumentFormat, "update-url": LEDGER_CONTRACT.updateUrl })) {
+  const declarations = skillHeader.split(/\r?\n/).filter((line) => line.trimStart().startsWith(`${key}:`));
+  if (declarations.length !== 1 || declarations[0] !== `  ${key}: "${value}"`) throw new Error(`Skill contract metadata mismatch: ${key}`);
+}
+for (const required of ["SKILL.md", "references/ledger-format.md", "references/document-context.md", "references/compatibility.md", "assets/tickets-template.md", "scripts/check-ledger.mjs", "scripts/ticket-md.mjs", "scripts/document-context.mjs", "scripts/lib/document-context.mjs", "scripts/lib/document-owner.mjs", "scripts/lib/document-settings.mjs", "scripts/lib/context-error.mjs", "scripts/lib/ledger-contract.mjs", "scripts/lib/ledger-format.mjs", "scripts/lib/document-header.mjs", "scripts/lib/document-metadata.mjs"]) {
   if (!files["implementation-ledger/" + required]) throw new Error("Missing bundled skill file: " + required);
 }
 const hash = createHash("sha256");
@@ -88,5 +98,5 @@ await writeFile(path.join(destination, `implementation-ledger-${version}.json`),
 await writeFile(path.join(destination, "implementation-ledger.zip"), archive);
 await writeFile(path.join(destination, `implementation-ledger-${version}.zip`), archive);
 await writeFile(path.join(destination, "INSTALL.txt"), guideBytes);
-await writeFile(path.join(destination, "manifest.json"), JSON.stringify({ version, archive: `implementation-ledger-${version}.zip`, payloadSha256, files: Object.keys(files) }, null, 2));
+await writeFile(path.join(destination, "manifest.json"), JSON.stringify({ version, archive: `implementation-ledger-${version}.zip`, payloadSha256, ledger: LEDGER_CONTRACT, files: Object.keys(files) }, null, 2));
 console.log(`Packaged implementation-ledger ${version} (${Object.keys(files).length} files).`);

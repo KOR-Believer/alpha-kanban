@@ -14,6 +14,17 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("UI language", () => {
+  it("localizes format and duplicate-ID errors with a concrete next action", async () => {
+    for (const code of ["UNSUPPORTED_FORMAT", "INVALID_FORMAT", "DUPLICATE_DOCUMENT_ID"]) {
+      const error = Object.assign(new Error("technical details"), { code });
+      const ko = errorSummary(error);
+      expect(ko).toMatch(/수정|확인/);
+      await setLanguage("en");
+      expect(errorSummary(error)).not.toBe(ko);
+      expect(errorSummary(error)).toMatch(/edit|format/);
+      await setLanguage("ko");
+    }
+  });
   it("defaults to Korean, restores English, and rejects unknown persisted values", () => {
     window.localStorage.clear();
     expect(readLanguage()).toBe("ko");
