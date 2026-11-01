@@ -9,6 +9,7 @@ import { BOARD_FILTERS_KEY, type BoardData } from "./allProjectsData";
 import { documentFixture, projectFixture } from "./allProjectsFixtures";
 import { setLanguage, t } from "./i18n";
 import { browserRepository } from "./browser/repository";
+import { OWNER_FILTERS_KEY } from "./ownerFilters";
 
 const api = vi.hoisted(() => ({
   workspaces: vi.fn(), document: vi.fn(), files: vi.fn(), saveOrder: vi.fn(), patch: vi.fn(), append: vi.fn(),
@@ -104,6 +105,52 @@ describe("all-projects document workflow", () => {
       element.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
+
+  it("applies each project's owner filter without rescanning, writing or discarding an open draft", async () => {
+    documents[first.id]!.file.relativePath = "docs/@alice/01_test_tickets.md";
+    documents[second.id]!.file.relativePath = "docs/@bob/01_test_tickets.md";
+    await mount();
+    expect(card().querySelector('[data-document-owner="@alice"]')).not.toBeNull();
+    expect(card(second.id).querySelector('[data-document-owner="@bob"]')).not.toBeNull();
+    await act(async () => ticketLink().click());
+    const draft = instructionInput();
+    await enter(draft, "보존할 지시");
+    const reads = api.files.mock.calls.length;
+    await act(async () => {
+      localStorage.setItem(OWNER_FILTERS_KEY, JSON.stringify({ [first.id]: "unassigned" }));
+      window.dispatchEvent(new StorageEvent("storage", { key: OWNER_FILTERS_KEY }));
+    });
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(1);
+    expect(card(second.id)).toBeTruthy();
+    expect(column("DONE").querySelector("header")?.textContent).toContain("1");
+    expect(draft.isConnected).toBe(true);
+    expect(draft.value).toBe("보존할 지시");
+    expect(document.querySelector('[role="dialog"] [data-document-owner="@alice"]')).not.toBeNull();
+    await act(async () => { await setLanguage("en"); });
+    expect(draft.value).toBe("보존할 지시");
+    expect(api.files).toHaveBeenCalledTimes(reads);
+    expect(api.patch).not.toHaveBeenCalled(); expect(api.append).not.toHaveBeenCalled(); expect(api.saveOrder).not.toHaveBeenCalled();
+  });
+
+  it("reports a path-only owner change while preserving the open draft", async () => {
+    documents[first.id]!.file.relativePath = "docs/@alice/01_test_tickets.md";
+    await mount();
+    await act(async () => ticketLink().click());
+    const draft = instructionInput();
+    await enter(draft, "Keep draft across owner changes");
+    const existing = client.getQueryData<BoardData>(allTicketsKey)!;
+    await act(async () => {
+      client.setQueryData(allTicketsKey, { ...existing, documents: existing.documents.map((item) => item.workspace.id !== first.id ? item : {
+        ...item, response: { ...item.response, file: { ...item.response.file, relativePath: "docs/@bob/01_test_tickets.md" } },
+      }) });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(draft.isConnected).toBe(true);
+    expect(draft.value).toBe("Keep draft across owner changes");
+    expect(document.querySelector('[role="dialog"] [data-document-owner="@bob"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("File changed externally"));
+    expect(api.patch).not.toHaveBeenCalled(); expect(api.append).not.toHaveBeenCalled();
+  });
 
   it("uses shared sticky column headers without per-column scroll containers", async () => {
     await mount();

@@ -93,6 +93,8 @@ The skill writes new documents in `docs/@alice/` with `Owner: @alice` below the 
 
 The shared context tool runs with Node.js and does not create settings or documents itself. Linked worktrees use their current shared policy and the original repository's private user settings. See [document context](skills/implementation-ledger/references/document-context.md) for workspace/home precedence, diagnostics and tool usage. Reading a colleague's context does not authorize executing their tickets.
 
+Connect a project root containing `docs` to see folder-based owners in the web viewer. The sidebar's document filters and the All tickets owner filters offer all owners, a selected owner, or unassigned documents, remembering each project's selection. No `.ak.user` is needed, and filtering keeps the open document and its contents intact. A direct connection to `docs` or a deeper folder cannot infer owners from hidden parents; connect the project root when you need that distinction.
+
 ## 3. Update the skill
 
 Review the request in the [skill update guide](https://kanban.giveit2.me/intro#updates) and send it to Codex. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.

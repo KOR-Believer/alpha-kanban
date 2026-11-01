@@ -18,6 +18,113 @@ async function fixture(content = ledger) {
   return { storage, lock, repository, root, project, file, workspaceId, fileId: summary.id, summary, guard };
 }
 
+describe("path owners without personal settings or migration", () => {
+  it("discovers owners and separates equal filenames/IDs while leaving configuration and Markdown untouched", async () => {
+    const f = await fixture();
+    const docs = f.project.children.get("docs") as FakeDirectory;
+    const alice = docs.directory("@alice").file("01_test_tickets.md", ledger.replace(/^# .+$/m, "$&\n\nOwner: @bob"));
+    const bob = docs.directory("@bob").file("01_test_tickets.md");
+    const invalid = docs.directory("@@bad").file("01_test_tickets.md");
+    const deeper = docs.directory("research").directory("@alice").file("01_test_tickets.md");
+    const atFilename = docs.file("@notes.md", "# A normal document\n");
+    const config = f.project.file(".ak.config", "[documents]\nownerFolders = false\n");
+    const user = f.project.file(".ak.user", "invalid private settings");
+    config.read = "denied"; user.read = "denied";
+    f.repository.invalidateListings();
+    const files = await f.repository.files(f.workspaceId);
+    expect(files.map((file) => [file.relativePath, file.pathOwner?.status, file.pathOwner?.value])).toEqual([
+      ["docs/01_test_tickets.md", "unassigned", null],
+      ["docs/@@bad/01_test_tickets.md", "invalid", null],
+      ["docs/@alice/01_test_tickets.md", "owned", "@alice"],
+      ["docs/@bob/01_test_tickets.md", "owned", "@bob"],
+      ["docs/@notes.md", "unassigned", null],
+      ["docs/research/@alice/01_test_tickets.md", "unassigned", null],
+    ].sort((a, b) => a[0]!.localeCompare(b[0]!)));
+    expect(new Set(files.map((file) => file.id)).size).toBe(6);
+    expect((await f.repository.documentSets(f.workspaceId)).sets).toHaveLength(6);
+    for (const enabled of [true, false]) {
+      config.content = `[documents]\nownerFolders = ${enabled}\n`;
+      f.repository.invalidateListings();
+      expect(await f.repository.files(f.workspaceId)).toEqual(files);
+    }
+    f.project.children.delete(".ak.config"); f.project.children.delete(".ak.user");
+    f.repository.invalidateListings();
+    expect(await f.repository.files(f.workspaceId)).toEqual(files);
+    expect([config, user].map((file) => file.reads)).toEqual([0, 0]);
+    expect([f.file, alice, bob, invalid, deeper, atFilename, config, user].every((file) => file.writes === 0)).toBe(true);
+    expect(alice.content).toContain("Owner: @bob");
+  });
+
+  it("reclassifies the same file across project/docs/deeper connections and restores the original boundary", async () => {
+    const f = await fixture();
+    const docs = f.project.children.get("docs") as FakeDirectory;
+    const alice = docs.directory("@alice");
+    docs.children.delete(f.file.name); alice.children.set(f.file.name, f.file); f.file.parent = alice;
+    f.repository.invalidateListings();
+    expect((await f.repository.files(f.workspaceId))[0]).toMatchObject({ id: f.fileId, pathOwner: { status: "owned", value: "@alice" } });
+    for (const target of [docs, alice]) {
+      const connection = await f.repository.connect(target.handle(), "project");
+      const connected = (await f.repository.workspaces()).workspaces.find((workspace) => workspace.label === target.name)!;
+      expect((await f.repository.files(connected.id))[0]).toMatchObject({ id: f.fileId, pathOwner: { status: "unassigned", value: null } });
+      expect(await f.repository.files(f.workspaceId)).toEqual([]);
+      await f.repository.disconnect(connection.id);
+      await f.repository.workspaces();
+      expect((await f.repository.files(f.workspaceId))[0]).toMatchObject({ id: f.fileId, pathOwner: { status: "owned", value: "@alice" } });
+    }
+    expect(f.file.content).toBe(ledger);
+    expect(f.file.writes).toBe(0);
+  });
+
+  it("refreshes ownership after a folder rename without changing IDs, headers or file bytes", async () => {
+    const f = await fixture(ledger.replace(/^# .+$/m, "$&\n\nOwner: @alice"));
+    const docs = f.project.children.get("docs") as FakeDirectory;
+    const folder = docs.directory("@alice");
+    docs.children.delete(f.file.name); folder.children.set(f.file.name, f.file); f.file.parent = folder;
+    f.repository.invalidateListings();
+    const before = (await f.repository.files(f.workspaceId))[0]!;
+    docs.children.delete("@alice"); folder.name = "@bob"; docs.children.set(folder.name, folder);
+    const after = (await f.repository.files(f.workspaceId))[0]!;
+    expect(after).toMatchObject({ id: before.id, hash: before.hash, mtimeMs: before.mtimeMs, pathOwner: { status: "owned", value: "@bob" } });
+    expect((await f.repository.markdown(f.workspaceId, after.id)).markdown).toContain("Owner: @alice");
+    expect(f.file.writes).toBe(0);
+  });
+
+  it.each([
+    { recordedOwner: null, connection: "project" },
+    { recordedOwner: "@bob", connection: "project" },
+    { recordedOwner: "@bob", connection: "docs" },
+    { recordedOwner: "@bob", connection: "owner" },
+  ])("ordinary edits preserve owner=$recordedOwner through a $connection connection without user settings", async ({ recordedOwner, connection }) => {
+    const content = recordedOwner ? ledger.replace(/^# .+$/m, `$&\n\nOwner: ${recordedOwner}`) : ledger;
+    const f = await fixture(content);
+    if (recordedOwner) {
+      const docs = f.project.children.get("docs") as FakeDirectory;
+      const folder = docs.directory("@alice");
+      docs.children.delete(f.file.name); folder.children.set(f.file.name, f.file); f.file.parent = folder;
+      f.repository.invalidateListings();
+    }
+    let workspaceId = f.workspaceId;
+    if (connection !== "project") {
+      const docs = f.project.children.get("docs") as FakeDirectory;
+      const target = connection === "docs" ? docs : docs.children.get("@alice") as FakeDirectory;
+      await f.repository.connect(target.handle(), "project");
+      workspaceId = (await f.repository.workspaces()).workspaces.find((workspace) => workspace.label === target.name)!.id;
+    }
+    const file = (await f.repository.files(workspaceId))[0]!;
+    expect(file.id).toBe(f.fileId);
+    expect(file.pathOwner?.value).toBe(recordedOwner && connection === "project" ? "@alice" : null);
+    const updated = await f.repository.patch(workspaceId, file.id, "TEST-01", { expectedHash: file.hash, expectedMtimeMs: file.mtimeMs, status: "IN_PROGRESS", progress: 50, reason: "Review next" });
+    await f.repository.append(workspaceId, file.id, "TEST-01", { expectedHash: updated.file.hash, expectedMtimeMs: updated.file.mtimeMs, kind: "manual", text: "Keep the original context" });
+    const reopened = await f.repository.markdown(workspaceId, file.id);
+    expect(reopened.markdown.includes("Owner:")).toBe(Boolean(recordedOwner));
+    if (recordedOwner) expect(reopened.markdown).toContain(`Owner: ${recordedOwner}`);
+    expect(reopened.markdown).toContain("Keep the original context");
+    expect(reopened.markdown).toContain("Review next");
+    expect((await f.repository.tickets(workspaceId, file.id)).document.tickets[0]).toMatchObject({ status: "IN_PROGRESS", progress: 50 });
+    expect([...f.project.children.keys()]).toEqual(["docs"]);
+  });
+});
+
 describe("browser-local identity and reads", () => {
   it("persists opaque identities and reads body, hash and modification time from the same file", async () => {
     const f = await fixture();

@@ -32,6 +32,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { DocumentOwnerBadge, ProjectOwnerFilters } from "./components/DocumentOwner";
+import { ownersInFiles, useOwnerFilters } from "./ownerFilters";
 
 export const allTicketsKey = ["all-tickets"] as const;
 const boardOrderKey = ["board-order"] as const;
@@ -54,6 +56,7 @@ export function AllProjectsBoard() {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [overStatus, setOverStatus] = useState<TicketStatus | null>(null);
   const [filters, setFilters] = useState(readBoardFilters);
+  const ownerPreferences = useOwnerFilters();
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [moveError, setMoveError] = useState<{ message: string; error: unknown; retryOrder?: string[] } | null>(null);
@@ -81,7 +84,15 @@ export function AllProjectsBoard() {
     }
     return [...counts].sort(([, a], [, b]) => a.label.localeCompare(b.label) || a.root.localeCompare(b.root));
   }, [tickets]);
-  const visible = filterBoardTickets(tickets, filters);
+  const ownerProjects = useMemo(() => {
+    const documents = boardData?.documents ?? [];
+    const workspaces = new Map(documents.map(({ workspace }) => [workspace.id, workspace]));
+    return [...workspaces.values()].filter((workspace) => !filters.projectIds.length || filters.projectIds.includes(workspace.project?.id ?? workspace.id))
+      .map((workspace) => ({ id: workspace.id, label: workspace.label, root: workspace.root,
+        owners: ownersInFiles(documents.filter((item) => item.workspace.id === workspace.id).map((item) => item.response.file)),
+      })).sort((a, b) => a.label.localeCompare(b.label) || a.root.localeCompare(b.root));
+  }, [boardData, filters.projectIds]);
+  const visible = filterBoardTickets(tickets, filters, ownerPreferences.filters);
   const statuses = BOARD_STATUSES.filter((status) => !(filters.hideDone && status === "DONE"));
   const tour = useScreenTour("all", {
     enabled: ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
@@ -91,6 +102,7 @@ export function AllProjectsBoard() {
   const currentDetail = detail ? currentDocument(detail.document) : undefined;
   const currentMove = pendingMove ? currentDocument(pendingMove.document) : undefined;
   const detailChanged = detail && (!currentDetail || currentDetail.response.file.hash !== detail.document.response.file.hash ||
+    currentDetail.response.file.relativePath !== detail.document.response.file.relativePath ||
     currentDetail.response.file.mtimeMs !== detail.document.response.file.mtimeMs);
   const externalChange: MarkdownFileChangeEvent | undefined = detailChanged ? {
     eventType: currentDetail ? "changed" : "removed", workspaceId: detail.document.workspace.id,
@@ -226,7 +238,7 @@ export function AllProjectsBoard() {
         </div>
       </header>
       <div className="ak-all-board-toolbar min-w-0">
-        <div data-tour="project-filters" className="ak-scroll-area flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="group" aria-label={t("Project filters")}>
+        <div data-tour="project-filters" className="ak-all-board-project-filters ak-scroll-area flex items-center gap-1 overflow-x-auto" role="group" aria-label={t("Project filters")}>
           <Button aria-pressed={!filters.projectIds.length} onClick={() => setFilters({ ...filters, projectIds: [] })} size="xs" variant={!filters.projectIds.length ? "secondary" : "ghost"}>{t("All projects")}</Button>
           {groups.map(([id, group]) => (
             <Button key={id} title={group.root} aria-pressed={filters.projectIds.includes(id)}
@@ -238,7 +250,8 @@ export function AllProjectsBoard() {
             </Button>
           ))}
         </div>
-        <div className="relative w-52 shrink-0">
+        <ProjectOwnerFilters projects={ownerProjects} filters={ownerPreferences.filters} onChange={ownerPreferences.update} />
+        <div className="relative w-52 max-w-full shrink-0">
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input data-tour="ticket-search" aria-label={t("Search tickets")} className="pl-9" placeholder={t("Search tickets")} value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
         </div>
@@ -309,6 +322,7 @@ export function AllProjectsBoard() {
       </main>
       {detail && detailTicket ? (
         <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`} ticket={detailTicket}
+          file={currentDetail?.response.file ?? detail.document.response.file}
           presentation={presentation}
           onOpenInWorkspace={() => { void navigate({ href: buildAppRoute({
             workspaceId: detail.document.workspace.id, filePath: documentRouteId(detail.document.response.file),
@@ -363,7 +377,9 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
       </div>
       <a href={projectHref} draggable={false} className="ak-focus-ring mt-2 block rounded-sm"
         onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(); } }}>
-        <span className="text-xs text-muted-foreground">{ticket.id}</span>
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span>{ticket.id}</span><DocumentOwnerBadge file={ticket.file} />
+        </span>
         <h3 className="mt-1 line-clamp-3 break-words text-sm font-medium leading-5">{ticket.title}</h3>
       </a>
       <div className="mt-3 flex items-center gap-2">

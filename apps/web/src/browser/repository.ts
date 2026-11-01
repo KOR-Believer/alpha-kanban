@@ -2,7 +2,7 @@ import type {
   MarkdownDocumentResponse, MarkdownFileSummary, TicketDocumentResponse, TicketInstructionKind,
   TicketProgress, TicketStatus, WorkspaceSummary, WorkspacesResponse, BoardOrder, DocumentSetTicketProgress, DocumentSetsResponse,
 } from "@alpha-kanban/shared";
-import { buildDocumentSets, inferMarkdownFileType, inferSequenceNumber, inferSlug, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
+import { buildDocumentSets, inferDocumentPathOwner, inferMarkdownFileType, inferSequenceNumber, inferSlug, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
 import { appendUserInstruction, parseTicketDocument, updateTicketStatusAndProgress } from "@alpha-kanban/shared/ticketMarkdown";
 import { IndexedDbStorage, type BrowserStorage } from "./storage";
 import { appActivity } from "../pwa/activity";
@@ -379,6 +379,7 @@ export class BrowserRepository {
       id: record.id, workspaceId: record.workspaceId, type: inferMarkdownFileType(record.path), filename: blob.name,
       directory: record.path.split("/").slice(0, -1).join("/"), relativePath: record.path, workspaceRelativePath: record.path,
       hash: await contentHash(markdown), mtimeMs: blob.lastModified, slug: inferSlug(record.path), sequenceNumber: inferSequenceNumber(record.path),
+      pathOwner: inferDocumentPathOwner(record.path),
     };
     const result = { file, markdown, size: blob.size };
     this.cache(result);

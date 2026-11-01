@@ -179,6 +179,13 @@ export const workspacesResponseSchema = z.object({
 
 export type WorkspacesResponse = z.infer<typeof workspacesResponseSchema>;
 
+export const documentPathOwnerSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("owned"), value: z.string().min(2) }),
+  z.object({ status: z.literal("unassigned"), value: z.null() }),
+  z.object({ status: z.literal("invalid"), value: z.null() }),
+]);
+export type DocumentPathOwner = z.infer<typeof documentPathOwnerSchema>;
+
 export const markdownFileSummarySchema = z.object({
   id: z.string().min(1),
   workspaceId: z.string().min(1),
@@ -192,6 +199,7 @@ export const markdownFileSummarySchema = z.object({
   hash: z.string().min(1),
   slug: z.string().min(1),
   sequenceNumber: z.number().int().nonnegative().optional(),
+  pathOwner: documentPathOwnerSchema.optional(),
 });
 
 export type MarkdownFileSummary = z.infer<typeof markdownFileSummarySchema>;
@@ -238,6 +246,7 @@ export const documentSetSummarySchema = z.object({
   documents: z.array(markdownFileSummarySchema),
   types: z.array(markdownFileTypeSchema),
   primaryFile: markdownFileSummarySchema,
+  pathOwner: documentPathOwnerSchema.optional(),
   ticketProgress: documentSetTicketProgressSchema.optional(),
   allTicketsDone: z.boolean().optional(),
 });

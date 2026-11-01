@@ -68,6 +68,8 @@ import {
 } from "./components/tickets/useTicketDetailPresentation";
 import { TicketDetailFrame } from "./components/tickets/TicketDetailFrame";
 import { TicketProgressBar } from "./components/tickets/TicketProgressBar";
+import { DocumentOwnerBadge, OwnerFilterSelect } from "./components/DocumentOwner";
+import { matchesOwnerFilter, ownerFilterFor, ownersInFiles, useOwnerFilters, type OwnerFilter } from "./ownerFilters";
 
 export const BOARD_STATUSES: TicketStatus[] = [
   "TODO",
@@ -272,6 +274,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   );
   const [documentSearch, setDocumentSearch] = useState("");
   const [documentFilters, setDocumentFilters] = useState(readStoredDocumentFilters);
+  const ownerPreferences = useOwnerFilters();
+  const ownerFilter = ownerFilterFor(ownerPreferences.filters, selectedWorkspaceId);
+  const setOwnerFilter = (value: OwnerFilter) => { if (selectedWorkspaceId) ownerPreferences.update({ [selectedWorkspaceId]: value }); };
   const [initialAutoOpenLastWorkspace] = useState(readStoredAutoOpenLastWorkspace);
   const shouldAutoOpenLastWorkspaceOnLoadRef = useRef(
     allowStartupAutoOpen && !initialRouteRef.current.workspaceId && initialAutoOpenLastWorkspace,
@@ -294,6 +299,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     refetchInterval: 15_000,
   });
   const documentSets = documentSetsQuery.data?.sets ?? [];
+  const documentOwners = useMemo(() => ownersInFiles(documentSets.flatMap((set) => set.documents)), [documentSets]);
   const storedDocumentSetSortPreference = selectedWorkspaceId
     ? documentSetSortPreferences[selectedWorkspaceId]
     : undefined;
@@ -304,8 +310,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     [documentSetSortPreference, documentSets],
   );
   const visibleDocumentSets = useMemo(
-    () => filterDocumentSets(sortedDocumentSets, documentSearch, documentFilters),
-    [sortedDocumentSets, documentSearch, documentFilters],
+    () => filterDocumentSets(sortedDocumentSets, documentSearch, documentFilters, ownerFilter),
+    [sortedDocumentSets, documentSearch, documentFilters, ownerFilter],
   );
   const allFiles = useMemo(
     () => sortedDocumentSets.flatMap((documentSet) => documentSet.documents),
@@ -735,6 +741,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 onSearchChange={setDocumentSearch}
                 filters={documentFilters}
                 onFiltersChange={setDocumentFilters}
+                owners={documentOwners}
+                ownerFilter={ownerFilter}
+                onOwnerFilterChange={setOwnerFilter}
                 onPreferenceChange={updateDocumentSetSortPreference}
                 preference={documentSetSortPreference}
               />
@@ -757,7 +766,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {sortedDocumentSets.length > 0 && visibleDocumentSets.length === 0 ? (
                   <div className="grid justify-items-start gap-2 px-3 py-2 text-sm text-muted-foreground" role="status">
                     <p>{t("No matching documents")}</p>
-                    <Button size="sm" variant="link" onClick={() => { setDocumentSearch(""); setDocumentFilters(DEFAULT_DOCUMENT_FILTERS); }}>
+                    <Button size="sm" variant="link" onClick={() => { setDocumentSearch(""); setDocumentFilters(DEFAULT_DOCUMENT_FILTERS); setOwnerFilter("all"); }}>
                       {t("Clear filters")}
                     </Button>
                   </div>
@@ -817,9 +826,16 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {selectedFile ? (
                   <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
                     <DocumentTypeBadge type={selectedFile.type} />
+                    <DocumentOwnerBadge file={selectedFile} />
                     <p className="ak-body-muted min-w-0 truncate text-xs">
                       {selectedFile.workspaceRelativePath}
                     </p>
+                  </div>
+                ) : null}
+                {selectedFile && !matchesOwnerFilter(selectedFile, ownerFilter) ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground" role="status">
+                    <span>{t("The open document is outside the selected owner filter.")}</span>
+                    <Button size="xs" variant="link" onClick={() => setOwnerFilter("all")}>{t("Clear owner filter")}</Button>
                   </div>
                 ) : null}
               </div>
@@ -895,6 +911,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           externalFileChange={externalFileChange}
           onExternalFileReload={reloadExternalFileChange}
           ticket={selectedTicket}
+          file={selectedFile}
         />
       ) : null}
 
@@ -991,6 +1008,9 @@ function DocumentListHeader({
   onFiltersChange,
   onPreferenceChange,
   preference,
+  owners,
+  ownerFilter,
+  onOwnerFilterChange,
 }: {
   disabled: boolean;
   search: string;
@@ -999,11 +1019,14 @@ function DocumentListHeader({
   onFiltersChange: (value: DocumentFilters) => void;
   onPreferenceChange: (preference: DocumentSetSortPreference) => void;
   preference: DocumentSetSortPreference;
+  owners: string[];
+  ownerFilter: OwnerFilter;
+  onOwnerFilterChange: (value: OwnerFilter) => void;
 }) {
   const { t } = useTranslation();
   const directionLabel = t(preference.direction === "asc" ? "Ascending" : "Descending");
   const DirectionIcon = preference.direction === "asc" ? ArrowUp : ArrowDown;
-  const activeFilters = Number(filters.hidePlainMarkdown) + Number(filters.hideCompletedSets);
+  const activeFilters = Number(filters.hidePlainMarkdown) + Number(filters.hideCompletedSets) + Number(ownerFilter !== "all");
 
   return (
     <div className="grid gap-2">
@@ -1033,7 +1056,7 @@ function DocumentListHeader({
             <PopoverContent align="end" className="w-72 p-3" aria-label={t("Document filters")}>
               <div className="flex items-center justify-between gap-2 pb-2">
                 <h3 className="text-sm font-medium">{t("Document filters")}</h3>
-                <Button size="xs" variant="ghost" disabled={!activeFilters} onClick={() => onFiltersChange(DEFAULT_DOCUMENT_FILTERS)}>{t("Reset")}</Button>
+                <Button size="xs" variant="ghost" disabled={!activeFilters} onClick={() => { onFiltersChange(DEFAULT_DOCUMENT_FILTERS); onOwnerFilterChange("all"); }}>{t("Reset")}</Button>
               </div>
               <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
                 <Checkbox checked={filters.hideCompletedSets} onCheckedChange={(checked) => onFiltersChange({ ...filters, hideCompletedSets: checked === true })} />
@@ -1043,6 +1066,9 @@ function DocumentListHeader({
                 <Checkbox checked={filters.hidePlainMarkdown} onCheckedChange={(checked) => onFiltersChange({ ...filters, hidePlainMarkdown: checked === true })} />
                 {t("Hide plain Markdown")}
               </label>
+              {owners.length || ownerFilter !== "all" ? <div className="mt-2 border-t border-border pt-3">
+                <OwnerFilterSelect owners={owners} value={ownerFilter} onChange={onOwnerFilterChange} disabled={disabled} />
+              </div> : null}
             </PopoverContent>
           </Popover>
         </div>
@@ -1164,9 +1190,10 @@ function DocumentSetRow({
               ) : null}
             </span>
           </div>
-          <span className="ak-body-muted block truncate text-xs">
-            {documentSet.directory || t("docs root")}
-          </span>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <DocumentOwnerBadge file={documentSet.primaryFile} />
+            <span className="ak-body-muted min-w-0 truncate text-xs">{documentSet.directory || t("docs root")}</span>
+          </div>
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap gap-1 pl-6">
@@ -1508,6 +1535,7 @@ export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByS
         {BOARD_STATUSES.map((status) => (
           <KanbanColumn
             key={status}
+            file={document.file}
             onTicketSelect={onTicketSelect}
             status={status}
             tickets={ticketsByStatus.get(status) ?? []}
@@ -1714,6 +1742,7 @@ function BoardState({
 }
 
 function KanbanColumn({
+  file,
   onTicketSelect,
   status,
   tickets,
@@ -1725,6 +1754,7 @@ function KanbanColumn({
   onDragLeave,
   onDrop,
 }: {
+  file: MarkdownFileSummary;
   onTicketSelect: (ticketId: string) => void;
   status: TicketStatus;
   tickets: TicketItem[];
@@ -1761,6 +1791,7 @@ function KanbanColumn({
         {tickets.map((ticket) => (
           <TicketCard
             key={ticket.id}
+            file={file}
             onSelect={() => onTicketSelect(ticket.id)}
             ticket={ticket}
             draggable={!dragDisabled}
@@ -1774,12 +1805,14 @@ function KanbanColumn({
 }
 
 function TicketCard({
+  file,
   onSelect,
   ticket,
   draggable,
   onDragStart,
   onDragEnd,
 }: {
+  file: MarkdownFileSummary;
   onSelect: () => void;
   ticket: TicketItem;
   draggable: boolean;
@@ -1804,7 +1837,7 @@ function TicketCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap gap-1.5">
             <Badge variant="outline">{ticket.id}</Badge>
-
+            <DocumentOwnerBadge file={file} />
           </div>
           <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge>
         </div>
@@ -1828,6 +1861,7 @@ function TicketCard({
 }
 
 export function TicketDetailDrawer({
+  file,
   externalFileChange,
   presentation,
   onClose,
@@ -1838,6 +1872,7 @@ export function TicketDetailDrawer({
   onOpenInWorkspace,
   ticket,
 }: {
+  file?: MarkdownFileSummary;
   externalFileChange?: MarkdownFileChangeEvent | null;
   presentation: TicketDetailPresentation;
   onClose: () => void;
@@ -1922,6 +1957,7 @@ export function TicketDetailDrawer({
             <DialogTitle className="ak-title break-words text-2xl">{ticket.title}</DialogTitle>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge>
+              <DocumentOwnerBadge file={file} />
               <span className="ak-body-muted text-sm">{ticket.type}</span>
             </div>
         </header>

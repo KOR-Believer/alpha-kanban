@@ -1,4 +1,5 @@
 import type { DocumentSetSummary, MarkdownFileSummary } from "@alpha-kanban/shared";
+import { matchesOwnerFilter, type OwnerFilter } from "./ownerFilters";
 
 export type VisibleDocumentSet = {
   documentSet: DocumentSetSummary;
@@ -19,6 +20,7 @@ export function filterDocumentSets(
   sets: DocumentSetSummary[],
   query: string,
   filters: DocumentFilters,
+  owner: OwnerFilter = "all",
 ): VisibleDocumentSet[] {
   const terms = normalize(query).split(/\s+/).filter(Boolean);
   return sets.flatMap((documentSet) => {
@@ -27,7 +29,7 @@ export function filterDocumentSets(
       progress?.totalTickets !== undefined && progress.totalTickets > 0 &&
       progress.doneTickets === progress.totalTickets);
     if (filters.hideCompletedSets && completed) return [];
-    const documents = documentSet.documents.filter((file) => !filters.hidePlainMarkdown || file.type !== "markdown");
+    const documents = documentSet.documents.filter((file) => matchesOwnerFilter(file, owner) && (!filters.hidePlainMarkdown || file.type !== "markdown"));
     if (!documents.length) return [];
     const names = normalize([
       documentSet.label,

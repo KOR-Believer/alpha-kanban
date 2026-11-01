@@ -1,5 +1,13 @@
 // English source strings are translation keys. Keep complete sentences together.
 export const korean: Record<string, string> = {
+  "Document owner": "문서 소유자",
+  "Document owner: {{owner}}": "문서 소유자: {{owner}}",
+  "All owners": "전체 소유자",
+  "Unassigned owner": "소유자 미지정",
+  "Owner filters": "소유자 필터",
+  "Owner filters ({{count}} active)": "소유자 필터 ({{count}}개 적용)",
+  "The open document is outside the selected owner filter.": "열린 문서는 선택한 소유자 필터에 포함되지 않습니다.",
+  "Clear owner filter": "소유자 필터 해제",
   "Compare with Codex instead": "대신 Codex에서 비교하기",
   "Compare my installed implementation-ledger with the complete official bundle at {{url}}. Verify its SHA-256 {{digest}} before using it. Review all files and compatibility, preserve personal changes, back up the installation, and ask before overwriting anything. Do not run downloaded scripts or change project documents. Report the actual installed directory and recognition status; do not claim a failed update succeeded.": "내 implementation-ledger 설치본을 {{url}}의 공식 전체 묶음과 비교해 줘. 사용하기 전에 SHA-256 {{digest}} 일치를 검증해. 모든 파일과 호환성을 확인하고 개인 수정 사항을 보존해. 설치본을 백업하고 덮어쓰기 전에 내 확인을 받아. 내려받은 스크립트를 실행하거나 프로젝트 문서를 변경하지 마. 실제 설치 디렉터리와 인식 여부를 보고하고, 실패한 업데이트를 성공했다고 보고하지 마.",
   "Ask Codex to review compatibility before changing your skill or documents.": "스킬이나 문서를 바꾸기 전에 Codex에 호환성을 확인해 달라고 요청하세요.",

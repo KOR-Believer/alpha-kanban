@@ -75,6 +75,17 @@ describe("local file observations", () => {
     expect(browserRepository.markdown).not.toHaveBeenCalled();
   });
 
+  it("reports a rediscovered owner path even when bytes and mtime are unchanged", async () => {
+    const changed = vi.fn();
+    stop = subscribeFileEvents(file.workspaceId, changed, vi.fn(), file);
+    await vi.advanceTimersByTimeAsync(0);
+    const moved = { ...file, relativePath: "docs/@bob/01_test_tickets.md", workspaceRelativePath: "docs/@bob/01_test_tickets.md" };
+    vi.mocked(browserRepository.markdown).mockResolvedValue({ file: moved, markdown: "", outline: [] });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(changed).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ eventType: "changed", file: moved }));
+    expect(browserRepository.files).not.toHaveBeenCalled();
+  });
+
   it("observes the selected file while sidebar discovery is pending, without overlapping reads", async () => {
     vi.mocked(browserRepository.files).mockImplementation(() => new Promise(() => {}));
     let finish!: () => void;

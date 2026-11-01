@@ -1,4 +1,26 @@
-import type { DocumentSetSummary, DocumentSetTicketProgress, MarkdownFileSummary, MarkdownFileType, MarkdownHeading } from "./index.js";
+import type { DocumentPathOwner, DocumentSetSummary, DocumentSetTicketProgress, MarkdownFileSummary, MarkdownFileType, MarkdownHeading } from "./index.js";
+
+/** Same identifier contract as the standalone ledger tool; never an OS/Git identity. */
+export function normalizeDocumentOwner(value: string): string | null {
+  if (!/^@[\p{L}\p{N}][\p{L}\p{N}\p{M}._-]*$/u.test(value) || value.endsWith(".") ||
+      new TextEncoder().encode(value).length > 240) return null;
+  return value.normalize("NFC");
+}
+
+/** Only the path visible below the connected project counts; do not infer hidden parents. */
+export function inferDocumentPathOwner(relativePath: string): DocumentPathOwner {
+  const parts = relativePath.split("/");
+  const [root, folder] = parts;
+  if (parts.length < 3 || root !== "docs" || !folder?.startsWith("@") || parts.some((part) => part === "." || part === "..")) {
+    return { status: "unassigned", value: null };
+  }
+  const value = normalizeDocumentOwner(folder);
+  return value ? { status: "owned", value } : { status: "invalid", value: null };
+}
+
+export function documentPathOwner(file: Pick<MarkdownFileSummary, "relativePath">): DocumentPathOwner {
+  return inferDocumentPathOwner(file.relativePath);
+}
 
 export function sumDocumentSetTicketProgress(
   values: Array<DocumentSetTicketProgress | undefined>,
@@ -43,6 +65,7 @@ export function buildDocumentSets(files: MarkdownFileSummary[]): DocumentSetSumm
         documents: sortedDocuments,
         types,
         primaryFile,
+        pathOwner: documentPathOwner(primaryFile),
       };
     })
     .sort(compareDocumentSets);

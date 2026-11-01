@@ -18,7 +18,7 @@ export function subscribeFileEvents(
       // Observe the open document independently of slow sidebar discovery.
       const { file } = await browserRepository.markdown(workspaceId, selectedFile.id);
       if (!active) return;
-      if (previous?.hash !== file.hash || previous.mtimeMs !== file.mtimeMs) onChange({
+      if (previous?.hash !== file.hash || previous.mtimeMs !== file.mtimeMs || previous.relativePath !== file.relativePath) onChange({
         eventType: "changed", workspaceId, fileId: file.id, file, relativePath: file.relativePath,
         workspaceRelativePath: file.workspaceRelativePath, observedAt: new Date().toISOString(),
       });

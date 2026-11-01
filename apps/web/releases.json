@@ -77,5 +77,32 @@
         "en": ["Adds the document context tool and optional Owner templates. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."]
       }
     }
+  },
+  {
+    "id": "2026-11-01-document-owner-filters",
+    "sequence": 4,
+    "date": "2026-11-01",
+    "notify": true,
+    "notes": {
+      "ko": [
+        "docs/@사용자 폴더의 소유자를 문서 목록·티켓 카드·상세에서 확인할 수 있습니다. 사이드바와 전체 티켓의 소유자 필터는 프로젝트별 선택을 기억합니다.",
+        "소유자 설정 없이 기존 문서를 계속 사용할 수 있습니다. 필터를 바꿔도 열어 둔 문서와 작성 중인 입력은 유지됩니다."
+      ],
+      "en": [
+        "View owners from docs/@user folders in the document list, ticket cards and details. Owner filters in the sidebar and All tickets remember each project’s selection.",
+        "Continue using ordinary documents without owner settings. Changing a filter preserves the open document and unsaved input."
+      ]
+    },
+    "skill": {
+      "compatibility": "unknown",
+      "notes": {
+        "ko": [
+          "동봉 스킬은 직전 릴리즈와 동일합니다. 기존 설치본을 변경하려면 Codex로 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."
+        ],
+        "en": [
+          "The bundled skill is unchanged from the previous release. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."
+        ]
+      }
+    }
   }
 ]

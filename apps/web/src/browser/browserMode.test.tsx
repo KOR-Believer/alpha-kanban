@@ -21,6 +21,7 @@ import { setLanguage } from "../i18n";
 import { projectFixture, documentFixture } from "../allProjectsFixtures";
 import { buildDocumentSets } from "@alpha-kanban/shared/documents";
 import { skillRepository } from "../skills/repository";
+import { OWNER_FILTERS_KEY } from "../ownerFilters";
 
 const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>() }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -97,6 +98,35 @@ describe("browser mode UI boundaries", () => {
     expect(element, selector).not.toBeNull();
     return element!;
   }
+
+  it("preserves the selected document, deep link and draft when an owner filter hides its sidebar entry", async () => {
+    const owned = { ...response, file: { ...response.file, relativePath: "docs/@alice/01_test_tickets.md", directory: "docs/@alice", workspaceRelativePath: "docs/@alice/01_test_tickets.md" } };
+    const other = { ...owned.file, id: "d_bob", relativePath: "docs/@bob/01_test_tickets.md", directory: "docs/@bob", workspaceRelativePath: "docs/@bob/01_test_tickets.md" };
+    vi.mocked(browserRepository.files).mockResolvedValue([owned.file, other, plainFile]);
+    vi.mocked(browserRepository.file).mockResolvedValue(owned.file);
+    vi.mocked(browserRepository.tickets).mockResolvedValue(owned);
+    vi.mocked(browserRepository.markdown).mockResolvedValue({ file: owned.file, markdown: "# Original\n\nOwner: @previous", outline: [] });
+    selectDocument("TEST-01");
+    await render(<App />);
+    const draft = await waitForElement<HTMLTextAreaElement>('textarea', document);
+    await typeInto(draft, "원문 유지 / keep draft");
+    const href = routing.location.href;
+    const reads = vi.mocked(browserRepository.files).mock.calls.length;
+    await act(async () => {
+      localStorage.setItem(OWNER_FILTERS_KEY, JSON.stringify({ [workspace.id]: "@bob" }));
+      window.dispatchEvent(new StorageEvent("storage", { key: OWNER_FILTERS_KEY }));
+    });
+    const navigation = container.querySelector('nav[aria-label="문서"]')!;
+    expect(navigation.querySelector('[data-document-owner="@alice"]')).toBeNull();
+    expect(navigation.querySelector('[data-document-owner="@bob"]')).not.toBeNull();
+    expect(container.textContent).toContain("열린 문서는 선택한 소유자 필터에 포함되지 않습니다.");
+    expect(routing.location.href).toBe(href);
+    expect(draft.isConnected).toBe(true); expect(draft.value).toBe("원문 유지 / keep draft");
+    await act(async () => { await setLanguage("en"); });
+    expect(draft.value).toBe("원문 유지 / keep draft");
+    expect(container.textContent).toContain("The open document is outside the selected owner filter.");
+    expect(browserRepository.files).toHaveBeenCalledTimes(reads);
+  });
 
   it.each([false, true])("keeps direct intro entry independent of auto-open=%s, folder queries and agents", async (autoOpen) => {
     localStorage.setItem("alpha-kanban.autoOpenLastWorkspace", String(autoOpen));
