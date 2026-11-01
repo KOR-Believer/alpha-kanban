@@ -62,6 +62,17 @@ describe("UI language", () => {
     expect(t("수동 지시")).toBe("Manual instruction");
   });
 
+  it("uses concise owner options and preserves owner names in both languages", async () => {
+    expect(t("All")).toBe("전체");
+    expect(t("Unassigned")).toBe("미지정");
+    expect(t("Search owners")).toBe("소유자 검색");
+    expect(t("Remove owner {{owner}}", { owner: "@alice" })).toBe("@alice 선택 해제");
+    await setLanguage("en");
+    expect(t("All")).toBe("All");
+    expect(t("Unassigned")).toBe("Unassigned");
+    expect(t("Remove owner {{owner}}", { owner: "@alice" })).toBe("Remove owner @alice");
+  });
+
   it("localizes the launcher and intro while preserving URLs in installation requests", async () => {
     expect(t("Register workspace")).toBe("워크스페이스 등록");
     expect(t("Search {{list}}", { list: t("Other projects") })).toBe("다른 프로젝트 검색");

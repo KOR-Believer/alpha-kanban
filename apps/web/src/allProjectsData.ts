@@ -1,6 +1,6 @@
 import type { MarkdownFileSummary, TicketDocumentResponse, TicketItem, WorkspaceSummary } from "@alpha-kanban/shared";
 import { buildAppRoute, documentIdentity, documentRouteId } from "./appRoute";
-import { matchesOwnerFilter, ownerFilterFor, type OwnerFilters } from "./ownerFilters";
+import { matchesBoardOwnerSelection, type BoardOwnerSelection } from "./allBoardOwnerFilters";
 
 export type BoardDocument = { response: TicketDocumentResponse; workspace: WorkspaceSummary };
 export type BoardData = { documents: BoardDocument[]; issues: string[] };
@@ -118,10 +118,10 @@ export function boardTickets(data?: BoardData): BoardTicket[] {
   })));
 }
 
-export function filterBoardTickets(tickets: BoardTicket[], filters: BoardFilters, owners: OwnerFilters = {}) {
+export function filterBoardTickets(tickets: BoardTicket[], filters: BoardFilters, owners: BoardOwnerSelection[] = []) {
   const search = filters.search.trim().toLocaleLowerCase();
   return tickets.filter((ticket) =>
-    matchesOwnerFilter(ticket.file, ownerFilterFor(owners, ticket.workspaceId)) &&
+    matchesBoardOwnerSelection(ticket.file, owners) &&
     (!filters.hideDone || ticket.status !== "DONE") &&
     (!filters.projectIds.length || filters.projectIds.includes(ticket.projectId)) &&
     (!search || `${ticket.id} ${ticket.title} ${ticket.projectLabel} ${ticket.file.relativePath}`.toLocaleLowerCase().includes(search)),

@@ -1055,7 +1055,7 @@ function DocumentListHeader({
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-3" aria-label={t("Document filters")}>
               <div className="flex items-center justify-between gap-2 pb-2">
-                <h3 className="text-sm font-medium">{t("Document filters")}</h3>
+                <h3 className="text-sm font-semibold">{t("Document filters")}</h3>
                 <Button size="xs" variant="ghost" disabled={!activeFilters} onClick={() => { onFiltersChange(DEFAULT_DOCUMENT_FILTERS); onOwnerFilterChange("all"); }}>{t("Reset")}</Button>
               </div>
               <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">

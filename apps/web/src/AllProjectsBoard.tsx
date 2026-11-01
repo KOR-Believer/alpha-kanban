@@ -32,8 +32,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DocumentOwnerBadge, ProjectOwnerFilters } from "./components/DocumentOwner";
-import { ownersInFiles, useOwnerFilters } from "./ownerFilters";
+import { BoardOwnerFilter, DocumentOwnerBadge } from "./components/DocumentOwner";
+import { ownersInFiles } from "./ownerFilters";
+import { useAllBoardOwnerFilters } from "./allBoardOwnerFilters";
 
 export const allTicketsKey = ["all-tickets"] as const;
 const boardOrderKey = ["board-order"] as const;
@@ -56,7 +57,7 @@ export function AllProjectsBoard() {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [overStatus, setOverStatus] = useState<TicketStatus | null>(null);
   const [filters, setFilters] = useState(readBoardFilters);
-  const ownerPreferences = useOwnerFilters();
+  const ownerPreferences = useAllBoardOwnerFilters();
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [moveError, setMoveError] = useState<{ message: string; error: unknown; retryOrder?: string[] } | null>(null);
@@ -84,15 +85,8 @@ export function AllProjectsBoard() {
     }
     return [...counts].sort(([, a], [, b]) => a.label.localeCompare(b.label) || a.root.localeCompare(b.root));
   }, [tickets]);
-  const ownerProjects = useMemo(() => {
-    const documents = boardData?.documents ?? [];
-    const workspaces = new Map(documents.map(({ workspace }) => [workspace.id, workspace]));
-    return [...workspaces.values()].filter((workspace) => !filters.projectIds.length || filters.projectIds.includes(workspace.project?.id ?? workspace.id))
-      .map((workspace) => ({ id: workspace.id, label: workspace.label, root: workspace.root,
-        owners: ownersInFiles(documents.filter((item) => item.workspace.id === workspace.id).map((item) => item.response.file)),
-      })).sort((a, b) => a.label.localeCompare(b.label) || a.root.localeCompare(b.root));
-  }, [boardData, filters.projectIds]);
-  const visible = filterBoardTickets(tickets, filters, ownerPreferences.filters);
+  const owners = useMemo(() => ownersInFiles((boardData?.documents ?? []).map(({ response }) => response.file)), [boardData]);
+  const visible = filterBoardTickets(tickets, filters, ownerPreferences.selected);
   const statuses = BOARD_STATUSES.filter((status) => !(filters.hideDone && status === "DONE"));
   const tour = useScreenTour("all", {
     enabled: ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
@@ -250,7 +244,7 @@ export function AllProjectsBoard() {
             </Button>
           ))}
         </div>
-        <ProjectOwnerFilters projects={ownerProjects} filters={ownerPreferences.filters} onChange={ownerPreferences.update} />
+        <BoardOwnerFilter owners={owners} selected={ownerPreferences.selected} onChange={ownerPreferences.update} />
         <div className="relative w-52 max-w-full shrink-0">
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input data-tour="ticket-search" aria-label={t("Search tickets")} className="pl-9" placeholder={t("Search tickets")} value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />

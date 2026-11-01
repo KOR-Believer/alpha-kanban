@@ -1,13 +1,16 @@
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
 import { documentPathOwner } from "@alpha-kanban/shared/documents";
-import { Users } from "lucide-react";
-import { useId } from "react";
+import { Users, X } from "lucide-react";
+import { useId, useRef, useState } from "react";
 import { useTranslation } from "@/i18n";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { ownerFilterFor, type OwnerFilter, type OwnerFilters } from "../ownerFilters";
+import type { OwnerFilter } from "../ownerFilters";
+import type { BoardOwnerSelection } from "../allBoardOwnerFilters";
 
 export function DocumentOwnerBadge({ file }: { file?: MarkdownFileSummary }) {
   const { t } = useTranslation();
@@ -26,45 +29,58 @@ export function OwnerFilterSelect({ owners, value, onChange, label, disabled }: 
   // A saved selection remains resettable even after its folder disappears.
   const options = [...new Set([...owners, ...(value.startsWith("@") ? [value] : [])])].sort();
   return <div className="grid min-w-0 gap-1.5">
-    <label htmlFor={id} className="text-xs font-medium text-muted-foreground">{label ?? t("Document owner")}</label>
+    <label htmlFor={id} className="text-sm text-foreground">{label ?? t("Document owner")}</label>
     <Select value={value} onValueChange={(next) => onChange(next as OwnerFilter)} disabled={disabled}>
-      <SelectTrigger id={id} size="sm" className="w-full min-w-0" aria-label={label ?? t("Document owner")}>
+      <SelectTrigger id={id} size="sm" className="w-full min-w-0 text-sm" aria-label={label ?? t("Document owner")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">{t("All owners")}</SelectItem>
-        <SelectItem value="unassigned">{t("Unassigned owner")}</SelectItem>
+        <SelectItem value="all">{t("All")}</SelectItem>
+        <SelectItem value="unassigned">{t("Unassigned")}</SelectItem>
         {options.map((owner) => <SelectItem value={owner} key={owner}>{owner}</SelectItem>)}
       </SelectContent>
     </Select>
   </div>;
 }
 
-export type OwnerFilterProject = { id: string; label: string; root: string; owners: string[] };
-
-export function ProjectOwnerFilters({ projects, filters, onChange }: {
-  projects: OwnerFilterProject[]; filters: OwnerFilters; onChange: (changes: OwnerFilters) => void;
+export function BoardOwnerFilter({ owners, selected, onChange }: {
+  owners: string[]; selected: BoardOwnerSelection[]; onChange: (value: BoardOwnerSelection[]) => void;
 }) {
   const { t } = useTranslation();
-  const eligible = projects.filter((project) => project.owners.length > 0 || ownerFilterFor(filters, project.id) !== "all");
-  if (!eligible.length) return null;
-  const active = eligible.filter((project) => ownerFilterFor(filters, project.id) !== "all").length;
-  return <Popover>
+  const [search, setSearch] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const label = (owner: BoardOwnerSelection) => owner === "unassigned" ? t("Unassigned") : owner;
+  // Keep selected names available even when a project disconnects or a folder disappears.
+  const names = [...new Set([...owners, ...selected.filter((owner) => owner !== "unassigned")])].sort() as BoardOwnerSelection[];
+  const query = search.trim().normalize("NFC").toLocaleLowerCase();
+  const options: BoardOwnerSelection[] = ["unassigned", ...names];
+  const matches = options.filter((owner) => label(owner).toLocaleLowerCase().includes(query));
+  if (!owners.length && !selected.length) return null;
+  return <Popover onOpenChange={(open) => { if (!open) setSearch(""); }}>
     <PopoverTrigger asChild>
-      <Button size="sm" variant={active ? "secondary" : "outline"} aria-label={t("Owner filters ({{count}} active)", { count: active })}>
-        <Users aria-hidden="true" />{t("Document owner")}{active ? <span className="tabular-nums">{active}</span> : null}
+      <Button size="sm" variant={selected.length ? "secondary" : "outline"} aria-label={t("Owner filters ({{count}} selected)", { count: selected.length })}>
+        <Users aria-hidden="true" />{t("Document owner")}{selected.length ? <span className="tabular-nums">{selected.length}</span> : null}
       </Button>
     </PopoverTrigger>
-    <PopoverContent align="end" className="w-72 p-3" aria-label={t("Owner filters")}>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{t("Owner filters")}</h3>
-        <Button size="xs" variant="ghost" disabled={!active}
-          onClick={() => onChange(Object.fromEntries(eligible.map((project) => [project.id, "all"])))}>{t("Reset")}</Button>
+    <PopoverContent align="end" className="flex max-h-[var(--radix-popover-content-available-height)] w-80 flex-col gap-3 p-3" aria-label={t("Owner filters")}
+      onOpenAutoFocus={(event) => { event.preventDefault(); searchInput.current?.focus(); }}>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{t("Owner filters")}</h3>
+        <Button size="xs" variant="ghost" disabled={!selected.length} onClick={() => onChange([])}>{t("All")}</Button>
       </div>
-      <div className="ak-scroll-area grid max-h-72 gap-3 overflow-y-auto">
-        {eligible.map((project) => <OwnerFilterSelect key={project.id} owners={project.owners}
-          label={eligible.some((other) => other.id !== project.id && other.label === project.label) ? project.root : project.label}
-          value={ownerFilterFor(filters, project.id)} onChange={(value) => onChange({ [project.id]: value })} />)}
+      <Input ref={searchInput} aria-label={t("Search owners")} placeholder={t("Search owners")} value={search} onChange={(event) => setSearch(event.target.value)} />
+      <div className="ak-scroll-area min-h-0 max-h-72 overflow-y-auto">
+        {selected.length ? <div className="mb-2 flex flex-wrap gap-1.5">
+          {selected.map((owner) => <Button key={owner} size="xs" variant="secondary" className="min-w-0 max-w-full"
+            aria-label={t("Remove owner {{owner}}", { owner: label(owner) })} onClick={() => onChange(selected.filter((value) => value !== owner))}>
+            <span className="truncate">{label(owner)}</span><X className="size-3" aria-hidden="true" />
+          </Button>)}
+        </div> : null}
+        {matches.map((owner) => <label key={owner} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted">
+          <Checkbox checked={selected.includes(owner)} onCheckedChange={(checked) => onChange(checked ? [...selected, owner] : selected.filter((value) => value !== owner))} />
+          <span className="min-w-0 break-all">{label(owner)}</span>
+        </label>)}
+        {!matches.length ? <p role="status" className="py-2 text-sm text-muted-foreground">{t("No matching owners")}</p> : null}
       </div>
     </PopoverContent>
   </Popover>;

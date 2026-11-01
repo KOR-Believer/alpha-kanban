@@ -10,6 +10,7 @@ import { documentFixture, projectFixture } from "./allProjectsFixtures";
 import { setLanguage, t } from "./i18n";
 import { browserRepository } from "./browser/repository";
 import { OWNER_FILTERS_KEY } from "./ownerFilters";
+import { ALL_BOARD_OWNER_FILTERS_KEY } from "./allBoardOwnerFilters";
 
 const api = vi.hoisted(() => ({
   workspaces: vi.fn(), document: vi.fn(), files: vi.fn(), saveOrder: vi.fn(), patch: vi.fn(), append: vi.fn(),
@@ -65,12 +66,12 @@ describe("all-projects document workflow", () => {
     await act(async () => root.unmount());
     client.clear(); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   });
-  async function mount() {
+  async function mount(expectedCards = 2) {
     await act(async () => root.render(<QueryClientProvider client={client}><AllProjectsBoard /></QueryClientProvider>));
-    for (let attempt = 0; attempt < 30 && !document.querySelector("[data-ticket-key]"); attempt++) {
+    for (let attempt = 0; attempt < 30 && document.querySelectorAll("[data-ticket-key]").length !== expectedCards; attempt++) {
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
     }
-    expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(2);
+    expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(expectedCards);
   }
   function card(id = first.id) {
     return [...document.querySelectorAll<HTMLElement>("[data-ticket-key]")].find((element) => element.textContent?.includes(`Fixture ${id}`))!;
@@ -106,9 +107,11 @@ describe("all-projects document workflow", () => {
     });
   }
 
-  it("applies each project's owner filter without rescanning, writing or discarding an open draft", async () => {
+  it("uses an independent all-board filter without rescanning, writing or discarding an open draft", async () => {
     documents[first.id]!.file.relativePath = "docs/@alice/01_test_tickets.md";
     documents[second.id]!.file.relativePath = "docs/@bob/01_test_tickets.md";
+    const projectPreference = JSON.stringify({ [first.id]: "unassigned" });
+    localStorage.setItem(OWNER_FILTERS_KEY, projectPreference);
     await mount();
     expect(card().querySelector('[data-document-owner="@alice"]')).not.toBeNull();
     expect(card(second.id).querySelector('[data-document-owner="@bob"]')).not.toBeNull();
@@ -117,19 +120,77 @@ describe("all-projects document workflow", () => {
     await enter(draft, "보존할 지시");
     const reads = api.files.mock.calls.length;
     await act(async () => {
-      localStorage.setItem(OWNER_FILTERS_KEY, JSON.stringify({ [first.id]: "unassigned" }));
-      window.dispatchEvent(new StorageEvent("storage", { key: OWNER_FILTERS_KEY }));
+      localStorage.setItem(ALL_BOARD_OWNER_FILTERS_KEY, JSON.stringify(["@bob"]));
+      window.dispatchEvent(new StorageEvent("storage", { key: ALL_BOARD_OWNER_FILTERS_KEY }));
     });
     expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(1);
     expect(card(second.id)).toBeTruthy();
     expect(column("DONE").querySelector("header")?.textContent).toContain("1");
     expect(draft.isConnected).toBe(true);
     expect(draft.value).toBe("보존할 지시");
+    expect(localStorage.getItem(OWNER_FILTERS_KEY)).toBe(projectPreference);
     expect(document.querySelector('[role="dialog"] [data-document-owner="@alice"]')).not.toBeNull();
     await act(async () => { await setLanguage("en"); });
     expect(draft.value).toBe("보존할 지시");
     expect(api.files).toHaveBeenCalledTimes(reads);
     expect(api.patch).not.toHaveBeenCalled(); expect(api.append).not.toHaveBeenCalled(); expect(api.saveOrder).not.toHaveBeenCalled();
+  });
+
+  it("searches and combines owner selections, removes chips and restores only the all-board preference", async () => {
+    documents[first.id]!.file.relativePath = "docs/@alice/01_test_tickets.md";
+    documents[second.id]!.file.relativePath = "docs/@bob/01_test_tickets.md";
+    const projectPreference = JSON.stringify({ [first.id]: "@bob", [second.id]: "unassigned" });
+    localStorage.setItem(OWNER_FILTERS_KEY, projectPreference);
+    await mount();
+    const reads = api.files.mock.calls.length;
+    await act(async () => button(t("Owner filters ({{count}} selected)", { count: 0 })).click());
+    const search = document.querySelector<HTMLInputElement>(`input[aria-label="${t("Search owners")}"]`)!;
+    const ownerCheckbox = (name: string) => [...document.querySelectorAll("label")].find((label) => label.textContent?.trim() === name)?.querySelector<HTMLButtonElement>('[role="checkbox"]');
+    await enter(search, "ALICE");
+    expect(ownerCheckbox("@bob")).toBeUndefined();
+    await act(async () => ownerCheckbox("@alice")!.click());
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(1);
+    await enter(search, "bob");
+    expect(button(t("Remove owner {{owner}}", { owner: "@alice" }))).toBeTruthy();
+    await act(async () => ownerCheckbox("@bob")!.click());
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(2);
+    expect(JSON.parse(localStorage.getItem(ALL_BOARD_OWNER_FILTERS_KEY)!)).toEqual(["@alice", "@bob"]);
+    await act(async () => button(t("Remove owner {{owner}}", { owner: "@alice" })).click());
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(1);
+    expect(card(second.id)).toBeTruthy();
+    await enter(search, "missing-owner");
+    expect(document.body.textContent).toContain(t("No matching owners"));
+    expect(button(t("Remove owner {{owner}}", { owner: "@bob" }))).toBeTruthy();
+    expect(localStorage.getItem(OWNER_FILTERS_KEY)).toBe(projectPreference);
+    expect(api.files).toHaveBeenCalledTimes(reads);
+    await act(async () => root.render(null));
+    await mount(1);
+    expect(card(second.id)).toBeTruthy();
+    await act(async () => button(t("Owner filters ({{count}} selected)", { count: 1 })).click());
+    expect(document.querySelector<HTMLInputElement>(`input[aria-label="${t("Search owners")}"]`)?.value).toBe("");
+    await act(async () => button(t("All")).click());
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(2);
+    expect(localStorage.getItem(OWNER_FILTERS_KEY)).toBe(projectPreference);
+    expect(JSON.parse(localStorage.getItem(ALL_BOARD_OWNER_FILTERS_KEY)!)).toEqual([]);
+    expect(api.patch).not.toHaveBeenCalled(); expect(api.append).not.toHaveBeenCalled();
+  });
+
+  it("shows one searchable owner list for 100 projects and deduplicates names across them", async () => {
+    const projects = Array.from({ length: 100 }, (_, index) => projectFixture(`/work/project-${index}`, `w_${index}`));
+    documents = Object.fromEntries(projects.map((project, index) => {
+      const response = documentFixture(project);
+      response.file.relativePath = `docs/${index % 2 ? "@bob" : "@alice"}/01_test_tickets.md`;
+      return [project.id, response];
+    }));
+    api.workspaces.mockResolvedValue({ workspaces: projects });
+    await mount(100);
+    await act(async () => button(t("Owner filters ({{count}} selected)", { count: 0 })).click());
+    const picker = document.querySelector(`[role="dialog"][aria-label="${t("Owner filters")}"]`)!;
+    expect(picker.querySelectorAll("input")).toHaveLength(1);
+    expect(picker.querySelectorAll('[role="combobox"]')).toHaveLength(0);
+    expect([...picker.querySelectorAll("label")].map((label) => label.textContent)).toEqual([t("Unassigned"), "@alice", "@bob"]);
+    await act(async () => picker.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1]!.click());
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(50);
   });
 
   it("reports a path-only owner change while preserving the open draft", async () => {

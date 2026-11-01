@@ -93,7 +93,7 @@ The skill writes new documents in `docs/@alice/` with `Owner: @alice` below the 
 
 The shared context tool runs with Node.js and does not create settings or documents itself. Linked worktrees use their current shared policy and the original repository's private user settings. See [document context](skills/implementation-ledger/references/document-context.md) for workspace/home precedence, diagnostics and tool usage. Reading a colleague's context does not authorize executing their tickets.
 
-Connect a project root containing `docs` to see folder-based owners in the web viewer. The sidebar's document filters and the All tickets owner filters offer all owners, a selected owner, or unassigned documents, remembering each project's selection. No `.ak.user` is needed, and filtering keeps the open document and its contents intact. A direct connection to `docs` or a deeper folder cannot infer owners from hidden parents; connect the project root when you need that distinction.
+Connect a project root containing `docs` to see folder-based owners in the web viewer. The sidebar offers All, Unassigned, or one owner and remembers each project's selection. In All tickets, search and select multiple owner names to see work matching any of them across projects. An empty selection shows all work, and this list is remembered independently of sidebar filters. No `.ak.user` is needed, and filtering keeps the open document and its contents intact. A direct connection to `docs` or a deeper folder cannot infer owners from hidden parents; connect the project root when you need that distinction.
 
 ## 3. Update the skill
 

@@ -4,6 +4,7 @@ import { documentFixture, projectFixture } from "./allProjectsFixtures";
 import { boardTickets, filterBoardTickets } from "./allProjectsData";
 import { DEFAULT_DOCUMENT_FILTERS, filterDocumentSets } from "./documentSetFiltering";
 import { matchesOwnerFilter, ownerFilterFor, ownersInFiles, parseOwnerFilters } from "./ownerFilters";
+import { parseBoardOwnerSelection } from "./allBoardOwnerFilters";
 
 const first = projectFixture("workspace/first", "bw_first");
 const second = projectFixture("workspace/second", "bw_second");
@@ -22,9 +23,13 @@ describe("owner display filters", () => {
     const before = structuredClone(data);
     const tickets = boardTickets(data);
     expect(new Set(tickets.map((ticket) => ticket.key)).size).toBe(4);
-    const result = filterBoardTickets(tickets, { projectIds: [], hideDone: false, search: "" }, { [first.id]: "@bob" });
-    expect(result.map((ticket) => ticket.file.id)).toEqual(["d_bob", "d_other"]);
-    expect(filterBoardTickets(tickets, { projectIds: [first.project!.id], hideDone: false, search: "" }, { [first.id]: "unassigned" }).map((ticket) => ticket.file.id)).toEqual(["d_plain"]);
+    const filters = { projectIds: [], hideDone: false, search: "" };
+    expect(filterBoardTickets(tickets, filters).map((ticket) => ticket.file.id)).toEqual(["d_alice", "d_bob", "d_plain", "d_other"]);
+    expect(filterBoardTickets(tickets, filters, ["@alice"]).map((ticket) => ticket.file.id)).toEqual(["d_alice", "d_other"]);
+    expect(filterBoardTickets(tickets, filters, ["@alice", "@bob"]).map((ticket) => ticket.file.id)).toEqual(["d_alice", "d_bob", "d_other"]);
+    expect(filterBoardTickets(tickets, filters, ["@bob", "unassigned"]).map((ticket) => ticket.file.id)).toEqual(["d_bob", "d_plain"]);
+    expect(filterBoardTickets(tickets, { ...filters, projectIds: [first.project!.id] }, ["@alice", "@bob"]).map((ticket) => ticket.file.id)).toEqual(["d_alice", "d_bob"]);
+    expect(filterBoardTickets(tickets, filters, ["unassigned"]).map((ticket) => ticket.file.id)).toEqual(["d_plain"]);
     expect(data).toEqual(before);
   });
 
@@ -57,5 +62,11 @@ describe("owner display filters", () => {
     expect(ownerFilterFor(restored, "first")).toBe("@alice");
     expect(ownerFilterFor(restored, "new-project")).toBe("all");
     expect(ownerFilterFor(restored, "toString")).toBe("all");
+  });
+
+  it("restores a separate all-board OR list without importing per-project preferences", () => {
+    for (const invalid of [null, "broken", "{}", JSON.stringify({ project: "@alice" })]) expect(parseBoardOwnerSelection(invalid)).toEqual([]);
+    expect(parseBoardOwnerSelection(JSON.stringify(["@alice", "@bob", "@alice", "unassigned", "all", "@@bad", null, 1, "@홍길동".normalize("NFD"), "@홍길동"])))
+      .toEqual(["@alice", "@bob", "unassigned", "@홍길동"]);
   });
 });

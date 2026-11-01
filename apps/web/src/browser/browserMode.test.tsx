@@ -22,6 +22,7 @@ import { projectFixture, documentFixture } from "../allProjectsFixtures";
 import { buildDocumentSets } from "@alpha-kanban/shared/documents";
 import { skillRepository } from "../skills/repository";
 import { OWNER_FILTERS_KEY } from "../ownerFilters";
+import { ALL_BOARD_OWNER_FILTERS_KEY } from "../allBoardOwnerFilters";
 
 const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>() }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -119,6 +120,14 @@ describe("browser mode UI boundaries", () => {
     const navigation = container.querySelector('nav[aria-label="문서"]')!;
     expect(navigation.querySelector('[data-document-owner="@alice"]')).toBeNull();
     expect(navigation.querySelector('[data-document-owner="@bob"]')).not.toBeNull();
+    const projectSelection = localStorage.getItem(OWNER_FILTERS_KEY);
+    await act(async () => {
+      localStorage.setItem(ALL_BOARD_OWNER_FILTERS_KEY, JSON.stringify(["@alice", "unassigned"]));
+      window.dispatchEvent(new StorageEvent("storage", { key: ALL_BOARD_OWNER_FILTERS_KEY }));
+    });
+    expect(navigation.querySelector('[data-document-owner="@alice"]')).toBeNull();
+    expect(navigation.querySelector('[data-document-owner="@bob"]')).not.toBeNull();
+    expect(localStorage.getItem(OWNER_FILTERS_KEY)).toBe(projectSelection);
     expect(container.textContent).toContain("열린 문서는 선택한 소유자 필터에 포함되지 않습니다.");
     expect(routing.location.href).toBe(href);
     expect(draft.isConnected).toBe(true); expect(draft.value).toBe("원문 유지 / keep draft");
