@@ -26,6 +26,7 @@
 - Run `node skills/implementation-ledger/scripts/check-ledger.mjs <file>` when creating a new canonical ticket document or validating strict Alpha Kanban compatibility.
 - Manual `apply_patch` edits are acceptable for non-canonical prose or checkbox changes, but keep them inside the inspected ticket range and re-run `pnpm ticket-md check`.
 - Do not resurrect legacy Progress Board sections. Ticket body fields are the canonical source of truth.
+- For authorized native document moves, owner reconciliation or PC path rebasing, use the repository-local `pnpm document-cli` and [its JSON/recovery contract](docs/document_cli.md). Analyze the current worktree's explicit docs scope, inspect the fixed diff and findings, then apply that exact plan ID. Preserve interrupted journals and use explicit resume/recover; never substitute shell moves or global string replacement for a failed guard. This does not install or update a personal skill.
 - Use the bundled `scripts/lib/ledger-contract.mjs` and `references/compatibility.md` for skill revision and document format support. Shared browser code and standalone helpers use the same format guard. Keep basic documents unversioned; ordinary edits never add or rewrite Ledger-Format, Document-ID or Owner. Metadata previews are pure analysis, not file application. Keep file UUIDs separate from browser `d_` IDs and isolate duplicates within each connected project.
 
 ## Document-First Workflow

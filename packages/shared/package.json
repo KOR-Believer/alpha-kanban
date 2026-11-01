@@ -6,6 +6,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./documentReferences": {
+      "types": "./src/documentReferences.d.mts",
+      "import": "./src/documentReferences.mjs"
+    },
     "./documentMetadata": {
       "types": "./dist/documentMetadata.d.ts",
       "import": "./dist/documentMetadata.js"
@@ -30,6 +34,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "mdast-util-from-markdown": "2.0.3",
+    "micromark-util-decode-string": "2.0.1",
     "zod": "^4.4.3"
   }
 }

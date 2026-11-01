@@ -135,6 +135,12 @@ importers:
 
   packages/shared:
     dependencies:
+      mdast-util-from-markdown:
+        specifier: 2.0.3
+        version: 2.0.3
+      micromark-util-decode-string:
+        specifier: 2.0.1
+        version: 2.0.1
       zod:
         specifier: ^4.4.3
         version: 4.4.3
