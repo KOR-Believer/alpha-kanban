@@ -1,6 +1,7 @@
 # {{Title}} 티켓
 
 {{OwnerHeader}}
+{{DocumentIdHeader}}
 
 ## Status
 

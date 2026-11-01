@@ -1,4 +1,5 @@
 import { BrowserMarkdownImage, BrowserMarkdownLink } from "./browser/MarkdownResources";
+import { DocumentMaintenance } from "./browser/DocumentMaintenance";
 import { browserRepository, BrowserFileError } from "./browser/repository";
 import { subscribeFileEvents } from "./browser/fileEvents";
 import { BrowserStartPage, BrowserProjectSwitcher, BrowserFilesMenu, BrowserReconnect } from "./browser/BrowserConnections";
@@ -840,6 +841,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 ) : null}
               </div>
               {!isProjectGuideVisible ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
+                {selectedFile ? <DocumentMaintenance key={selectedFile.id} file={selectedFile} /> : null}
                 {selectedFile?.type === "tickets" && ticketQuery.data?.document.compatibility?.readable !== false ? (
                   <TicketDocumentViewToggle
                     mode={ticketViewMode}

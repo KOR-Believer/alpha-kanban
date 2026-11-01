@@ -28,6 +28,8 @@ export default defineConfig(({ command }) => {
   build: { outDir: "dist-browser" },
   resolve: {
     alias: {
+      "@alpha-kanban/shared/documentMigration": fileURLToPath(new URL("../../packages/shared/src/documentMigration.mjs", import.meta.url)),
+      "@alpha-kanban/shared/documentReferences": fileURLToPath(new URL("../../packages/shared/src/documentReferences.mjs", import.meta.url)),
       "@alpha-kanban/shared/documentMetadata": fileURLToPath(new URL("../../packages/shared/src/documentMetadata.ts", import.meta.url)),
       "@alpha-kanban/shared/ticketMarkdown": fileURLToPath(new URL("../../packages/shared/src/ticketMarkdown.ts", import.meta.url)),
       "@alpha-kanban/shared/documents": fileURLToPath(new URL("../../packages/shared/src/documents.ts", import.meta.url)),

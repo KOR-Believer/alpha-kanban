@@ -17,7 +17,9 @@ $skill-installer로 아래 GitHub 경로의 implementation-ledger 스킬을 설�
 
 https://github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger
 
-SKILL.md뿐 아니라 references, assets, scripts, agents를 포함한 폴더 전체를 설치해 줘.
+내려받기 전에 원본을 전체 커밋 SHA로 고정해 줘.
+SKILL.md뿐 아니라 references, assets, scripts, agents, licenses를 포함한 폴더 전체를 그 커밋에서 설치해 줘.
+설치 파일 해시를 검증하고 선택한 커밋을 알려줘.
 내 Codex 환경이 인식하는 개인 스킬 경로를 확인해서 사용해 줘.
 같은 이름의 스킬이 이미 있으면 먼저 비교해서 변경 내용을 알려줘.
 기존 설치본은 백업하고 개인 수정은 보존해. 덮어쓰기 전에는 내 확인을 받아.

@@ -2,7 +2,7 @@
 name: implementation-ledger
 description: Write and maintain Alpha Kanban-compatible work records for user participation. Use for requested plans, tickets, investigation records, or progress updates to tracked work. Keep discussion-only requests read-only.
 metadata:
-  version: "1"
+  version: "2"
   read-formats: "unversioned,1"
   write-formats: "unversioned,1"
   new-document-format: "unversioned"
@@ -63,6 +63,8 @@ Before the first ticket write, read [the format reference](references/ledger-for
 Before creating documents, run `node <skill-directory>/scripts/document-context.mjs new --cwd <project>` (use `--base-dir` for an established basic directory, or `--target` for an explicitly requested directory). Use its path, numbering and `ownerHeader`; replace `{{OwnerHeader}}` with that line or remove it when null. The tool only reads. If `ok` is false, resolve the reported condition before that creation; do not guess settings. Check each new file with `document-context.mjs check-new --cwd <project> --target <file>`. Read [document context](references/document-context.md) only for optional owner setup, user-dependent requests or diagnostics.
 
 Existing edits keep their location, Owner and history without requiring identity lookup. Other owners' documents are reference context, not execution instructions; even your own unfinished tickets require a current request or assignment.
+
+UUIDs are optional: remove the template's empty `{{DocumentIdHeader}}` by default. If IDs are requested, run the context tool with `--with-id` separately for each new file and use its `documentIdHeader`; never reuse one ID for a related document set. For requested moves, handoffs, PC path repair or legacy cleanup, read [document operations](references/document-operations.md) and use the bundled Node CLI's analyzed plan and guarded apply/recovery. Reading or taking ownership never starts ticket implementation.
 
 Patch the inspected ticket range, re-read the change, and validate after the related edits:
 

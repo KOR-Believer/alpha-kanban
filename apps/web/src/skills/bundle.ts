@@ -2,6 +2,8 @@ export type SkillFile = { path: string; content: string; sha256: string };
 export type SkillBundle = {
   schema: 1; name: "implementation-ledger"; version: string; files: SkillFile[];
   known: Array<{ source: string; files: Array<Pick<SkillFile, "path" | "sha256">> }>;
+  source?: { repository: string; commit: string; kind: "commit" | "worktree" };
+  ledger?: { skillRevision: string; readFormats: readonly string[]; writeFormats: readonly string[]; newDocumentFormat: string; formatField: string; updateUrl: string };
 };
 export const MAX_FILES = 100;
 export const MAX_BYTES = 2 * 1024 * 1024;
@@ -42,6 +44,16 @@ export async function validateBundle(value: unknown, expected: string, digest?: 
   }
   if ((await skillHash(joined)).slice(0, 12) !== expected || !isLedgerSkill(bundle.files.find((file) => file.path === "SKILL.md")!.content) ||
     (digest !== undefined && (!/^[a-f0-9]{64}$/.test(digest) || await skillHash(JSON.stringify(bundle)) !== digest))) throw new Error("Invalid skill bundle.");
+  if (bundle.source !== undefined || bundle.ledger !== undefined) {
+    const { source, ledger } = bundle;
+    const formats = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.length <= 20 && new Set(value).size === value.length && value.every((item) => typeof item === "string" && /^(unversioned|[1-9]\d*)$/.test(item));
+    if (!source || source.repository !== "https://github.com/KOR-Believer/alpha-kanban" || !/^[a-f0-9]{40}$/.test(source.commit) || !["commit", "worktree"].includes(source.kind) || !ledger || !/^[1-9]\d*$/.test(ledger.skillRevision) || !formats(ledger.readFormats) || !formats(ledger.writeFormats) || ledger.writeFormats.some((format) => !ledger.readFormats.includes(format)) || !ledger.writeFormats.includes(ledger.newDocumentFormat) || ledger.formatField !== "Ledger-Format" || ledger.updateUrl !== "https://kanban.giveit2.me/intro#updates") throw new Error("Invalid skill provenance or compatibility contract.");
+    const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(bundle.files.find((file) => file.path === "SKILL.md")!.content)![1]!;
+    for (const [key, value] of Object.entries({ version: ledger.skillRevision, "read-formats": ledger.readFormats.join(","), "write-formats": ledger.writeFormats.join(","), "new-document-format": ledger.newDocumentFormat, "update-url": ledger.updateUrl })) {
+      const found = header.split(/\r?\n/).filter((line) => line.trimStart().startsWith(key + ":"));
+      if (found.length !== 1 || found[0] !== `  ${key}: "${value}"`) throw new Error("Invalid skill provenance or compatibility contract.");
+    }
+  }
   return bundle;
 }
 export async function loadSkillBundle(version = __APP_RELEASE__.skillBundle, digest = __APP_RELEASE__.skillPayload) {

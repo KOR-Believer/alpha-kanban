@@ -1,6 +1,7 @@
 # {{Title}} 계획
 
 {{OwnerHeader}}
+{{DocumentIdHeader}}
 
 작성일: {{YYYY-MM-DD}}
 수정일: {{YYYY-MM-DD}}

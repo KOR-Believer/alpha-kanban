@@ -119,11 +119,11 @@ class CliError extends Error {}
 
 function printHelp() {
   console.log(`Usage:
-  pnpm ticket-md check <file>
-  pnpm ticket-md show <file> <ticket-id>
-  pnpm ticket-md status <file> <ticket-id> [--status DONE] [--progress 100] [--dry-run]
-  pnpm ticket-md append-user <file> <ticket-id> <text...> [--date YYYY-MM-DD] [--dry-run]
-  pnpm ticket-md append-note <file> <ticket-id> <text...> [--date YYYY-MM-DD] [--dry-run]
+  node <skill-directory>/scripts/ticket-md.mjs check <file>
+  node <skill-directory>/scripts/ticket-md.mjs show <file> <ticket-id>
+  node <skill-directory>/scripts/ticket-md.mjs status <file> <ticket-id> [--status DONE] [--progress 100] [--dry-run]
+  node <skill-directory>/scripts/ticket-md.mjs append-user <file> <ticket-id> <text...> [--date YYYY-MM-DD] [--dry-run]
+  node <skill-directory>/scripts/ticket-md.mjs append-note <file> <ticket-id> <text...> [--date YYYY-MM-DD] [--dry-run]
 
 Notes:
   - Tickets are located by unique ### TICKET-ID. headings outside fenced code blocks.

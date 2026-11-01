@@ -6,6 +6,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./documentMigration": {
+      "types": "./src/documentMigration.d.mts",
+      "import": "./src/documentMigration.mjs"
+    },
     "./documentReferences": {
       "types": "./src/documentReferences.d.mts",
       "import": "./src/documentReferences.mjs"
@@ -34,6 +38,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "github-slugger": "2.0.0",
     "mdast-util-from-markdown": "2.0.3",
     "micromark-util-decode-string": "2.0.1",
     "zod": "^4.4.3"

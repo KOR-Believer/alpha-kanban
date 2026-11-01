@@ -5,6 +5,8 @@ import type {
 import { buildDocumentSets, inferDocumentPathOwner, inferMarkdownFileType, inferSequenceNumber, inferSlug, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
 import { appendUserInstruction, parseTicketDocument, updateTicketStatusAndProgress } from "@alpha-kanban/shared/ticketMarkdown";
 import { readDocumentMetadata, indexDocumentIds } from "@alpha-kanban/shared/documentMetadata";
+import { previewDocumentMigrations, type MigrationPreview, type MigrationTarget } from "@alpha-kanban/shared/documentMigration";
+import { inspectReferences, localUrlPath } from "@alpha-kanban/shared/documentReferences";
 import { IndexedDbStorage, type BrowserStorage } from "./storage";
 import { appActivity } from "../pwa/activity";
 
@@ -20,6 +22,11 @@ type IndexedSnapshot = { file: MarkdownFileSummary; size: number; ticketProgress
 export type RecoveryRecord = {
   id: string; fileId: string; workspaceId: string; path: string; ticketId: string;
   before: string; intended: string; beforeHash: string; intendedHash: string; createdAt: string;
+  operation?: "document-migration";
+};
+export type BrowserMigration = {
+  workspaceId: string; fileId: string; target: MigrationTarget; preview: MigrationPreview;
+  guards: { id: string; path: string; hash: string; mtimeMs: number }[]; id: string;
 };
 type Guard = { expectedHash?: string; expectedMtimeMs?: number };
 export type TicketChange = Guard & { status?: TicketStatus; progress?: TicketProgress; reason?: string };
@@ -420,6 +427,55 @@ export class BrowserRepository {
     }) };
   }
 
+  async previewMigration(workspaceId: string, fileId: string, selection: Omit<MigrationTarget, "path">, generatedIds?: Record<string, string>): Promise<BrowserMigration> {
+    const files = await this.files(workspaceId, true), documents = [], guards = [];
+    let bytes = 0;
+    for (const file of files) {
+      const current = await this.markdown(workspaceId, file.id);
+      bytes += current.markdown.length * 2;
+      if (bytes > 128 * 1024 * 1024) throw new BrowserFileError("SCAN_LIMIT", "Too much Markdown for one migration preview. Use the document CLI with a smaller scope.");
+      documents.push({ path: current.file.relativePath, markdown: current.markdown, writable: file.id === fileId });
+      guards.push({ id: file.id, path: current.file.relativePath, hash: current.file.hash, mtimeMs: current.file.mtimeMs });
+    }
+    const file = guards.find((entry) => entry.id === fileId);
+    if (!file) throw new BrowserFileError("FILE_NOT_FOUND", "The selected document is unavailable.");
+    const target = { ...selection, path: file.path };
+    // This root is a temporary namespace for relative-link arithmetic, never a physical path or stored identity.
+    const preview = previewDocumentMigrations({ root: "/project", documents, targets: [target], generatedIds });
+    if (preview.rules.length) {
+      const excluded = await this.excludedPaths(await this.project(workspaceId));
+      if (excluded.length) preview.issues.push({ severity: "blocked", code: "INCOMPLETE_REFERENCE_SCOPE", path: file.path, message: "A separately connected folder is excluded from this project. Use the document CLI to inspect the complete reference scope." });
+      for (const document of documents) for (const ref of inspectReferences(document.markdown).references) {
+        try {
+          const local = localUrlPath(ref.url.split(/[?#]/)[0]!);
+          if (local && (/^[\\/]/.test(local) || /^[A-Za-z]:/.test(local))) preview.issues.push({ severity: "blocked", code: "ABSOLUTE_REFERENCE_UNVERIFIED", path: document.path, message: "Absolute local links require the document CLI to verify their physical targets." });
+        } catch { preview.issues.push({ severity: "blocked", code: "INVALID_REFERENCE", path: document.path, message: "A local link could not be verified." }); }
+      }
+      if (preview.issues.length) preview.decision = "blocked";
+    }
+    const body = { workspaceId, fileId, target, preview, guards };
+    return { ...body, id: await contentHash(JSON.stringify(body)) };
+  }
+
+  async applyMigration(plan: BrowserMigration) {
+    const { id, ...body } = plan;
+    if (id !== await contentHash(JSON.stringify(body)) || !["ready", "noop"].includes(plan.preview.decision)) throw new BrowserFileError("INVALID_PREVIEW", "Preview the selected changes again before applying them.");
+    const guard = plan.guards.find((entry) => entry.id === plan.fileId);
+    if (!guard) throw new BrowserFileError("INVALID_PREVIEW", "The preview has no original document guard.");
+    const verify = async () => {
+      const { path: _path, ...selection } = plan.target;
+      const fresh = await this.previewMigration(plan.workspaceId, plan.fileId, selection, plan.preview.generatedIds);
+      if (fresh.id !== id) throw new BrowserFileError("STALE_FILE", "The document or its references changed. Preview the changes again.");
+    };
+    return this.lock("migration:" + plan.workspaceId, async () => {
+      await this.write(plan.workspaceId, plan.fileId, "", { expectedHash: guard.hash, expectedMtimeMs: guard.mtimeMs }, async (source) => {
+        await verify();
+        return plan.preview.changes.find((change) => change.path === plan.target.path)?.after ?? source;
+      }, { operation: "document-migration", verify });
+      return this.markdown(plan.workspaceId, plan.fileId);
+    });
+  }
+
   patch(workspaceId: string, fileId: string, ticketId: string, update: TicketChange) {
     return this.write(workspaceId, fileId, ticketId, update, (markdown) => updateTicketStatusAndProgress(markdown, ticketId, { ...update, reason: update.reason ?? "" }));
   }
@@ -428,7 +484,7 @@ export class BrowserRepository {
     return this.write(workspaceId, fileId, ticketId, instruction, (markdown) => appendUserInstruction(markdown, ticketId, instruction.text.trim(), { kind: instruction.kind }));
   }
 
-  private async write(workspaceId: string, fileId: string, ticketId: string, guard: Guard, transform: (source: string) => string): Promise<TicketDocumentResponse> {
+  private async write(workspaceId: string, fileId: string, ticketId: string, guard: Guard, transform: (source: string) => string | Promise<string>, migration?: { operation: "document-migration"; verify: () => Promise<void> }): Promise<TicketDocumentResponse> {
     if (!guard.expectedHash || guard.expectedMtimeMs === undefined) throw new BrowserFileError("STALE_FILE", "Reload the document before saving.");
     return this.lock("document:" + fileId, async () => {
       if ((await this.recoveries()).some((record) => record.fileId === fileId)) throw new BrowserFileError("RECOVERY_REQUIRED", "Review the pending recovery record before saving again.");
@@ -436,7 +492,7 @@ export class BrowserRepository {
       if (await record.handle.queryPermission({ mode: "readwrite" }) !== "granted") throw new BrowserFileError("PERMISSION_REQUIRED", "Grant write access from the folder connections menu.");
       const before = await this.snapshot(record, true);
       if (before.file.hash !== guard.expectedHash || before.file.mtimeMs !== guard.expectedMtimeMs) throw new BrowserFileError("STALE_FILE", "The Markdown file changed externally. Reload it before saving.");
-      const intended = transform(before.markdown);
+      const intended = await transform(before.markdown);
       if (intended === before.markdown) return { file: before.file, document: parseTicketDocument(intended) };
       if (before.file.documentId) {
         const identity = (await this.documentIdIndex(workspaceId)).find((entry) => entry.documentId === before.file.documentId);
@@ -447,16 +503,19 @@ export class BrowserRepository {
       const recovery: RecoveryRecord = {
         id: newId("r_"), fileId, workspaceId, path: record.path, ticketId, before: before.markdown, intended,
         beforeHash: before.file.hash, intendedHash: await contentHash(intended), createdAt: new Date().toISOString(),
+        ...(migration ? { operation: migration.operation } : {}),
       };
       // Fail closed: no original file mutation until the preimage and intended result are durable.
       await this.storage.set("recovery:" + recovery.id, recovery);
       this.changed();
       let writable: FileSystemWritableFileStream | undefined;
       try {
-        writable = await record.handle.createWritable({ keepExistingData: false });
+        writable = await record.handle.createWritable({ keepExistingData: Boolean(migration) });
+        await migration?.verify();
         const latest = await this.snapshot(await this.document(workspaceId, fileId), true);
         if (latest.file.hash !== before.file.hash || latest.file.mtimeMs !== before.file.mtimeMs) throw new BrowserFileError("STALE_FILE", "The file changed just before saving; the write was cancelled.");
         await writable.write(intended);
+        if (migration) await writable.truncate(new TextEncoder().encode(intended).byteLength);
         await writable.close();
         writable = undefined;
         const result = await this.snapshot(await this.document(workspaceId, fileId), true);
@@ -490,6 +549,28 @@ export class BrowserRepository {
       if (current.file.hash !== expectedHash) throw new BrowserFileError("STALE_FILE", "The file changed during recovery review.");
       await this.storage.delete("recovery:" + record.id);
       this.changed();
+    });
+  }
+
+  async restoreMigration(record: RecoveryRecord, expectedHash: string) {
+    return this.lock("document:" + record.fileId, async () => {
+      const saved = await this.storage.get<RecoveryRecord>("recovery:" + record.id);
+      if (saved?.operation !== "document-migration" || JSON.stringify(saved) !== JSON.stringify(record) || await contentHash(saved.before) !== saved.beforeHash || await contentHash(saved.intended) !== saved.intendedHash) throw new BrowserFileError("INVALID_PREVIEW", "The recovery copy could not be verified.");
+      const current = await this.recoveryDocument(saved);
+      if (current.file.hash !== expectedHash || ![saved.beforeHash, saved.intendedHash].includes(expectedHash)) throw new BrowserFileError("STALE_FILE", "The current file differs from the recovery copies. Preserve the external changes and resolve it manually.");
+      if (expectedHash !== saved.beforeHash) {
+        const document = await this.document(current.file.workspaceId, saved.fileId);
+        if (await document.handle.queryPermission({ mode: "readwrite" }) !== "granted") throw new BrowserFileError("PERMISSION_REQUIRED", "Grant write access from the folder connections menu.");
+        let writable: FileSystemWritableFileStream | undefined;
+        try {
+          writable = await document.handle.createWritable({ keepExistingData: true });
+          const latest = await this.recoveryDocument(saved);
+          if (latest.file.hash !== expectedHash || latest.file.mtimeMs !== current.file.mtimeMs) throw new BrowserFileError("STALE_FILE", "The file changed during recovery review.");
+          await writable.write(saved.before); await writable.truncate(new TextEncoder().encode(saved.before).byteLength); await writable.close(); writable = undefined;
+          if ((await this.recoveryDocument(saved)).file.hash !== saved.beforeHash) throw new BrowserFileError("WRITE_UNCERTAIN", "The restored content could not be verified. Keep the recovery copy.");
+        } catch (error) { await writable?.abort().catch(() => undefined); throw error; }
+      }
+      await this.storage.delete("recovery:" + saved.id); this.changed();
     });
   }
 

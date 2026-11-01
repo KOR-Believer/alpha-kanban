@@ -1,52 +1,25 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { zipSync, strToU8 } from "fflate";
-import { validateBundle } from "../apps/web/src/skills/bundle.ts";
+import { createSkillDistribution, sha256 } from "./lib/skill-distribution.mjs";
+import { buildDocumentCli } from "./build-document-cli.mjs";
 import { LEDGER_CONTRACT } from "../skills/implementation-ledger/scripts/lib/ledger-contract.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const source = path.join(root, "skills/implementation-ledger");
 const destination = path.join(root, "apps/web/public-browser/downloads");
-const files = {};
-async function collect(directory, relative = "") {
-  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-    const name = relative ? relative + "/" + entry.name : entry.name;
-    if (entry.isDirectory()) await collect(path.join(directory, entry.name), name);
-    else if (entry.isFile()) files["implementation-ledger/" + name] = new Uint8Array(await readFile(path.join(directory, entry.name)));
-    else throw new Error("Skill bundles must contain only regular files and directories: " + name);
-  }
-}
-await collect(source);
-const skillText = new TextDecoder().decode(files["implementation-ledger/SKILL.md"]);
-const skillHeader = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(skillText)?.[1];
-if (!skillHeader) throw new Error("Missing skill front matter.");
-for (const [key, value] of Object.entries({ version: LEDGER_CONTRACT.skillRevision,
-  "read-formats": LEDGER_CONTRACT.readFormats.join(","), "write-formats": LEDGER_CONTRACT.writeFormats.join(","),
-  "new-document-format": LEDGER_CONTRACT.newDocumentFormat, "update-url": LEDGER_CONTRACT.updateUrl })) {
-  const declarations = skillHeader.split(/\r?\n/).filter((line) => line.trimStart().startsWith(`${key}:`));
-  if (declarations.length !== 1 || declarations[0] !== `  ${key}: "${value}"`) throw new Error(`Skill contract metadata mismatch: ${key}`);
-}
-for (const required of ["SKILL.md", "references/ledger-format.md", "references/document-context.md", "references/compatibility.md", "assets/tickets-template.md", "scripts/check-ledger.mjs", "scripts/ticket-md.mjs", "scripts/document-context.mjs", "scripts/lib/document-context.mjs", "scripts/lib/document-owner.mjs", "scripts/lib/document-settings.mjs", "scripts/lib/context-error.mjs", "scripts/lib/ledger-contract.mjs", "scripts/lib/ledger-format.mjs", "scripts/lib/document-header.mjs", "scripts/lib/document-metadata.mjs"]) {
-  if (!files["implementation-ledger/" + required]) throw new Error("Missing bundled skill file: " + required);
-}
-const hash = createHash("sha256");
-for (const [name, bytes] of Object.entries(files)) hash.update(name).update(bytes);
-const version = hash.digest("hex").slice(0, 12);
-const bundle = {
-  schema: 1, name: "implementation-ledger", version,
-  files: Object.entries(files).map(([name, bytes]) => ({
-    path: name.slice("implementation-ledger/".length), content: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-  })),
-  known: JSON.parse(await readFile(path.join(root, "scripts/skill-releases.json"), "utf8")),
-};
-const payloadSha256 = createHash("sha256").update(JSON.stringify(bundle)).digest("hex");
-await validateBundle(bundle, version, payloadSha256);
+await buildDocumentCli();
+const { bundle, payloadSha256 } = await createSkillDistribution();
+const version = bundle.version;
+const files = Object.fromEntries(bundle.files.map((file) => ["implementation-ledger/" + file.path, strToU8(file.content)]));
 const guide = `Implementation Ledger / Codex
 Bundle version: ${version}
+Source commit: ${bundle.source.commit}
+Source kind: ${bundle.source.kind} (source provenance, not a publication claim)
+Source: ${bundle.source.repository}/tree/${bundle.source.commit}/skills/implementation-ledger
+Skill revision: ${LEDGER_CONTRACT.skillRevision}; document formats: ${LEDGER_CONTRACT.readFormats.join(", ")}
+Payload SHA-256: ${payloadSha256}
 
 한국어
 1. implementation-ledger.zip을 내려받아 압축을 풉니다.
@@ -67,7 +40,7 @@ Bundle version: ${version}
    작업은 Codex 채팅에서 이어가세요. 필요한 경우에만 보드에서 티켓을 옮기거나 지시를 남기고,
    Codex에 변경된 문서를 다시 읽어달라고 요청하세요.
 
-agent의 문서 컨텍스트 판정·검증 및 ticket-md 보조 스크립트에는 Node.js가 필요합니다.
+agent의 문서 컨텍스트 판정·검증 및 ticket-md 보조 스크립트에는 Node.js 24가 필요합니다. 동봉된 문서 CLI는 Git도 사용하며 pnpm이나 원본 저장소가 필요 없습니다.
 설정 없이 기본 작성할 수 있으며, 소유자별 작성은 references/document-context.md의 선택 설정을 사용합니다.
 
 English
@@ -86,7 +59,7 @@ scope and completion criteria before requesting implementation.
 Connect the project folder here to review the plan and progress.
 Continue the work in Codex chat. Move tickets or leave instructions on the board only
 when needed, then ask Codex to reread the changed Markdown.
-Node.js is used by the agent's document context, validation and ticket helpers, not the browser app.
+Node.js 24 is used by the agent helpers, not the browser app. The bundled document CLI also uses Git, and needs neither pnpm nor the source repository.
 Basic document creation needs no settings. Optional owner setup is described in references/document-context.md.
 `;
 // A BOM also identifies UTF-8 when a static server omits the text/plain charset.
@@ -98,5 +71,5 @@ await writeFile(path.join(destination, `implementation-ledger-${version}.json`),
 await writeFile(path.join(destination, "implementation-ledger.zip"), archive);
 await writeFile(path.join(destination, `implementation-ledger-${version}.zip`), archive);
 await writeFile(path.join(destination, "INSTALL.txt"), guideBytes);
-await writeFile(path.join(destination, "manifest.json"), JSON.stringify({ version, archive: `implementation-ledger-${version}.zip`, payloadSha256, ledger: LEDGER_CONTRACT, files: Object.keys(files) }, null, 2));
+await writeFile(path.join(destination, "manifest.json"), JSON.stringify({ version, archive: `implementation-ledger-${version}.zip`, payloadSha256, archiveSha256: sha256(archive), source: bundle.source, ledger: LEDGER_CONTRACT, fileHashes: bundle.files.map(({ path, sha256 }) => ({ path, sha256 })), files: Object.keys(files) }, null, 2));
 console.log(`Packaged implementation-ledger ${version} (${Object.keys(files).length} files).`);

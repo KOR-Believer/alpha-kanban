@@ -10,7 +10,7 @@ import { previewDocumentMetadata } from "../../skills/implementation-ledger/scri
 import { makeFixture, moveRequest, gitTest, put } from "./document-fixtures.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
-const cliFile = path.join(repoRoot, "scripts/document-cli.mjs");
+const cliFile = process.env.AK_TEST_CLI_PATH ?? path.join(repoRoot, "scripts/document-cli.mjs");
 const transactionFile = pathToFileURL(path.join(repoRoot, "scripts/lib/document-transaction.mjs")).href;
 const missing = file => assert.rejects(access(file), { code: "ENOENT" });
 function cli(f, args, input) {
@@ -29,6 +29,28 @@ function approved(f, request) {
 function apply(f, plan) { return cli(f, ["apply", "--plan", "-", "--approve", plan.id], plan); }
 function verify(f, id) { return cli(f, ["verify", "--id", id]); }
 function recover(f, id) { return cli(f, ["recover", "--id", id, "--approve", id]); }
+
+test("migration previews stale Progress Board rows, applies the reviewed ID and restores the original", async t => {
+  const f = await makeFixture(t), file = "docs/02_legacy_tickets.md";
+  const source = (await readFile(path.join(repoRoot, "docs/02_alpha_kanban_tickets.md"), "utf8"))
+    .replace("| AKB-00 | DONE | 100%", "| OLD-77 | TODO | 0%")
+    .replace(/^\| AKB-01 \|.*\n/m, "")
+    .replace("## Progress Board\n", "## Progress Board\n\nKeep this note.\n");
+  await f.put(file, source);
+  const request = { schema: 1, operation: "migrate", scope: ["docs"], targets: [{ path: file, assignId: true, cleanupLegacy: true }] };
+  const plan = approved(f, request);
+  assert.equal(await readFile(path.join(f.root, file), "utf8"), source);
+  assert.equal(apply(f, plan).code, 0);
+  const after = await readFile(path.join(f.root, file), "utf8");
+  assert.equal(after, plan.changes[0].diff.after);
+  assert.ok(after.includes(plan.migration.generatedIds[file]));
+  assert.ok(after.includes("Keep this note.")); assert.ok(!after.includes("| OLD-77 |"));
+  assert.equal(after.slice(after.indexOf("## Ticket List")), source.slice(source.indexOf("## Ticket List")));
+  assert.equal(verify(f, plan.id).body.verified, true);
+  assert.equal(analyze(f, request).body.decision, "noop");
+  assert.equal(recover(f, plan.id).code, 0);
+  assert.equal(await readFile(path.join(f.root, file), "utf8"), source);
+});
 
 test("JSON-only analyze/apply/verify and repeated requests work without config, Owner or document IDs", async t => {
   const f = await makeFixture(t), source = "# 메모\r\n\r\n[b](b.md#section)\r\n";

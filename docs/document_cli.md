@@ -1,6 +1,6 @@
 # 문서 이동·정합화·PC 경로 보정 도구
 
-페이즈 3의 저장소 내 Node CLI와 공용 분석 계약이다. 현재 worktree의 명시한 `docs`만 쓰며, 다른 repo는 사용자가 지정한 현재 위치의 참조 대상만 검사한다. 독립 스킬 설치본 동봉은 AKD-08에서 다룬다.
+저장소 내 Node CLI와 독립 동봉 CLI가 공유하는 분석·적용 계약이다. 현재 worktree의 명시한 `docs`만 쓰며, 다른 repo는 사용자가 지정한 현재 위치의 참조 대상만 검사한다. 독립 설치본은 Node.js 24와 Git만 필요하며 pnpm·원본 저장소·node_modules를 요구하지 않는다. 설치본 계약은 `skills/implementation-ledger/references/document-operations.md`에 있다.
 
 ## 명령 순서
 
@@ -67,7 +67,13 @@ CommonMark inline 링크·이미지·reference 정의의 경로 범위만 수정
 
 현재 worktree의 접근 가능한 Markdown을 역참조 검사한다. `.git`, 의존성·빌드·캐시·출력 디렉터리, symlink·중첩 저장소·읽기 실패는 별도로 보고한다. 지정 쓰기 범위 안에 미검사 경계가 있으면 보류한다. README/AGENTS 등 범위 밖 참조를 고쳐야 하는 이동도 보류한다.
 
-후속 섹션 정리용 공용 분석은 정확한 heading 경계의 삭제와 보존된 중복 제목의 앵커 번호 변화를 처리한다. 평문 한글/영문/숫자/공백/하이픈/밑줄 제목을 지원하며, 복잡한 heading/HTML 앵커나 삭제 대상의 참조가 있으면 삭제를 보류한다. 이 페이즈의 CLI에는 섹션 삭제 명령을 노출하지 않는다.
+섹션 정리용 공용 분석은 정확한 heading 경계의 삭제와 보존된 중복 제목의 앵커 번호 변화를 처리한다. 제목의 평문·inline code·구두점은 GitHub slugger로 계산하며 강조 등 서식 노드·HTML 앵커나 삭제 대상의 참조가 있으면 삭제를 보류한다. `migrate`는 명시적으로 선택한 ID 발급과 아래 규칙에 맞는 예전 Progress Board 정리를 처리한다.
+
+## 선택적 문서 정리
+
+`operation: migrate`에 `targets: [{path: "docs/13_search_tickets.md", assignId: true, cleanupLegacy: true}]`를 전달한다. 두 선택은 독립적이며 일반 Markdown은 `allowPlainMarkdown: true`를 명시한다. 기존 ID는 유지하고 생성한 UUID를 계획에 고정하여 적용/재개 시 재사용한다. Progress Board 제목과 알려진 다섯 열 표 형식만으로 판정하며 본문 티켓 수·ID·값은 비교하지 않는다. 표 밖 메모가 있으면 제목과 메모를 유지하고 표만 제거한다. 옛 내장 템플릿·미지원/손상 형식·날짜/이력은 보존한다. 정리 불가 표는 `migration.retained`에 보고한다. 제목 참조가 사라지거나 범위 밖 수정을 요구하면 차단한다.
+
+브라우저의 문서 정리는 같은 변환을 사용하되 선택 파일 하나만 쓴다. 연결 프로젝트에서 읽은 문서의 hash/mtime/목록과 적용 직전 상태를 확인하고 IndexedDB 원본 복구를 제공한다. 절대 로컬 링크·별도 연결 경계·다른 파일의 참조 수정은 CLI로 처리한다. ID만 선택하면 불필요한 링크 이행을 하지 않는다.
 
 ## 중단·재개·복구
 
@@ -80,6 +86,8 @@ pnpm document-cli recover --id "작업 id" --approve "작업 id"
 ```
 
 각 worktree의 Git 관리 디렉터리 아래 `alpha-kanban-document-operations/`에 비공개 권한의 journal·원본 바이트·단계별 예상 결과를 저장한다. linked worktree는 자신의 Git 관리 경로를 사용한다. 첫 문서 변경 전에 원본 전체를 저장·동기화하며 Git index·commit·개인 설정·브라우저 IndexedDB는 변경하지 않는다. 미해결 기록과 원본 백업을 자동 삭제하지 않는다.
+
+완료 검증은 당시 스캔에 결합되어 후속 작업으로 참조 문서가 바뀌면 과거 영수증이 `REFERENCE_CHANGED`를 반환할 수 있다. 이를 자동 복구 사유로 삼지 않고 당시 승인 결과와 현재 변경을 구분한다. 반복 분석의 `document-operation-receipt-1`은 `noop/already-applied` 영수증이며 새 apply 계획이 아니다.
 
 동일 파일시스템에서 목적지의 배타적 hard link를 만든 뒤 링크/Owner 내용을 적용하고 close·readback과 원본을 다시 확인해 원래 경로를 제거한다. 이 과정은 다중 파일 원자적 이동이 아니며, 중간에는 양쪽 경로가 보일 수 있다. 완료/실패 보고의 단계와 파일 목록을 확인한다. 기존 hard link·symlink·목적지 점유·다른 파일시스템은 거부한다. 폴더 ACL/flags/다른 소유권처럼 보존 근거가 없는 경우도 쓰기 전에 거부한다. 파일별 64 MiB, 작업별 원본 256 MiB 한도를 넘으면 작업을 나눈다. 제외 경로 외 스캔이 20,000개 항목을 넘는 worktree에서는 분석을 완료하지 않는다.
 
@@ -94,6 +102,17 @@ CLI 잠금은 브라우저나 외부 편집기를 배제하지 않는다. 적용
 격리된 실제 macOS 폴더/Git worktree에서 이동·인수·등록·PC 보정·재실행·복구, 파일 inode/mode/xattr와 자원 바이트 보존, 실제 권한 오류, 단계 실패 주입과 프로세스 종료 후 재개를 검증한다. 기존 24·25 문서는 격리 복사본으로 번호와 이력 보존을 확인한다. 운영 문서를 실제로 옮긴 결과나 Windows OS native 검증으로 확대하지 않는다. Windows 드라이브·UNC·다른 PC 배치는 공용 순수 계산 fixture로 별도 검증한다. 현재 폴더 속성 검사 어댑터는 macOS용이며 검사할 수 없는 플랫폼의 폴더 전체 이동은 보류한다. 개별 파일은 원래 inode를 유지하는 방식만 사용한다.
 
 브라우저 재발견은 기존 AKD-02/03의 소유자·UUID·handle 규약을 사용한다. 브라우저의 기존 handle이 유지되면 로컬 ID를 유지하고 새 handle이면 UUID만으로 예전 경로/로컬 ID를 합치지 않는다. 실제 OS의 FSA handle 유지 여부는 native CLI 테스트나 fake handle 테스트만으로 보장하지 않는다.
+
+### 페이즈 4 검증
+
+2026-11-01, macOS의 격리 Git 폴더와 설치본에서 확인했다.
+
+- 공용/웹 전체 회귀 후 최종 삭제 규칙과 참조 분석 39개, 브라우저/번역 10개, native migration 4개, CLI 추가 migration 1개 검사가 통과했다. 티켓 수·ID·값이 다른 표, 메모 보존, 앵커 변화, 미지원 형식, UUID 고정, 중단·재개·복구를 포함한다.
+- 배포/설치 검사 9개가 JSON·ZIP·설치 파일·영수증의 해시/출처와 실패 시 보존을 검증했다. 그 안에서 원본 저장소 밖에 실행 파일 하나만 복사한 CLI로 11개 실제 이동·인수·경로 보정·정리·복구 시나리오를 통과했다. Node.js 24와 Git 외 런타임 의존성이 없다.
+- 컨텍스트/설정 28개 회귀 검사와 독립 agent 3개로 기본 작성·선택적 UUID, 외부 worktree의 참조/인수/명시적 구현 구분, 중단 작업 재개·PC 보정·레거시 정리를 확인했다. 기존 번호/UUID/티켓 이력·다른 worktree·범위 밖 파일을 보존했다. 상세 설정·번호의 기존 agent 기준은 [페이즈 1 검증](team_documents_validation.md)을 재사용했다.
+- 격리 Chrome의 OPFS 문서에서 본문 2개 티켓과 다른 ID 1개짜리 표를 미리보기 후 삭제했다. 본문 바이트와 미리보기 UUID를 보존하고, 미리보기 후 외부 변경은 거부했다. 한영·라이트/다크·좁은 화면을 확인하고 `typecheck`·빌드·스킬 형식·번들 재현 검사를 통과했다.
+
+Chrome OPFS 검증은 실제 OS 폴더 권한이나 Windows 실기 근거가 아니다. 운영 문서 변환·개인 전역 스킬 교체·공개 배포는 하지 않았다. 새 묶음의 공개 전 설치/업데이트 게이트는 [릴리즈 검증](release_skill_validation.md)에 유지한다.
 
 ## 확인·결정이 필요한 사항
 

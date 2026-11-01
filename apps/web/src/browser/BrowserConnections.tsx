@@ -203,8 +203,9 @@ function Recovery({ record }: { record: RecoveryRecord }) {
   const actions = useBrowserActions();
   const [review, setReview] = useState<{ hash: string; result: string }>();
   const [confirm, setConfirm] = useState(false);
+  const [restore, setRestore] = useState(false);
   return <div className="grid gap-2 border-b border-border py-3">
-    <p className="break-all text-sm">{record.path} · {record.ticketId}</p>
+    <p className="break-all text-sm">{record.path} · {record.operation === "document-migration" ? t("Document maintenance") : record.ticketId}</p>
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" onClick={() => downloadText(record.before, record.id + "-before.md")}><Download />{t("Original copy")}</Button>
       <Button size="sm" variant="outline" onClick={() => downloadText(record.intended, record.id + "-intended.md")}><Download />{t("Intended copy")}</Button>
@@ -214,11 +215,18 @@ function Recovery({ record }: { record: RecoveryRecord }) {
       })}><RefreshCw />{t("Check current file")}</Button>
     </div>
     {review ? <><p className="text-sm">{t(review.result)}</p><Button size="sm" variant="outline" onClick={() => setConfirm(true)}>{t("Finish recovery review")}</Button></> : null}
+    {review && record.operation === "document-migration" && [record.beforeHash, record.intendedHash].includes(review.hash) ? <Button size="sm" variant="outline" disabled={actions.busy} onClick={() => setRestore(true)}>{t("Restore original document")}</Button> : null}
     <ErrorText message={actions.error} />
     <Dialog open={confirm} onOpenChange={setConfirm}>
       <DialogContent>
         <DialogHeader><DialogTitle>{t("Finish recovery review")}</DialogTitle><DialogDescription>{t("Remove these recovery copies without changing the file? Download any copies you need first.")}</DialogDescription></DialogHeader>
         <DialogFooter><Button variant="outline" onClick={() => setConfirm(false)}>{t("Cancel")}</Button><Button disabled={actions.busy} onClick={() => void actions.run(async () => { await browserRepository.dismissRecovery(record, review!.hash); setConfirm(false); })}>{t("Confirm")}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={restore} onOpenChange={setRestore}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t("Restore original document")}</DialogTitle><DialogDescription>{t("Restore the saved original only if the current file still matches a recovery copy?")}</DialogDescription></DialogHeader>
+        <DialogFooter><Button variant="outline" onClick={() => setRestore(false)}>{t("Cancel")}</Button><Button disabled={actions.busy} onClick={() => void actions.run(async () => { await browserRepository.restoreMigration(record, review!.hash); setRestore(false); })}>{t("Restore original document")}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   </div>;

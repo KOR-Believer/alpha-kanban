@@ -17,7 +17,9 @@ Use $skill-installer to install implementation-ledger from this GitHub path:
 
 https://github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger
 
-Install the entire folder, including references, assets, scripts, and agents, not only SKILL.md.
+Resolve the source to a full commit before downloading.
+Install the entire folder from that commit, including references, assets, scripts, agents, and licenses, not only SKILL.md.
+Verify installed file hashes and report the chosen commit.
 Find and use the personal skill location recognized by my Codex environment.
 If a skill with the same name is already installed, compare it and explain the changes first.
 Back up the existing installation and preserve my customizations. Ask before overwriting it.

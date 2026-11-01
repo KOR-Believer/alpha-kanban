@@ -50,7 +50,7 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     const { command, flags } = argumentsFor(argv);
     let result, exitCode = 0;
-    if (command === "help") result = { schema: 1, commands: commandFlags, guide: "docs/document_cli.md", input: "UTF-8 JSON file or - for stdin", scope: "Current worktree only; no checkout or cwd option", exits: { success: 0, invalidInput: 2, review: 3, blocked: 4, recoveryRequired: 5 } };
+    if (command === "help") result = { schema: 1, commands: commandFlags, guide: "references/document-operations.md", runtime: "Node.js 24 and Git; bundled runtime needs no pnpm or node_modules", input: "UTF-8 JSON file or - for stdin", scope: "Current worktree only; no checkout or cwd option", exits: { success: 0, invalidInput: 2, review: 3, blocked: 4, recoveryRequired: 5 } };
     else if (command === "analyze") {
       result = await analyzeDocumentOperation(await jsonInput(flags.request));
       exitCode = result.decision === "review" ? 3 : result.decision === "blocked" ? 4 : 0;

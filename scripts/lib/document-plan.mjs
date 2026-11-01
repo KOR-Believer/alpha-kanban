@@ -4,6 +4,7 @@ import { analyzeReferences, referenceTargets, projectPath, absolutePath, movePat
 import { readDocumentMetadata, analyzeDocumentMetadata, previewDocumentMetadata } from "../../skills/implementation-ledger/scripts/lib/document-metadata.mjs";
 import { inspectLedgerFormat, inspectTicketCompatibility } from "../../skills/implementation-ledger/scripts/lib/ledger-format.mjs";
 import { scanDocumentHeader } from "../../skills/implementation-ledger/scripts/lib/document-header.mjs";
+import { previewDocumentMigrations } from "../../packages/shared/src/documentMigration.mjs";
 import { resolveDocumentContext } from "../../skills/implementation-ledger/scripts/lib/document-context.mjs";
 import { fail, hashObject, sha, portable, maybeStat, git, worktreeContext, normalizeRemote, safePath, snapshot, scanWorktree } from "./document-fs.mjs";
 
@@ -13,7 +14,7 @@ const exactKeys = (input, names, label) => {
 };
 export function validateRequest(request) {
   exactKeys(request, ["schema", "operation", "scope", "moves", "targets", "repositories", "output", "owner", "intent", "actor", "acknowledgements"], "request");
-  if (request.schema !== 1 || !["move", "reconcile", "rebase"].includes(request.operation)) fail("INVALID_REQUEST", "Expected schema 1 and move, reconcile or rebase.");
+  if (request.schema !== 1 || !["move", "reconcile", "rebase", "migrate"].includes(request.operation)) fail("INVALID_REQUEST", "Expected schema 1 and move, reconcile, rebase or migrate.");
   if (!Array.isArray(request.scope) || !request.scope.length) fail("INVALID_REQUEST", "Explicit docs write scope is required.");
   for (const scope of request.scope) if (projectPath(scope) !== "docs" && !scope.startsWith("docs/")) fail("WRITE_SCOPE", "Write scope must be docs or a path below docs.");
   if (request.output !== undefined && !["relative", "file-url"].includes(request.output)) fail("INVALID_REQUEST", "Unknown link output policy.");
@@ -23,7 +24,8 @@ export function validateRequest(request) {
   if (request.repositories !== undefined && !Array.isArray(request.repositories)) fail("INVALID_REQUEST", "repositories must be an array.");
   if (request.acknowledgements !== undefined && (!Array.isArray(request.acknowledgements) || request.acknowledgements.some((id) => typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)))) fail("INVALID_REQUEST", "Acknowledgements must be exact analysis fingerprints.");
   if (request.operation !== "move" && request.moves !== undefined) fail("INVALID_REQUEST", "Only move accepts moves.");
-  if (request.operation !== "reconcile" && request.targets !== undefined) fail("INVALID_REQUEST", "Only reconcile accepts targets.");
+  if (!["reconcile", "migrate"].includes(request.operation) && request.targets !== undefined) fail("INVALID_REQUEST", "Only reconcile and migrate accept targets.");
+  if (request.operation === "migrate" && ["owner", "actor", "intent", "output", "repositories"].some((key) => request[key] !== undefined)) fail("INVALID_REQUEST", "Metadata migration does not change ownership or repository mappings.");
   if (request.operation === "rebase" && (request.owner !== undefined || request.actor !== undefined || request.intent !== undefined)) fail("INVALID_REQUEST", "PC rebasing does not also change ownership.");
 }
 
@@ -71,7 +73,7 @@ function formatCheck(relative, markdown) {
 }
 
 /** Reads only. The caller controls where to save the returned reviewable JSON plan. */
-export async function createDocumentPlan(request, { cwd = process.cwd(), home } = {}) {
+export async function createDocumentPlan(request, { cwd = process.cwd(), home, generatedIds } = {}) {
   validateRequest(request);
   const context = await worktreeContext(cwd), root = context.root;
   const repos = await inspectRepositories(request, context);
@@ -149,7 +151,12 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home } 
       checks.push({ target: candidate, record }); available.push(candidate);
     } catch (error) { checks.push({ target: candidate, code: error.code ?? "TARGET_UNAVAILABLE" }); }
   }
-  const references = analyzeReferences({ ...referenceInput, available });
+  if (request.operation === "migrate") {
+    if (!Array.isArray(request.targets) || !request.targets.length) fail("INVALID_REQUEST", "migrate requires a nonempty targets list.");
+    for (const target of request.targets) await writePath(target.path);
+  }
+  const migration = request.operation === "migrate" ? previewDocumentMigrations({ root: portable(root), documents, targets: request.targets, available, generatedIds }) : null;
+  const references = migration ?? analyzeReferences({ ...referenceInput, available });
   issues.push(...references.issues);
   const edits = new Map(references.changes.map((change) => [change.path, change]));
   const files = new Map(physical.map((entry) => [entry.from, entry]));
@@ -197,7 +204,7 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home } 
     }
   }
   if (changes.reduce((sum, change) => sum + Number(change.before.size), 0) > 256 * 1024 * 1024) fail("BACKUP_LIMIT", "One operation may back up at most 256 MiB; select a smaller docs scope.");
-  if (changes.length || directories.length) issues.push({ severity: "review", code: "UNSCANNED_BACKLINKS", path: "", message: "Backlinks in other worktrees, unregistered repos, chats and arbitrary prose are not checked. Confirm that this scope is sufficient." });
+  if ((changes.length || directories.length) && (!migration || migration.rules.length)) issues.push({ severity: "review", code: "UNSCANNED_BACKLINKS", path: "", message: "Backlinks in other worktrees, unregistered repos, chats and arbitrary prose are not checked. Confirm that this scope is sufficient." });
   const guard = { paths: scan.paths, documents: scan.documents.map((document) => ({ path: document.path, ...document.guard })), skipped: scan.skipped };
   const baseRequest = { ...request }; delete baseRequest.acknowledgements;
   const binding = hashObject({ context, request: baseRequest, guard });
@@ -205,7 +212,8 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home } 
   const decision = diagnostics.some((issue) => issue.severity === "blocked") ? "blocked" : !changes.length && !directories.length ? "noop"
     : diagnostics.some((issue) => !issue.acknowledged) ? "review" : "ready";
   const plan = { schema: 1, engine: "document-operations-1", request, context, actor: actorIdentity, repositories: repos, scan: guard, targetChecks: checks,
-    changes, directories, references: references.references, issues: diagnostics, decision };
+    changes, directories, references: references.references, issues: diagnostics, decision,
+    ...(migration ? { migration: { generatedIds: migration.generatedIds, rules: migration.rules, retained: migration.retained } } : {}) };
   return { ...plan, id: hashObject(plan) };
 }
 

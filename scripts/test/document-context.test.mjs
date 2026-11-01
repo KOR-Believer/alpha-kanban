@@ -313,3 +313,13 @@ test("standalone copied skill works without project node_modules and emits machi
   child = run(["new", "--target", "docs/manual"]); assert.equal(child.status, 0);
   assert.equal((await lstat(entry)).isFile(), true);
 });
+
+test("optional new IDs are generated per file without enabling ownership or changing an existing document", async t => {
+  const f = await fixture(t);
+  const basic = ok(await f.resolve()); assert.equal(basic.document.documentIdHeader, null);
+  const one = ok(await f.resolve({ withId: true })), two = ok(await f.resolve({ withId: true }));
+  assert.match(one.document.documentIdHeader, /^Document-ID: [0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.notEqual(one.document.documentIdHeader, two.document.documentIdHeader);
+  assert.equal(one.document.ownerHeader, null); assert.equal(one.user.status, "not-needed");
+  assert.equal((await f.resolve({ operation: "actor", withId: true })).ok, false);
+});

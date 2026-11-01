@@ -8,7 +8,7 @@ import { appendProgressNote, appendUserInstruction, inspectTicketCompatibility, 
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const base = readFileSync(join(root, "skills/implementation-ledger/assets/tickets-template.md"), "utf8")
-  .replace("{{OwnerHeader}}", "").replace("{{PREFIX}}-00", "TEST-01").replaceAll(/\{\{[^}]+\}\}/g, "Example")
+  .replace("{{OwnerHeader}}", "").replace("{{DocumentIdHeader}}", "").replace("{{PREFIX}}-00", "TEST-01").replaceAll(/\{\{[^}]+\}\}/g, "Example")
   .replaceAll("PREFIX-00", "TEST-01").replaceAll("PROJECT-00", "TEST-01");
 const temp = mkdtempSync(join(tmpdir(), "ak-format-"));
 const file = join(temp, "01_test_tickets.md");

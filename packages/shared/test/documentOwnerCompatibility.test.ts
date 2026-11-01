@@ -12,6 +12,7 @@ const skill = fileURLToPath(new URL("../../../skills/implementation-ledger/", im
 function render(kind: string, owner: string | null) {
   return readFileSync(join(skill, "assets", `${kind}-template.md`), "utf8").replace(/\{\{([^}]+)\}\}/g, (_, key: string) => {
     if (key === "OwnerHeader") return owner ? `Owner: ${owner}` : "";
+    if (key === "DocumentIdHeader") return "";
     if (key === "PREFIX") return "OWN";
     if (key === "YYYY-MM-DD") return "2026-11-01";
     return "Fixture";

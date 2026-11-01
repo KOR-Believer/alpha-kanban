@@ -2,7 +2,7 @@
 
 ## Sources of truth
 
-`scripts/lib/ledger-contract.mjs` declares skill revision **1**, readable/writable document formats **unversioned and 1**, and the new-document default **unversioned**. SKILL.md metadata and packaged manifest must agree with it. Revision 1 is the first declared revision, not a version retroactively assigned to older bundles. No previous semantic versions are inferred from bundle hashes.
+`scripts/lib/ledger-contract.mjs` declares skill revision **2**, readable/writable document formats **unversioned and 1**, and the new-document default **unversioned**. SKILL.md metadata and packaged manifest must agree with it. Revision 1 is the first declared revision, not a version retroactively assigned to older bundles. No previous semantic versions are inferred from bundle hashes.
 
 | Identifier | Meaning |
 | --- | --- |
@@ -40,6 +40,7 @@ A release record identifies its revision, supported read/write formats, new-docu
 
 | Revision | Change / affected earlier installations | Recommendation / document migration |
 | --- | --- | --- |
+| 2 (local, not yet published) | Optional ID assignment, legacy Progress Board cleanup, standalone guarded document CLI and explicit installation provenance. Affects revisions 1 and undeclared installations only when these capabilities are wanted. | Recommended for these optional operations; no document migration required by an update. |
 | 1 (local, not yet published) | First explicit contract; preserves undeclared legacy documents and optional Owner. Previous undeclared bundles have unknown capabilities until compared. Adds shared format guards and read-only identity analysis. | Use when format checks/identity analysis are needed; no automatic document migration. Installation replacement still requires separate verification and consent. |
 
 ## Optional identity analysis
@@ -48,4 +49,10 @@ A release record identifies its revision, supported read/write formats, new-docu
 
 `Document-ID: <UUID v4>` is optional in the Owner header. Preserve existing valid IDs; only an explicit clone receives a replacement. Invalid/duplicate fields and unsupported formats are refused. UUID assignment does not also add Owner, a format declaration, title or dates. Owner reconciliation records the current valid `docs/@name` path; it cannot establish past paths, safe links or permission to implement a ticket.
 
-A preview returns the source, intended text, generated ID and exact edits. Keep that same preview for resumption: `resumeMetadataPreview(preview, currentMarkdown, currentPath)` accepts only the original or already-intended bytes at that path. It returns text, not an applied result or a safe-file transaction. Changed input needs new analysis. Index UUIDs by project; duplicate local files remain a collision, and another checkout is not an automatic match. No command to apply these metadata previews is provided by this revision.
+A preview returns the source, intended text, generated ID and exact edits. Keep that same preview for resumption: `resumeMetadataPreview(preview, currentMarkdown, currentPath)` accepts only the original or already-intended bytes at that path. It returns text, not an applied result or a safe-file transaction. Changed input needs new analysis. Index UUIDs by project; duplicate local files remain a collision, and another checkout is not an automatic match. For explicitly requested ID assignment or legacy cleanup, use the guarded `migrate` command in [document operations](document-operations.md); it uses the same shared transformation as browser previews. Owner reconciliation is a separate explicit CLI operation. Do not apply a raw pure preview by directly overwriting a file.
+
+## Exact installation provenance
+
+The packaged JSON and manifest carry the full source commit, repository URL, `source.kind` (`commit` or modified `worktree`), declared ledger contract and every file SHA-256. The ZIP contains the same skill files; its digest is in the manifest. A worktree build is not the bytes at the linked commit and neither kind alone proves publication. Use the app-pinned payload hash or a deliberately selected full commit as the source; a mutable branch or revision number alone is insufficient. Existing reviewed snapshots remain in the release registry without inventing new published history.
+
+The repository installer offers read-only `--inspect --target <dedicated-directory>` and fresh installation only. It refuses every existing target, including matching, custom, unversioned and incomplete folders. It stages and verifies the complete bundle, publishes SKILL.md last without overwriting a raced target, then writes a receipt outside the skill folder so installed hashes remain comparable. A failure retains prepared files and a receipt for explicit comparison/recovery; do not call a partial target installed or delete it blindly. Registered official installations use the existing confirmed browser backup/update/restore workflow; unknown or modified installations require agent comparison. No new initial-install browser engine is provided.

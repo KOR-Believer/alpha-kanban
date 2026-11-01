@@ -20,11 +20,14 @@
     "ticket-md": "node scripts/ticket-md.mjs",
     "document-cli": "node scripts/document-cli.mjs",
     "test:ledger": "node --test scripts/test/document-context.test.mjs scripts/test/document-owner.test.mjs",
-    "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs",
-    "test": "pnpm test:ledger && pnpm test:documents && pnpm -r --if-present test"
+    "build:document-cli": "node scripts/build-document-cli.mjs",
+    "test:skill-distribution": "node --test --test-concurrency=1 scripts/test/skill-distribution.test.mjs",
+    "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs scripts/test/document-migration.test.mjs",
+    "test": "pnpm test:ledger && pnpm test:documents && pnpm test:skill-distribution && pnpm -r --if-present test"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
+    "esbuild": "0.28.2",
     "fflate": "^0.8.3",
     "playwright": "1.64.1",
     "typescript": "^6.0.3",

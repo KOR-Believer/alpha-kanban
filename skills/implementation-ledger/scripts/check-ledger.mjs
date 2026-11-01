@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { assertTicketCompatibility, structuralLedgerLines } from "./lib/ledger-format.mjs";
 
+import { readDocumentMetadata } from "./lib/document-metadata.mjs";
+
 const REQUIRED_FIELDS = [
   "Status",
   "Progress",
@@ -45,6 +47,8 @@ try { assertTicketCompatibility(source); }
 catch (error) { console.error(error.message); process.exit(1); }
 const lines = structuralLedgerLines(source);
 const errors = [];
+const metadata = readDocumentMetadata(source);
+if (metadata.documentId.status === "invalid" || metadata.owner.status === "invalid") errors.push("Invalid Document-ID or Owner metadata; missing optional fields remain supported.");
 const warnings = [];
 const statusSections = findSections(lines, "Status");
 const ticketListSections = findSections(lines, "Ticket List");

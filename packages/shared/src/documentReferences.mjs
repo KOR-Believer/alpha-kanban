@@ -1,5 +1,6 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { decodeString } from "micromark-util-decode-string";
+import GithubSlugger from "github-slugger";
 import { scanDocumentHeader } from "../../../skills/implementation-ledger/scripts/lib/document-header.mjs";
 import { absolutePath, pathKey, within, relativePath, parentPath, resolvePath, localUrlPath, mappedPath, movePath, encodedPath, fileUrl, projectPath } from "./documentPaths.mjs";
 
@@ -77,7 +78,7 @@ export function inspectReferences(source) {
     if (node.type === "text" && /\[\[[\s\S]+?\]\]/.test(node.value)) issues.push({ severity: "review", code: "WIKI_REFERENCE", offset: start, message: "Wiki links are not rewritten." });
     if (node.type === "heading") {
       const text = (node.children ?? []).map((child) => child.type === "text" || child.type === "inlineCode" ? child.value : "\0").join("");
-      headings.push({ start, end, text, supported: /^[\p{L}\p{N}\p{M} _-]+$/u.test(text) });
+      headings.push({ start, end, depth: node.depth, text, supported: !text.includes("\0") });
     }
     for (const child of node.children ?? []) walk(child);
   };
@@ -167,13 +168,8 @@ function anchorMapping(document, removals, inspection) {
     if (!inspection.headings.some((h) => h.start === range.start) || (range.end !== document.markdown.length && !inspection.headings.some((h) => h.start === range.end))) throw new Error("Section deletion must use exact heading boundaries.");
   }
   if (inspection.headings.some((h) => !h.supported) || inspection.issues.some((i) => i.code === "HTML_REFERENCE")) throw new Error("Anchor syntax is outside the supported plain-heading subset.");
-  const beforeCounts = new Map(), afterCounts = new Map(), mapping = new Map();
-  const slug = (heading, counts) => {
-    const base = heading.text.toLowerCase().replace(/ /g, "-");
-    let result = base, n = 0;
-    while (counts.has(result)) result = base + "-" + ++n;
-    counts.set(result, true); return result;
-  };
+  const beforeCounts = new GithubSlugger(), afterCounts = new GithubSlugger(), mapping = new Map();
+  const slug = (heading, counts) => counts.slug(heading.text);
   for (const heading of inspection.headings) {
     const before = slug(heading, beforeCounts);
     const removed = removals.some((r) => r.start <= heading.start && heading.start < r.end);
@@ -236,6 +232,8 @@ export function analyzeReferences(input) {
         }
         let suffix = candidate.parts.suffix;
         const anchor = anchors.get(pathKey(target));
+        // A section-only operation changes fragments, never the spelling of a path.
+        if (!context.moves.length && !context.mappings.length && !input.previousRoot) pathText = candidate.parts.rawPath;
         if (anchor && candidate.parts.fragment !== null) {
           const fragment = decodeURIComponent(candidate.parts.fragment);
           if (!anchor.mapping.has(fragment) || anchor.mapping.get(fragment) === null) {

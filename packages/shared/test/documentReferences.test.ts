@@ -137,7 +137,7 @@ describe("section anchor contract for the later migration tool", () => {
   it("holds deletion for a removed anchor, a read-only backlink or unsupported heading syntax", () => {
     expect(run({ documents: [doc("docs/a.md", text), doc("README.md", "# R\n[x](docs/a.md#repeat)\n", false)], sectionRemovals: removals, available: ["/repo/docs/a.md"] }).issues.some((i: any) => i.code === "DELETED_OR_UNKNOWN_ANCHOR")).toBe(true);
     expect(run({ documents: [doc("docs/a.md", text), doc("README.md", "# R\n[x](docs/a.md#repeat-1)\n", false)], sectionRemovals: removals, available: ["/repo/docs/a.md"] }).issues.some((i: any) => i.code === "OUTSIDE_WRITE_SCOPE")).toBe(true);
-    expect(run({ documents: [doc("docs/a.md", text.replace("# Title", "# Title!"))], sectionRemovals: removals }).decision).toBe("blocked");
+    expect(run({ documents: [doc("docs/a.md", text.replace("# Title", "# *Tit*"))], sectionRemovals: removals }).decision).toBe("blocked");
   });
   it("exposes only exact reference candidates for native validation", () => {
     expect(referenceTargets({ root: "/repo", documents: [doc("docs/a.md", "# A\n[x](b.md) [web](https://x.invalid)\n")] })).toEqual(["/repo/docs/b.md"]);

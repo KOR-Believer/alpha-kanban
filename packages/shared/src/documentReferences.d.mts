@@ -31,7 +31,7 @@ export interface SourceReference {
 export interface ReferenceEdit { start: number; end: number; before: string; after: string; }
 export interface ReferenceInspection {
   references: SourceReference[];
-  headings: { start: number; end: number; text: string; supported: boolean }[];
+  headings: { start: number; end: number; depth: number; text: string; supported: boolean }[];
   issues: ReferenceIssue[];
 }
 export interface ReferenceAnalysis {

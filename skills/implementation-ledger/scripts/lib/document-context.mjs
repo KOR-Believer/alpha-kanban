@@ -7,6 +7,7 @@ import path from "node:path";
 import { ContextError } from "./context-error.mjs";
 import { parseSettings } from "./document-settings.mjs";
 import { checkNewOwner, ownerFromPath } from "./document-owner.mjs";
+import { readDocumentMetadata } from "./document-metadata.mjs";
 
 const exec = promisify(execFile);
 const unused = () => ({ status: "not-needed", value: null, source: null });
@@ -184,12 +185,13 @@ async function nextNumber(scope) {
 }
 
 /** Read-only context for skill-created documents; home is injectable for isolated callers/tests. */
-export async function resolveDocumentContext({ operation = "new", cwd = process.cwd(), target, baseDir = "docs", home = os.homedir() } = {}) {
+export async function resolveDocumentContext({ operation = "new", cwd = process.cwd(), target, baseDir = "docs", home = os.homedir(), withId = false } = {}) {
   const result = { ok: false, operation, context: null, policy: unused(), user: unused(), document: null, numbering: null, diagnostics: [] };
   try {
     if (!["new", "edit", "actor", "check-new"].includes(operation)) throw new ContextError("INVALID_REQUEST", "Unknown operation.");
     if (["edit", "check-new"].includes(operation) && !target) throw new ContextError("INVALID_REQUEST", "This operation requires --target.");
     if (operation === "actor" && target) throw new ContextError("INVALID_REQUEST", "actor does not accept a document target.");
+    if (typeof withId !== "boolean" || (withId && operation !== "new")) throw new ContextError("INVALID_REQUEST", "withId only applies to an explicitly requested new document ID.");
     const context = result.context = await projectContext(cwd);
     let workspace;
     const workspaceOnce = async () => {
@@ -218,7 +220,11 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
       if (operation === "check-new") {
         if (owner.status === "invalid") throw new ContextError("INVALID_OWNER", "The target has an invalid owner folder.", { source: file });
         if (owner.value) await ownerDirectory(context.projectRoot, owner.value);
-        result.document.recordedOwner = checkNewOwner(await readText(file), owner.value);
+        const markdown = await readText(file);
+        result.document.recordedOwner = checkNewOwner(markdown, owner.value);
+        const metadata = readDocumentMetadata(markdown);
+        if (!metadata.format.writable || metadata.documentId.status === "invalid") throw new ContextError("INVALID_METADATA", "New document metadata is invalid.", { source: file });
+        result.document.documentId = metadata.documentId.value;
       }
     } else {
       let destination;
@@ -248,6 +254,7 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
         path: destination, relativePath: relative(context.projectRoot, destination), pathOwner: owner,
         createDirectory: !(await statOrMissing(destination)), ownerAction: owner.value ? "record-on-new-document" : "omit-on-new-document",
         ownerHeader: owner.value ? `Owner: ${owner.value}` : null,
+        documentIdHeader: withId ? `Document-ID: ${crypto.randomUUID()}` : null,
       };
     }
     result.ok = true;

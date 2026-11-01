@@ -247,7 +247,7 @@ export async function applyDocumentPlan(plan, { cwd = process.cwd(), home, appro
       return runJournal(directory, existing, { cwd, home, fault });
     }
     for (const id of ids) if (!["completed", "rolled-back"].includes((await loadJournal(directory, id)).status)) fail("RECOVERY_REQUIRED", "Resolve the earlier interrupted operation before creating a new one.", { id });
-    const fresh = await createDocumentPlan(plan.request, { cwd, home });
+    const fresh = await createDocumentPlan(plan.request, { cwd, home, ...(plan.migration ? { generatedIds: plan.migration.generatedIds } : {}) });
     if (fresh.id !== plan.id) fail("STALE_PLAN", "Inputs, files, repo evidence or user settings changed after analysis.");
     const steps = await stepsFor(plan), expected = {};
     for (const change of plan.changes) { expected[change.from] = change.before; if (change.from !== change.to) expected[change.to] = null; }
