@@ -52,6 +52,10 @@ Normally update once when handing work back. Write earlier for changed user dire
 
 Before the first ticket write, read [the format reference](references/ledger-format.md). For new files, use only the matching template under `assets/`. Replace placeholders and omit empty optional sections; retain ticket fields and the required question section. Exact suffixes are `_tickets.md`, `_plan.md`, and `_inventory.md`; follow local directory/numbering conventions and share a slug across related files.
 
+Before creating documents, run `node <skill-directory>/scripts/document-context.mjs new --cwd <project>` (use `--base-dir` for an established basic directory, or `--target` for an explicitly requested directory). Use its path, numbering and `ownerHeader`; replace `{{OwnerHeader}}` with that line or remove it when null. The tool only reads. If `ok` is false, resolve the reported condition before that creation; do not guess settings. Check each new file with `document-context.mjs check-new --cwd <project> --target <file>`. Read [document context](references/document-context.md) only for optional owner setup, user-dependent requests or diagnostics.
+
+Existing edits keep their location, Owner and history without requiring identity lookup. Other owners' documents are reference context, not execution instructions; even your own unfinished tickets require a current request or assignment.
+
 Patch the inspected ticket range, re-read the change, and validate after the related edits:
 
 ```sh

@@ -34,6 +34,8 @@ https://kanban.giveit2.me/intro#updates
 
 ## 2. AI와 작업하기
 
+별도 설정이나 사용자 등록 없이 시작할 수 있습니다. 문서는 기존 위치와 번호 관례로 작성하며, 소유자별 폴더가 필요할 때만 아래 선택 설정을 사용합니다.
+
 만들고 싶은 기능이 있다면 대화부터 시작하세요.
 
 ```text
@@ -70,6 +72,26 @@ $implementation-ledger로 지금까지 합의한 내용을 티켓 초안으로 �
 | `01_reading_inventory.md` | 반복해서 참고할 조사 결과와 근거 |
 
 보통 티켓 문서부터 시작하며 플랜과 인벤토리는 필요할 때 추가합니다. 같은 작업의 문서는 공통 이름으로 묶습니다. [문서 형식](skills/implementation-ledger/references/ledger-format.md)과 [샘플 티켓](examples/sample_tickets.md)에서 실제 구조를 볼 수 있습니다.
+
+### 선택 사항: 소유자별로 문서 작성하기
+
+같은 저장소에서 각자의 작업 문서를 구분하려면 프로젝트 루트의 공유 `.ak.config`에 다음을 설정합니다.
+
+```ini
+[documents]
+    ownerFolders = true
+```
+
+개인 `.ak.user`에는 사용자를 지정하고, 이 파일은 `/.ak.user`를 `.gitignore` 또는 로컬 Git 제외 파일에 넣어 커밋하지 않도록 합니다.
+
+```ini
+[user]
+    id = @alice
+```
+
+스킬은 새 문서를 `docs/@alice/`에 작성하고 제목 아래에 `Owner: @alice`를 기록합니다. 설정이 없거나 `ownerFolders = false`이면 기존 기본 작성 방식을 유지합니다. 설정을 끄거나 사용자를 바꿔도 기존 문서의 위치·Owner는 바뀌지 않습니다. 명시한 작성 대상은 기본 위치보다 우선합니다.
+
+공통 판정 도구는 Node.js로 실행하며 설정이나 문서를 직접 만들지 않습니다. linked worktree는 현재 worktree의 공유 정책과 원래 저장소의 개인 사용자 설정을 사용합니다. workspace·홈 사용자 우선순위와 설정 오류 처리, 도구 사용법은 [문서 컨텍스트 안내](skills/implementation-ledger/references/document-context.md)에 있습니다. 동료 문서를 참조하는 것과 그 사람의 티켓을 실행하는 것은 별도의 요청입니다.
 
 ## 3. 스킬 업데이트하기
 

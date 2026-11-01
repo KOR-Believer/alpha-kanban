@@ -36,6 +36,8 @@ pnpm test
 pnpm build
 ```
 
+`pnpm test:ledger` exercises the bundled read-only context tool in disposable directories and native Git worktrees, including configuration precedence, ownership headers, numbering and a copied installation without project dependencies. It also runs as part of `pnpm test`. Tests pass an isolated home to the tool; they do not modify personal settings or installed skills. The shared-package tests verify that normal Markdown writes preserve the Owner header, BOM, line endings and other tickets. Real agent document-creation checks are separate from these automated tests.
+
 For browser flows, use desktop Chrome:
 
 ```sh

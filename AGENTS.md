@@ -18,6 +18,7 @@
 
 - Before choosing older work, consult `docs/21_alpha_kanban_browser_transition_inventory.md`. `[폐기]` tickets use `DEFERRED` for parser compatibility, not an automatic future queue. Preserve historical DONE evidence; do not restore server/chat/provider execution from superseded plans. Active browser, skill, PWA, and intro work remains in its existing tickets.
 - Use the bundled `skills/implementation-ledger` skill as the operating protocol for creating or updating plan, ticket, and inventory documents.
+- Before new records, use the bundled read-only `scripts/document-context.mjs new` result for placement, optional Owner and numbering, then `check-new` for the written header. Keep ownerFolders opt-in and existing edits independent of user lookup. Preserve existing Owner and paths; the tool does not migrate documents or authorize other owners' tickets.
 - Prefer the repo-local `pnpm ticket-md` helper when changing ticket status, progress, `Completed at`, `사용자 지시`, or `진행 메모`.
 - Use `pnpm ticket-md show <file> <ticket-id>` before editing an existing ticket so the exact ticket range is known.
 - Use `pnpm ticket-md status`, `pnpm ticket-md append-user`, and `pnpm ticket-md append-note` for canonical ticket mutations. These commands update only the located ticket body and top-level `현재 진행률`.

@@ -19,7 +19,7 @@ async function collect(directory, relative = "") {
   }
 }
 await collect(source);
-for (const required of ["SKILL.md", "references/ledger-format.md", "assets/tickets-template.md", "scripts/check-ledger.mjs", "scripts/ticket-md.mjs"]) {
+for (const required of ["SKILL.md", "references/ledger-format.md", "references/document-context.md", "assets/tickets-template.md", "scripts/check-ledger.mjs", "scripts/ticket-md.mjs", "scripts/document-context.mjs", "scripts/lib/document-context.mjs", "scripts/lib/document-owner.mjs", "scripts/lib/document-settings.mjs", "scripts/lib/context-error.mjs"]) {
   if (!files["implementation-ledger/" + required]) throw new Error("Missing bundled skill file: " + required);
 }
 const hash = createHash("sha256");
@@ -57,7 +57,8 @@ Bundle version: ${version}
    작업은 Codex 채팅에서 이어가세요. 필요한 경우에만 보드에서 티켓을 옮기거나 지시를 남기고,
    Codex에 변경된 문서를 다시 읽어달라고 요청하세요.
 
-검증 및 ticket-md 보조 스크립트를 터미널에서 실행하려면 Node.js가 필요합니다.
+agent의 문서 컨텍스트 판정·검증 및 ticket-md 보조 스크립트에는 Node.js가 필요합니다.
+설정 없이 기본 작성할 수 있으며, 소유자별 작성은 references/document-context.md의 선택 설정을 사용합니다.
 
 English
 Extract the complete implementation-ledger folder into ~/.codex/skills/
@@ -75,7 +76,8 @@ scope and completion criteria before requesting implementation.
 Connect the project folder here to review the plan and progress.
 Continue the work in Codex chat. Move tickets or leave instructions on the board only
 when needed, then ask Codex to reread the changed Markdown.
-Node.js is required only for optional terminal helper scripts, not the browser app.
+Node.js is used by the agent's document context, validation and ticket helpers, not the browser app.
+Basic document creation needs no settings. Optional owner setup is described in references/document-context.md.
 `;
 // A BOM also identifies UTF-8 when a static server omits the text/plain charset.
 const guideBytes = strToU8("\uFEFF" + guide);

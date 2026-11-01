@@ -1,5 +1,7 @@
 # {{Title}} 티켓
 
+{{OwnerHeader}}
+
 ## Status
 
 - 작성일: {{YYYY-MM-DD}}

@@ -34,6 +34,8 @@ The [skill guide on the website](https://kanban.giveit2.me/intro#skill) also pro
 
 ## 2. Work with AI
 
+Start without configuration or user registration. Documents follow the project's existing location and numbering practice. Use the optional settings below only when you want separate owner folders.
+
 Start by discussing what you want to build.
 
 ```text
@@ -70,6 +72,26 @@ You can return to the same files to continue later. Document creation and implem
 | `01_reading_inventory.md` | Research and evidence worth referring to again |
 
 Usually start with tickets; add a plan or inventory when needed. Related documents share a common filename prefix. See the [document format](skills/implementation-ledger/references/ledger-format.md) and [sample tickets](examples/sample_tickets.md).
+
+### Optional: write documents in owner folders
+
+To distinguish each person's work in a shared repository, add this to the project's shared `.ak.config`:
+
+```ini
+[documents]
+    ownerFolders = true
+```
+
+Set your identity in the private `.ak.user`. Keep this file out of commits by adding `/.ak.user` to `.gitignore` or the local Git exclude file.
+
+```ini
+[user]
+    id = @alice
+```
+
+The skill writes new documents in `docs/@alice/` with `Owner: @alice` below the title. Without settings, or with `ownerFolders = false`, basic placement stays the same. Changing the policy or user does not move existing documents or change their Owner. An explicitly requested destination takes precedence over default placement.
+
+The shared context tool runs with Node.js and does not create settings or documents itself. Linked worktrees use their current shared policy and the original repository's private user settings. See [document context](skills/implementation-ledger/references/document-context.md) for workspace/home precedence, diagnostics and tool usage. Reading a colleague's context does not authorize executing their tickets.
 
 ## 3. Update the skill
 
