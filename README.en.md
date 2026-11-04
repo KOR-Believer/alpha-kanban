@@ -1,16 +1,39 @@
-# Alpha Kanban
+<p align="center">
+  <img src="docs/assets/readme/icon.png" width="72" height="72" alt="">
+</p>
+<h1 align="center">Alpha Kanban</h1>
+<p align="center"><strong>Keep your plans with AI in Markdown. Pick up where you left off.</strong></p>
+<p align="center"><a href="README.md">한국어</a> · English</p>
+<p align="center">
+  <a href="#get-started">Get started</a> ·
+  <a href="https://kanban.giveit2.me/">Open Kanban</a> ·
+  <a href="https://kanban.giveit2.me/docs">User guide</a> ·
+  <a href="https://kanban.giveit2.me/releases">Release notes</a>
+</p>
 
-[한국어](README.md) · **English**
+**Alpha Kanban keeps the plans, scope, and verification results you agree on with AI in your project.**
+The [implementation-ledger skill](skills/implementation-ledger/SKILL.md) records them in Markdown, ready to read when you resume work. An optional web viewer turns those same files into a Kanban board.
 
-**Keep a project record of what you agree with AI, implement, and verify.**
+<a href="docs/assets/readme/board-en-light.jpg">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/board-en-dark.jpg">
+  <img src="docs/assets/readme/board-en-light.jpg" alt="Reading journal example: plan and ticket files on the left, with tickets grouped under TODO, READY, IN_PROGRESS, and DONE on the board">
+</picture>
+</a>
+<p align="center"><sub>A fictional reading journal project · <a href="examples/reading-journal/en/01_reading_plan.md">Read the plan</a> · <a href="examples/reading-journal/en/01_reading_tickets.md">See the original Markdown</a></sub></p>
 
-The core is the [implementation-ledger skill](skills/implementation-ledger/SKILL.md). It helps AI record scope, acceptance criteria, progress, and verification in local Markdown so you can review the work and take part in decisions. The skill supports the workflow from planning through implementation on its own. The web app is an optional viewer for those same documents and their progress.
+- **Keep decisions beyond the conversation.** Check what you agreed to build and how far it has progressed.
+- **Keep work records with your code.** Read them in any Markdown editor and track changes with Git.
+- **Use your AI chat on its own.** The web viewer is optional, there when you want to read documents or check progress visually.
 
-[Introduction and installation](https://kanban.giveit2.me/about) · [Usage documentation](https://kanban.giveit2.me/docs) · [Open web viewer](https://kanban.giveit2.me/)
+## Get started
 
-## 1. Install the skill
+### 1. Ask your AI tool to install the skill
 
-Send this request to **your AI coding tool's chat** with access to your local project files. You do not need to download this repository or run the web app locally. Installation requires access to GitHub.
+Send the request below to an AI coding tool that supports skills and can access your local files. Installation needs access to GitHub. You do not need to clone this repository or run a local web server.
+
+<details>
+<summary><strong>Show the installation request</strong></summary>
 
 ```text
 Check this AI tool's skill installation procedure and install implementation-ledger from this GitHub path:
@@ -30,15 +53,13 @@ https://kanban.giveit2.me/about#updates
 Do not include my personal path in the URL.
 ```
 
-After installation, check that your AI tool recognizes `implementation-ledger`. If it does not appear, ask it to check its skill-loading procedure and that `SKILL.md`, references, and templates were installed together.
+</details>
 
-The [skill guide on the website](https://kanban.giveit2.me/about#skill) also provides the installation request. The website provides guidance; ask your AI tool to perform the installation.
+After installation, check that your AI tool recognizes `implementation-ledger`. If it does not, ask it to check the installation path and its skill-loading procedure. [Full installation guide →](https://kanban.giveit2.me/docs/install)
 
-## 2. Work with AI
+### 2. Talk about what you want to build
 
-Start without configuration or user registration. Documents follow the project's existing location and numbering practice. Use the optional settings below only when you want separate owner folders.
-
-Start by discussing what you want to build.
+No account or configuration files are needed to start.
 
 ```text
 Use the implementation-ledger skill.
@@ -46,112 +67,63 @@ I want to build a reading journal app. Let's discuss the features and scope firs
 Do not write documents or code yet.
 ```
 
-Once you have a direction, ask for a work record.
+### 3. Review the tickets, then ask for implementation
+
+Once you have a direction, ask for a draft.
 
 ```text
-Use the implementation-ledger skill to draft tickets from what we have agreed.
-Add a plan if multiple tickets need shared design decisions.
-Separate scope and acceptance criteria from questions I need to answer or decide.
-Do not implement yet.
+Use implementation-ledger to draft tickets from what we agreed.
+Add a plan if several tickets need shared design decisions.
+Separate scope, acceptance criteria, and questions I need to decide. Do not implement yet.
 ```
 
-Read the draft and check the features, exclusions, and acceptance criteria. Discuss questions that affect the current implementation, have AI update the documents with your decisions, then request development.
+Read the draft's features, exclusions, and acceptance criteria. Have your decisions reflected in the documents before requesting implementation.
 
 ```text
 Implement the reviewed tickets in dependency order.
 First read the latest user directions and relevant open questions.
-Verify the acceptance criteria and record the results and remaining work in the tickets.
+Record verification results and remaining work in the tickets.
 ```
 
-You can return to the same files to continue later. Document creation and implementation are separate requests, leaving room to review and adjust the scope.
+In your next conversation, ask AI to read the same tickets and continue.
 
-### What gets recorded?
+## What stays in your project
 
-| Example document | Purpose |
+| Document | What it records |
 | --- | --- |
-| `01_reading_tickets.md` | Scope, acceptance criteria, status, progress, user directions, and verification results |
-| `01_reading_plan.md` | Goals, design, and decisions shared by several tasks |
-| `01_reading_inventory.md` | Research and evidence worth referring to again |
+| [Tickets](examples/reading-journal/en/01_reading_tickets.md) | Scope, acceptance criteria, status, progress, user directions, and verification results |
+| [Plan](examples/reading-journal/en/01_reading_plan.md) | Goals, design, and decisions shared by several tasks |
+| Inventory | Research and evidence worth returning to |
 
-Usually start with tickets; add a plan or inventory when needed. Related documents share a common filename prefix. See the [document format](skills/implementation-ledger/references/ledger-format.md) and [sample tickets](examples/sample_tickets.md).
+Start with tickets. Add a plan or inventory when you need one. See the [document format](skills/implementation-ledger/references/ledger-format.md) for the full structure.
 
-### Optional: choose a document folder
+## View the same files as a board
 
-Place `.ak.config` in the project root and set the document directory. The directory containing the configuration is not itself the document folder.
+[Open Kanban](https://kanban.giveit2.me/) → in desktop Chrome, choose **Open project** → select your project folder.
 
-```text
-[documents]
-    root = notes
-```
+Review tickets by status, search their full text, and move between plans and tickets. **All tickets** brings work from several projects together. You can also change a status or leave a direction. Confirmed edits go back to the original Markdown; saving does not run AI.
 
-This selects `<project>/notes/`. Omitting `root` defaults to `docs`; nested project-relative paths such as `notes/planning` are supported. Existing files are not moved automatically. Changing the folder does not enable owner folders.
+Your documents stay in the local folder you choose. Alpha Kanban does not upload project Markdown. Folder connections and view preferences are stored in the current browser. [Web viewer guide →](https://kanban.giveit2.me/docs/progress)
 
-Each shared setting resolves independently: **current repo → designated workspace → default**. An inherited `root = notes` still selects each repository's own `notes/`. See [document context](skills/implementation-ledger/references/document-context.md) for workspace connection and worktree inheritance.
+## Update the skill
 
-### Optional: write documents in owner folders
+Send the [update request](https://kanban.giveit2.me/about#updates) to your AI tool to compare the installed skill with the official source, back it up, and update after your confirmation.
 
-To distinguish each person's work in a shared repository, add this to the project's shared `.ak.config`:
+To manage updates on the web, open **Skill updates** and drop your installed `implementation-ledger` folder, or use **Choose folder**. Connecting does not change files. Review the differences and confirm to apply them after a full backup. Regular updates do not overwrite personal changes.
 
-```text
-[documents]
-    ownerFolders = true
-```
+Finish AI tasks using the skill before updating or restoring it. [Connect and update](https://kanban.giveit2.me/docs/updates) · [Back up and restore](https://kanban.giveit2.me/docs/backup)
 
-Set your identity in the private `.ak.user`. Keep this file out of commits by adding `/.ak.user` to `.gitignore` or the local Git exclude file.
+## Go further
 
-```text
-[user]
-    id = @alice
-```
+| What you want to do | Guide |
+| --- | --- |
+| Use a document folder other than `docs` | [.ak.config settings](https://kanban.giveit2.me/docs/config) |
+| Share context and organize documents by owner | [Owner folders and personal settings](https://kanban.giveit2.me/docs/owners) |
+| Bring documents you maintain up to the current format | [Document maintenance](https://kanban.giveit2.me/docs/organize) |
+| Move documents or hand work over | [Moving and handing off](https://kanban.giveit2.me/docs/handoff) |
+| Open local links written on another PC | [Local folder connections](https://kanban.giveit2.me/docs/local-links) |
+| Recover folder access or an app that will not open | [Folder permissions](https://kanban.giveit2.me/docs/folder-access) · [App repair](https://kanban.giveit2.me/repair.html) |
 
-The skill writes new documents under `@alice/` in the document folder (default `docs/@alice/`) with `Owner: @alice` below the title. Without settings, or with `ownerFolders = false`, basic placement stays the same. Changing the policy or user does not move existing documents or change their Owner. An explicitly requested destination takes precedence over default placement.
+## Contribute
 
-The shared context tool runs with Node.js and does not create settings or documents itself. Linked worktrees use their current shared policy and the original repository's private user settings. See [document context](skills/implementation-ledger/references/document-context.md) for workspace/home precedence, diagnostics and tool usage. Reading a colleague's context does not authorize executing their tickets.
-
-Connect a project root containing `.ak.config` and the document folder (default `docs`) to see folder-based owners in the web viewer. The sidebar offers All, Unassigned, or one owner and remembers each project's selection. In All tickets, search and select multiple owner names to see work matching any of them across projects. An empty selection shows all work, and this list is remembered independently of sidebar filters. No `.ak.user` is needed, and filtering keeps the open document and its contents intact. A direct connection to the document folder or a deeper folder cannot infer owners from hidden parents; connect the project root when you need that distinction.
-
-## 3. Update the skill
-
-Review the request in the [skill update guide](https://kanban.giveit2.me/about#updates) and send it to your AI tool. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.
-
-**A registered skill can be updated with the app.** Review the skill's changed files in the PWA update dialog and choose **Back up skill and update both**. After the new app loads, it backs up and replaces the skill. Finish AI tasks using the skill first. Without a registered folder, or when the installed skill already matches, only the app is updated. Personal or unrecognized changes are not replaced by regular updates: choose **Update app only** and ask your AI tool to compare them. Backups remain available under **Skill updates** for explicit restoration.
-
-Optionally open **Skill updates** and drop the `implementation-ledger` folder reported by your AI tool, or use **Choose folder**. Connecting requests read and write access but does not change files. The app compares the installation with its supplied bundle. Compatible official installations can be updated after confirmation, with a full backup and save verification. Personal or unrecognized files are not replaced by regular updates; ask your AI tool to compare them or use the separate reinstall review and confirmation. Connecting is not required to use agent requests or Kanban.
-
-Finish AI tasks using the skill before an update or restore, and keep the app window open until verification finishes. Use **Skill backups** to export or restore the original files. Disconnecting leaves files and backups intact, but clearing browser data can remove backups, so export first. Saved files and recognition by your AI tool are verified separately.
-
-## Optional: view documents and progress on the web
-
-Open the [web viewer](https://kanban.giveit2.me/) in desktop Chrome and choose **Open project** to connect the folder you use with AI. No account or local web server is required.
-
-- **Project board:** Read ticket status, scope, acceptance criteria, and progress notes.
-- **All tickets:** Review work across connected projects. You can register their shared parent folder as a workspace.
-- **Document views:** Read, search, and sort plans, tickets, inventories, and ordinary Markdown.
-- **Optional editing:** Grant write access to save status, progress, reasons, and manual directions to the original Markdown. Dragging a ticket also requires save confirmation.
-
-You can keep all conversation and development in your AI chat and use the web app only for reading. After leaving a direction on the board, ask AI to reread the latest file. Saving does not run AI. Avoid editing the same file in AI and the browser at the same time.
-
-For guidance, use **Help → Take a quick tour** or **Create plans and tickets with AI** in the app.
-
-### Document maintenance
-
-Use this optional action to keep documents you continue to maintain aligned with the current document format as it evolves. Existing documents and boards remain readable without running maintenance.
-
-Open a document and choose **Document maintenance** to preview its proposed changes. Available operations include missing document IDs, folder-based Owner insertion or correction, and removal of obsolete guidance and templates. Only **Apply** saves the selected document. Actual ticket bodies and sections referenced by other documents are preserved.
-
-### Local data and PWA
-
-Documents are read from the local folder you choose; confirmed edits are saved to the original files. Alpha Kanban does not upload project Markdown. Folder connections, view preferences, and save-recovery records belong to that browser and site origin.
-
-- Disconnecting a folder does not delete its files. Reconnect it if permission expires.
-- A different address or browser profile needs its own connections and settings. Clearing site data also removes saved connections, settings, and recovery records.
-- If a save result is uncertain, inspect **Local folders → Recovery records** and the actual file before saving again.
-- Use **App installation and updates** to install the PWA. Once **Ready to use offline** appears, you can read and edit local files already downloaded to your device offline. External AI tools and GitHub need their own connections.
-- When an update is ready, open its notification or **App installation and updates → Update history** to read the changes before choosing to apply it. Unread notes appear once on the project selector after updating; the same menu lets you revisit them.
-- Before an app update, save or discard drafts in all app windows. If the app will not open, use [app repair](https://kanban.giveit2.me/repair.html) while online.
-
-`/` is the project workspace; `/about` is the introduction and installation guide. The PWA also starts at `/`.
-
-## Contributing
-
-For local development, builds, and validation of the skill and web app, see the [contribution guide](CONTRIBUTING.md).
+Found a rough edge or have an idea? [Open an issue](https://github.com/KOR-Believer/alpha-kanban/issues). To work on the skill or web app, see the [contribution guide](CONTRIBUTING.md) for local setup and checks.
