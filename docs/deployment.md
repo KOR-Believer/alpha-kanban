@@ -21,6 +21,33 @@ Use the operator's existing Pages project and custom-domain settings. Account ac
 | Output directory | `apps/web/dist-browser` |
 | Public custom domain | `kanban.giveit2.me` |
 
+## Channel selection and promotion
+
+Both channel definitions live in `apps/web/release-channel.mjs`. The channel is a build setting, separate from the source branch and `AK_PWA_MODE=app|recovery|retired`. Keep both definitions when merging tested changes into master; build master again with `stable` instead of copying a canary artifact.
+
+| Setting | Stable | Canary |
+| --- | --- | --- |
+| `AK_RELEASE_CHANNEL` | `stable` | `canary` |
+| Pages target | Existing `alpha-kanban` project | Separate `alpha-kanban-canary` project |
+| Branch | `master` | `release/canary` |
+| Canonical origin | `https://kanban.giveit2.me` | `https://kanban-canary.giveit2.me` |
+| Authored history | `apps/web/releases.json` | `apps/web/releases.canary.json` |
+
+Keep the build command and output directory in the table above. Confirm the actual account/project configuration before the first deployment; this repository contract does not configure Cloudflare. Pages injects `CF_PAGES`, `CF_PAGES_BRANCH` and `CF_PAGES_URL`; the build requires an explicit channel and rejects a project or branch mismatch before packaging. [Cloudflare build environment](https://developers.cloudflare.com/pages/configuration/build-configuration/#environment-variables)
+
+For an authorized direct upload, supply the intended target when building and again when checking existing output. For example, in the separate canary checkout:
+
+```sh
+AK_RELEASE_CHANNEL=canary AK_DEPLOY_PROJECT=alpha-kanban-canary AK_DEPLOY_BRANCH=release/canary pnpm build
+AK_RELEASE_CHANNEL=canary AK_DEPLOY_PROJECT=alpha-kanban-canary AK_DEPLOY_BRANCH=release/canary pnpm check:release apps/web/dist-browser
+```
+
+The check validates the channel/origin, manifest, complete offline asset digests, repair metadata and pinned skill archive/payload before upload. It rejects canary output checked against the stable target. It does not perform the upload or control a manually invoked hosting CLI; the operator must use the same verified target for that step. `AK_RELEASE_NOTES_FILE` is a local smoke override and is rejected for deployment builds.
+
+Use separate work directories to build both channels. Generated downloads are tagged with their channel, and Vite refuses a mismatched package. `pnpm test:channel-builds` provides a repeatable comparison from one source snapshot. Recovery and retirement use the same channel setting and output checks. Missing channel metadata is accepted only as a historical stable release; canary requires explicit matching metadata.
+
+The two origins retain the existing local storage, IndexedDB and cache keys independently. They do not isolate the physical files if both apps connect to the same folder. Test with disposable copies and preserve each origin's recovery records.
+
 Use the Node.js and pnpm versions documented in [Contributing](../CONTRIBUTING.md), and install dependencies from the lockfile before building. Publish the complete output, including the generated service worker, repair files, skill archive, fonts, and `_headers`.
 
 Serve the app over HTTPS with SPA routing for `/`, `/intro`, `/all`, and `/w/:id`. Cloudflare Pages provides [default SPA handling](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering) when the output root has no `404.html`. Verify actual responses after deployment: worker scripts, release metadata, repair assets, and missing static assets must not be mistaken for the app's HTML shell.

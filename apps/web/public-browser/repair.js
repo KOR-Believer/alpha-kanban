@@ -20,6 +20,9 @@ const copy = {
   },
 };
 const prefix = "alpha-kanban-app-v1-";
+const releaseChannel = "__RELEASE_CHANNEL__";
+const blockedOrigins = "__OTHER_CHANNEL_ORIGINS__";
+const matchesChannel = (value) => value === releaseChannel || (value === undefined && releaseChannel === "stable");
 const button = document.querySelector("#repair");
 const result = document.querySelector("#result");
 const language = document.querySelector("#language");
@@ -40,7 +43,7 @@ function message(worker, type) {
     const channel = new MessageChannel();
     const timer = setTimeout(() => { channel.port1.close(); reject(new Error("busy")); }, 5000);
     channel.port1.onmessage = (event) => { clearTimeout(timer); channel.port1.close(); resolve(event.data); };
-    worker.postMessage({ type, protocol: 1 }, [channel.port2]);
+    worker.postMessage({ type, protocol: 1, channel: releaseChannel }, [channel.port2]);
   });
 }
 async function fresh(path, integrity) {
@@ -54,12 +57,14 @@ async function fresh(path, integrity) {
 async function waitForWorker(registration) {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (registration.waiting) {
+      if (!matchesChannel((await message(registration.waiting, "AK_INFO")).channel)) throw new Error("failed");
       const reply = await message(registration.waiting, "AK_APPLY");
       if (!reply.ok) throw new Error("busy");
     }
     const active = registration.active;
     if (active?.state === "activated") {
       const info = await message(active, "AK_INFO");
+      if (!matchesChannel(info.channel)) throw new Error("failed");
       if (info.mode === "app" && info.ready) return info;
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -70,17 +75,20 @@ button.onclick = async () => {
   if (!navigator.onLine) { say("offline"); return; }
   button.disabled = true; say("checking");
   try {
+    if (blockedOrigins.includes(location.origin)) throw new Error("failed");
     if (!navigator.locks || !navigator.serviceWorker) throw new Error("failed");
     let registration = await navigator.serviceWorker.getRegistration("/");
     if (registration && !owned(registration)) throw new Error("failed");
     if (registration?.active) {
+      if (!matchesChannel((await message(registration.active, "AK_INFO")).channel)) throw new Error("failed");
       const reply = await message(registration.active, "AK_CLIENTS");
       if (reply.count) throw new Error("busy");
     }
     const release = await (await fresh("/release.json")).json();
-    if (release.app !== "alpha-kanban" || release.protocol !== 1) throw new Error("failed");
+    if (release.app !== "alpha-kanban" || release.protocol !== 1 || !matchesChannel(release.channel)) throw new Error("failed");
     if (release.mode === "retired") {
       await registration?.update();
+      if (registration?.waiting && !matchesChannel((await message(registration.waiting, "AK_INFO")).channel)) throw new Error("failed");
       if (registration?.waiting && !(await message(registration.waiting, "AK_APPLY")).ok) throw new Error("busy");
       for (let attempt = 0; attempt < 50 && await navigator.serviceWorker.getRegistration("/"); attempt++) await new Promise((resolve) => setTimeout(resolve, 200));
       if (await navigator.serviceWorker.getRegistration("/")) throw new Error("busy");
@@ -91,7 +99,7 @@ button.onclick = async () => {
       say("retired"); return;
     }
     const inventory = await (await fresh("/offline-assets.json")).json();
-    if (inventory.buildId !== release.buildId || !Array.isArray(inventory.assets) || !inventory.assets.some((asset) => asset.url === "index.html")) throw new Error("failed");
+    if (!matchesChannel(inventory.channel) || inventory.buildId !== release.buildId || !Array.isArray(inventory.assets) || !inventory.assets.some((asset) => asset.url === "index.html")) throw new Error("failed");
     const responses = [];
     // Verify the entire release before changing any existing app cache.
     for (const asset of inventory.assets) responses.push([asset, await fresh("/" + asset.url, asset.integrity)]);

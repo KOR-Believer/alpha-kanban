@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { IndexedDbStorage } from "./storage";
 
 describe("browser operational storage", () => {
+  it("commits discovered identity pairs together and aborts the entire batch on failure", async () => {
+    const storage = new IndexedDbStorage("batch-" + crypto.randomUUID());
+    await storage.setMany([{ key: "document:kept", value: "original" }, { key: "document-path:p:kept", value: "kept" }]);
+    const original = IDBObjectStore.prototype.put;
+    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(function(this: IDBObjectStore, value, key) {
+      if (key === "document-path:p:new") throw new DOMException("Full", "QuotaExceededError");
+      return original.call(this, value, key);
+    });
+    try {
+      await expect(storage.setMany([{ key: "document:kept", value: "changed" }, { key: "document:new", value: "new" }, { key: "document-path:p:new", value: "new" }])).rejects.toMatchObject({ name: "QuotaExceededError" });
+    } finally { put.mockRestore(); }
+    expect(await storage.get("document:kept")).toBe("original");
+    expect(await storage.get("document:new")).toBeUndefined();
+    expect(await storage.get("document-path:p:kept")).toBe("kept");
+  });
   it("persists recovery and order records across repository instances and isolates prefixes", async () => {
     const name = "test-" + crypto.randomUUID();
     const storage = new IndexedDbStorage(name);
@@ -24,6 +39,8 @@ describe("browser operational storage", () => {
       "document:d1": { id: "d1", workspaceId: "p1", path: "docs/02_tickets.md" },
       "document-path:p1:docs/02_tickets.md": "d1", lastWorkspace: "p1",
       boardOrder: { keys: ["d1#AKP-01"] }, "recovery:r1": { before: "원본", intended: "결과", intendedHash: "hash" },
+      "link-mapping:v1:map:p1:%2Fold": { id: "mapping1", scopeId: "p1", prefix: "/old", label: "local-folder", remotes: ["origin=example.com/team/repo"] },
+      "link-mapping:v1:document:linked%3Amapping1:docs%2Fa.md": { id: "ld_1" },
     };
     for (const [key, value] of Object.entries(fixtures)) await before.set(key, value);
     const after = new IndexedDbStorage(name);

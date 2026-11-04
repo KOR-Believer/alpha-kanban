@@ -14,7 +14,8 @@ import { buildAppRoute, parseAppRouteState } from "../appRoute";
 import { browserRepository } from "./repository";
 import { BrowserMarkdownImage } from "./MarkdownResources";
 import { BrowserFilesMenu, BrowserReconnect, BrowserSkillGuide, BrowserStartPage } from "./BrowserConnections";
-import { FakeDirectory } from "./browserFixtures";
+import { FakeDirectory, ledger } from "./browserFixtures";
+import { parseTicketDocument } from "@alpha-kanban/shared/ticketMarkdown";
 import { tourStorageKey } from "../onboarding/tourState";
 import { ProjectGuide } from "../components/ProjectGuide";
 import { setLanguage } from "../i18n";
@@ -24,10 +25,11 @@ import { skillRepository } from "../skills/repository";
 import { OWNER_FILTERS_KEY } from "../ownerFilters";
 import { ALL_BOARD_OWNER_FILTERS_KEY } from "../allBoardOwnerFilters";
 
-const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>() }));
+const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>(), router: { history: { block: () => () => {} } } }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...await importOriginal<object>(),
   useNavigate: () => routing.navigate,
+  useRouter: () => routing.router,
   useLocation: ({ select }: { select: (location: typeof routing.location) => unknown }) => select(useSyncExternalStore(
     (listener) => { routing.listeners.add(listener); return () => { routing.listeners.delete(listener); }; },
     () => routing.location,
@@ -59,6 +61,7 @@ describe("browser mode UI boundaries", () => {
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue([new DOMRect(0, 0, 100, 28)] as unknown as DOMRectList);
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
     vi.spyOn(browserRepository, "workspaces").mockResolvedValue({ workspaces: [workspace] });
+    vi.spyOn(browserRepository, "documentCount").mockResolvedValue(1);
     vi.spyOn(browserRepository, "connections").mockResolvedValue([]);
     vi.spyOn(browserRepository, "recoveries").mockResolvedValue([]);
     vi.spyOn(browserRepository, "files").mockResolvedValue([response.file]);
@@ -81,20 +84,34 @@ describe("browser mode UI boundaries", () => {
     const url = new URL(href, "http://localhost");
     routing.location = { pathname: url.pathname, searchStr: url.search, hash: url.hash.slice(1), href };
   }
-  it("renders unsupported ticket documents as Markdown without a board or editable deep-link detail", async () => {
-    vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: { ...response.document,
-      compatibility: { status: "unsupported", version: "99", readable: false, writable: false, code: "UNSUPPORTED_FORMAT" } } });
+  it.each([
+    ["future format", ledger.replace("# Browser test", "# Browser test\n\nLedger-Format: 99")],
+    ["invalid metadata", ledger.replace("# Browser test", "# Browser test\n\nLedger-Format: 1\nLedger-Format: 1")],
+    ["missing fields", ledger.replace("제외 범위:\n- none\n", "")],
+    ["legacy values", ledger.replace("Status: READY", "Status: WATCH").replace("Progress: 25%", "Progress: 80%")],
+  ])("renders the board and deep-link detail without maintenance: %s", async (name, source) => {
+    vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: parseTicketDocument(source) });
     vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
-    selectDocument(response.document.tickets[0]!.id);
+    const patch = vi.spyOn(browserRepository, "patch");
+    const append = vi.spyOn(browserRepository, "append");
+    selectDocument("TEST-01");
     await render(<App allowStartupAutoOpen={false} />);
-    expect((await waitForElement(".ak-markdown")).textContent).toContain("Original body");
-    expect(container.textContent).toContain("지원하지 않는 문서 형식입니다.");
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.querySelector(".ak-project-board")).toBeNull();
-    expect(container.textContent).not.toContain("티켓 0개");
-    expect(container.querySelector('[aria-label="티켓 문서 보기 방식"]')).toBeNull();
+    const board = await waitForElement(".ak-project-board");
+    expect(board.querySelectorAll("article")).toHaveLength(2);
+    expect([...board.querySelectorAll("article")].every((card) => card.getAttribute("draggable") === "true")).toBe(true);
+    if (name === "legacy values") expect(board.querySelector("article")?.textContent).toContain("0%");
+    expect(container.querySelector('[aria-label="티켓 문서 보기 방식"]')).not.toBeNull();
+    expect(container.querySelector(".ak-markdown")).toBeNull();
+    const detail = await waitForElement('[role="dialog"]', document);
+    expect(detail.textContent).toContain("Test ticket");
+    expect(detail.textContent).toContain("old direction");
+    expect(detail.textContent).toContain("old note");
+    expect(detail.querySelector('form[data-tour="ticket-instructions"]')).not.toBeNull();
+    expect(detail.querySelector("[role=combobox]")).not.toBeNull();
     await act(async () => { await setLanguage("en"); });
-    expect(container.textContent).toContain("This document format is not supported.");
+    expect(detail.textContent).toContain("old direction");
+    expect(container.querySelectorAll(".ak-project-board article")).toHaveLength(2);
+    expect(patch).not.toHaveBeenCalled(); expect(append).not.toHaveBeenCalled();
   });
 
   async function typeInto(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -523,12 +540,12 @@ describe("browser mode UI boundaries", () => {
   });
 
   it.each([
-    { hasDocs: true, isAvailable: true, label: "문서 있음", background: "bg-primary" },
-    { hasDocs: false, isAvailable: true, label: "문서 없음", background: "bg-muted" },
-    { hasDocs: true, isAvailable: false, label: "접근 불가", background: "bg-[var(--ak-warning-soft)]" },
-    { hasDocs: false, isAvailable: false, label: "접근 불가", background: "bg-[var(--ak-warning-soft)]" },
-  ])("shares $label badge colors across project lists and the switcher (docs=$hasDocs)", async ({ hasDocs, isAvailable, label, background }) => {
-    const project = { ...workspace, hasDocs, isAvailable };
+    { count: 24, isAvailable: true, label: "문서 24", background: "bg-primary" },
+    { count: 0, isAvailable: true, label: "문서 0", background: "bg-muted" },
+    { count: 24, isAvailable: false, label: "재연결 필요", background: "bg-[var(--ak-warning-soft)]" },
+  ])("shares $label badge colors across project lists and the switcher", async ({ count, isAvailable, label, background }) => {
+    vi.mocked(browserRepository.documentCount).mockResolvedValue(count);
+    const project = { ...workspace, isAvailable };
     await render(<>
       <WorkspaceButton workspace={project} isSelected={false} onSelect={vi.fn()} />
       <WorkspaceSwitcherTrigger workspace={project} onClick={vi.fn()} />
@@ -610,7 +627,7 @@ describe("browser mode UI boundaries", () => {
     expect(trigger.classList.contains("w-full")).toBe(true);
     expect(trigger.textContent).toContain(workspace.label);
     expect(trigger.textContent).toContain(workspace.root);
-    expect(trigger.textContent).toContain("문서 있음");
+    expect(trigger.textContent).toContain("문서 1");
     await act(async () => trigger.click());
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("이 브라우저에 연결된 폴더");
     expect(fetch).not.toHaveBeenCalled();
@@ -688,6 +705,42 @@ describe("browser mode UI boundaries", () => {
     expect(browserRepository.tickets).not.toHaveBeenCalled();
     expect(routing.navigate).not.toHaveBeenCalled();
   });
+
+  it("keeps an open draft when a native move removes the old handle, including a failed reload", async () => {
+    selectDocument("TEST-01");
+    const sets = { sets: buildDocumentSets([response.file]) };
+    queryClient.setQueryData(["document-sets", workspace.id], sets);
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue(sets);
+    await render(<App />);
+    const draft = await waitForElement<HTMLTextAreaElement>('[role="dialog"] form textarea', document);
+    await typeInto(draft, "Keep this draft after a native move");
+    const href = routing.location.href;
+    // The native CLI can preserve UUID and inode while Chrome loses the old handle.
+    const moved = { ...response.file, id: "d_moved", directory: "docs/@bob", relativePath: "docs/@bob/01_test_tickets.md", workspaceRelativePath: "docs/@bob/01_test_tickets.md" };
+    const missing = Object.assign(new Error("Old file handle is unavailable"), { name: "NotFoundError" });
+    vi.mocked(browserRepository.documentSets).mockResolvedValue({ sets: buildDocumentSets([moved]) });
+    vi.mocked(browserRepository.file).mockRejectedValue(missing);
+    vi.mocked(browserRepository.markdown).mockRejectedValue(missing);
+    vi.mocked(browserRepository.tickets).mockRejectedValue(missing);
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await render(<App />);
+    expect(draft.isConnected).toBe(true);
+    expect(draft.value).toBe("Keep this draft after a native move");
+    const detail = document.querySelector('[role="dialog"]')!;
+    expect(detail.textContent).toContain("마크다운 파일이 삭제되었습니다");
+    const save = [...detail.querySelectorAll("button")].find(button => button.textContent === "문서에 추가")!;
+    expect(save.disabled).toBe(true);
+    const reload = [...detail.querySelectorAll("button")].find(button => button.textContent === "다시 불러오기")!;
+    await act(async () => reload.click());
+    await render(<App />);
+    expect(draft.isConnected).toBe(true);
+    expect(draft.value).toBe("Keep this draft after a native move");
+    expect(save.disabled).toBe(true);
+    expect(detail.textContent).toContain("마크다운 파일이 삭제되었습니다");
+    expect(routing.location.href).toBe(href);
+    expect(routing.navigate).not.toHaveBeenCalled();
+  });
+
   it("renders Start and external skill guidance without health, Codex, workspace API or SSE requests", async () => {
     await render(<App />);
     expect(container.textContent).toContain("설치 요청문 확인·복사");
@@ -714,8 +767,10 @@ describe("browser mode UI boundaries", () => {
     await act(async () => button.click());
     const guide = document.querySelector<HTMLElement>('[role="dialog"]')!;
     const request = guide.querySelector("textarea")!;
-    expect(request.value).toContain("개인 스킬과 비교");
-    expect(request.value).toContain("github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger");
+    expect(request.value).toContain("설치본 전체를 백업");
+    expect(request.value).toContain(`/downloads/implementation-ledger-${__APP_RELEASE__.skillBundle}.json`);
+    expect(request.value).toContain(__APP_RELEASE__.skillPayload);
+    expect(request.value).not.toContain("/tree/master");
     expect(guide.querySelectorAll("li")).toHaveLength(4);
     expect(guide.textContent).toContain("~/.codex/skills/implementation-ledger/");
     expect(guide.textContent).toContain("$CODEX_HOME/skills/implementation-ledger/");
@@ -725,7 +780,7 @@ describe("browser mode UI boundaries", () => {
     await act(async () => { await setLanguage("en"); });
     expect(button.textContent).toBe("Review and copy install request");
     expect(guide.isConnected).toBe(true);
-    expect(request.value).toContain("preserve personal changes");
+    expect(request.value).toContain("preserve my customizations");
     expect(guide.textContent).toContain("back it up and compare the changes");
     expect(guide.textContent).toContain("$implementation-ledger");
     expect(guide.textContent).toContain("discuss open questions that affect the work and create or update the tickets");

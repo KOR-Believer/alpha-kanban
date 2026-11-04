@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLanguage } from "../../i18n";
-import { INSTALL_COMPLETION, INTRO_INSTALL_REQUEST, SKILL_SOURCE_URL, SkillInstallPanel, UPDATE_REQUEST } from "../SkillGuide";
+import { SkillInstallPanel } from "../SkillGuide";
+import { INSTALL_REQUEST, UPDATE_REQUEST, skillAgentRequest, skillDistribution } from "../../skills/distribution";
 import { english, korean } from "../../i18n/messages";
 import { IntroConversation } from "./IntroConversation";
 import { INTRO_DURATION, INTRO_MESSAGES } from "./demo";
@@ -90,8 +91,10 @@ describe("intro interaction", () => {
     await clickText("업데이트 요청문 확인·복사");
     const dialog = document.querySelector('[role="dialog"]')!;
     const request = dialog.querySelector("textarea")!;
-    expect(request.value).toContain(korean[UPDATE_REQUEST]!.replace("{{url}}", SKILL_SOURCE_URL));
-    expect(request.value).toContain("https://kanban.giveit2.me/intro#updates");
+    expect(request.value).toContain(korean[UPDATE_REQUEST]);
+    expect(request.value).toContain(skillDistribution().registrationUrl);
+    expect(request.value).toContain(skillDistribution().url);
+    expect(request.value).not.toContain("/tree/master");
     expect(request.value).toContain("실제 설치 디렉터리");
     const clipboard = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
     await clickText("요청문 복사", dialog);
@@ -100,7 +103,7 @@ describe("intro interaction", () => {
     expect(dialog.querySelector('[role="status"]')?.textContent).toBe(korean["Text selected. Copy it manually."]);
     await act(async () => setLanguage("en"));
     expect(dialog.isConnected).toBe(true);
-    expect(request.value).toContain(UPDATE_REQUEST.replace("{{url}}", SKILL_SOURCE_URL));
+    expect(request.value).toContain(UPDATE_REQUEST);
     expect(request.value).toContain("actual installed directory");
     expect(dialog.querySelector('[role="status"]')?.textContent).toBe("");
     clipboard.mockResolvedValue(undefined);
@@ -112,8 +115,8 @@ describe("intro interaction", () => {
       window.history.replaceState({}, "", "/intro#skill"); window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
     await clickText("Review and copy install request");
-    expect(document.querySelector("textarea")?.value).toBe(INTRO_INSTALL_REQUEST.replace("{{url}}", SKILL_SOURCE_URL) + "\n\n" + INSTALL_COMPLETION);
-    for (const key of [UPDATE_REQUEST, INTRO_INSTALL_REQUEST]) expect(english[key]).toBe(key);
+    expect(document.querySelector("textarea")?.value).toBe(skillAgentRequest((key, values) => key.replace(/{{(\w+)}}/g, (_, name) => values?.[name] ?? ""), "install"));
+    for (const key of [UPDATE_REQUEST, INSTALL_REQUEST]) expect(english[key]).toBe(key);
   });
 
   it("ignores a clipboard completion for an earlier language", async () => {

@@ -6,13 +6,15 @@ import path from "node:path";
 import { within } from "../../packages/shared/src/documentPaths.mjs";
 import { assertPlan, createDocumentPlan, inspectRepositories, validateRequest } from "./document-plan.mjs";
 import { resolveDocumentContext } from "../../skills/implementation-ledger/scripts/lib/document-context.mjs";
+import { withinDocumentRoot } from "../../skills/implementation-ledger/scripts/lib/document-root.mjs";
 import { fail, hashObject, portable, maybeStat, safePath, snapshot, scanWorktree, worktreeContext } from "./document-fs.mjs";
-import { operationDirectory, saveJournal, loadJournal, journalIds, syncDirectory, withOperationLock } from "./document-journal.mjs";
+import { operationDirectory, saveJournal, loadJournal, journalIds, syncDirectory, withOperationLock, documentPersistence, documentWriteFlags } from "./document-journal.mjs";
 
 const exec = promisify(execFile);
 const selected = (plan, file, directory = false) => plan.request.scope.some((scope) => file === scope || file.startsWith(scope + "/") || (directory && scope.startsWith(file + "/")));
 async function targetPath(plan, relative, missing = false, directory = false) {
-  if (!selected(plan, relative, directory) || (relative !== "docs" && !relative.startsWith("docs/"))) fail("WRITE_SCOPE", "A journal step is outside its approved docs scope.");
+  const root = plan.documentRoot?.value ?? "docs";
+  if (!selected(plan, relative, directory) || (!withinDocumentRoot(relative, root) && !(directory && root.startsWith(relative + "/")))) fail("WRITE_SCOPE", "A journal step is outside its approved document scope.");
   return safePath(plan.context.root, relative, { missing });
 }
 function comparable(record, { ignoreMtime = false, ignoreLinks = false } = {}) {
@@ -31,16 +33,21 @@ async function assertExpected(journal, paths = Object.keys(journal.expected)) {
     fail("EXTERNAL_CHANGE", "A file or directory differs from the journal. New edits were preserved.", { path: relative });
   }
 }
-async function boundContext(journal, cwd, home) {
+async function boundContext(journal, cwd, home, rollback = false) {
   const actual = await worktreeContext(cwd);
   if (hashObject(actual) !== hashObject(journal.plan.context)) fail("WORKTREE_CHANGED", "The current worktree, HEAD or branch changed. Do not apply this plan elsewhere.");
+  if (!rollback) {
+    const settings = await resolveDocumentContext({ operation: "root", cwd: actual.root });
+    const expected = journal.plan.documentRoot ?? { status: "known", value: "docs", source: { scope: "default", path: null } };
+    if (!settings.ok || hashObject(settings.documentRoot) !== hashObject(expected)) fail("DOCUMENT_ROOT_CHANGED", "The document root or its setting source changed. Review a new plan; interrupted operations can still be explicitly recovered.");
+  }
   if (journal.plan.actor) {
     const actor = await resolveDocumentContext({ operation: "actor", cwd: actual.root, ...(home ? { home } : {}) });
     if (!actor.ok || hashObject({ user: actor.user, context: actor.context }) !== hashObject(journal.plan.actor)) fail("ACTOR_CHANGED", "Current-user identity or its source changed.");
   }
 }
 async function verifyScan(journal) {
-  const scan = await scanWorktree(journal.plan.context.root);
+  const scan = await scanWorktree(journal.plan.context.root, journal.plan.documentRoot?.value ?? "docs");
   const expectedPaths = new Map(journal.plan.scan.paths.map(entry => [entry.path, entry.kind]));
   for (const [relative, record] of Object.entries(journal.expected)) {
     if (record) expectedPaths.set(relative, record.kind); else expectedPaths.delete(relative);
@@ -113,7 +120,7 @@ async function setDirectoryAttributes(file, template) {
   for (const [name, hex] of Object.entries(template.attributes?.xattrs ?? {})) await exec("/usr/bin/xattr", ["-wx", name, hex, file]);
 }
 async function writeBytes(file, bytes, expected, beforeClose) {
-  const handle = await open(file, constants.O_RDWR | (constants.O_NOFOLLOW ?? 0));
+  const handle = await open(file, documentWriteFlags(constants.O_RDWR | (constants.O_NOFOLLOW ?? 0)));
   try {
     const info = await handle.stat({ bigint: true });
     if (String(info.dev) !== expected.dev || String(info.ino) !== expected.ino || String(info.mtimeNs) !== expected.mtimeNs) fail("EXTERNAL_CHANGE", "The open file no longer matches the checked file.");
@@ -201,7 +208,7 @@ async function executeStep(directory, journal, step, direction, fault) {
 }
 
 async function runJournal(directory, journal, { cwd, home, fault }, rollback = false) {
-  assertPlan(journal.plan); await boundContext(journal, cwd, home);
+  assertPlan(journal.plan); await boundContext(journal, cwd, home, rollback);
   await reconcilePending(directory, journal);
   await assertExpected(journal); await verifyScan(journal);
   if (!rollback && !journal.recovering && journal.status !== "rolled-back") await verifyTargets(journal);
@@ -231,7 +238,7 @@ async function runJournal(directory, journal, { cwd, home, fault }, rollback = f
     fail("OPERATION_INTERRUPTED", "The operation stopped. Inspect the journal, then explicitly resume or recover; nothing was automatically rolled back.", { id: journal.plan.id, cause: journal.error, cursor: journal.cursor, pending: journal.pending?.step ?? null });
   }
 }
-const report = journal => ({ id: journal.plan.id, status: journal.status, completedSteps: journal.cursor, totalSteps: journal.steps.length, recoveredSteps: journal.rollbackCursor, files: journal.plan.changes.map(change => ({ from: change.from, to: change.to })), error: journal.error });
+const report = journal => ({ id: journal.plan.id, status: journal.status, completedSteps: journal.cursor, totalSteps: journal.steps.length, recoveredSteps: journal.rollbackCursor, files: journal.plan.changes.map(change => ({ from: change.from, to: change.to })), persistence: journal.persistence ?? null, error: journal.error });
 
 export async function applyDocumentPlan(plan, { cwd = process.cwd(), home, approve, fault } = {}) {
   assertPlan(plan);
@@ -253,9 +260,9 @@ export async function applyDocumentPlan(plan, { cwd = process.cwd(), home, appro
     for (const change of plan.changes) { expected[change.from] = change.before; if (change.from !== change.to) expected[change.to] = null; }
     for (const directory of plan.directories) expected[directory.from] = directory.before;
     for (const step of steps) if (step.kind === "mkdir") expected[step.path] = null;
-    const journal = { schema: 1, plan, steps, expected, cursor: 0, rollbackCursor: 0, pending: null, status: "prepared", error: null };
+    const journal = { schema: 1, plan, steps, expected, cursor: 0, rollbackCursor: 0, pending: null, status: "prepared", persistence: documentPersistence(), error: null };
     await fault?.("before-journal", null, journal);
-    await saveJournal(directory, journal); // Entire preimage is durable before the first document change.
+    await saveJournal(directory, journal); // Flush and read back the entire preimage before the first document change.
     await fault?.("after-journal", null, journal);
     return runJournal(directory, journal, { cwd, home, fault });
   });
@@ -270,7 +277,7 @@ export async function continueDocumentOperation(id, { cwd = process.cwd(), home,
 export async function verifyDocumentOperation(id, { cwd = process.cwd(), home } = {}) {
   const directory = await operationDirectory(await worktreeContext(cwd));
   const journal = await loadJournal(directory, id);
-  assertPlan(journal.plan); await boundContext(journal, cwd, home);
+  assertPlan(journal.plan); await boundContext(journal, cwd, home, journal.status === "rolled-back");
   // Verification is read-only: an uncertain pending step is never adopted here.
   if (journal.pending) return { ...report(journal), verified: false, pending: journal.pending.step };
   await assertExpected(journal); await verifyScan(journal);
@@ -287,7 +294,7 @@ export async function listDocumentOperations({ cwd = process.cwd() } = {}) {
 
 /** A verified receipt makes an identical request idempotent even after its source path disappears. */
 export async function analyzeDocumentOperation(request, options = {}) {
-  validateRequest(request);
+  validateRequest(request, null);
   const context = await worktreeContext(options.cwd ?? process.cwd());
   const directory = await operationDirectory(context);
   const key = value => { const { acknowledgements: _ignored, ...body } = value; return hashObject(body); };

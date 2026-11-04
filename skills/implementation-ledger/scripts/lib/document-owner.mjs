@@ -1,5 +1,6 @@
 import { ContextError } from "./context-error.mjs";
 import { headerField, scanDocumentHeader } from "./document-header.mjs";
+import { DEFAULT_DOCUMENT_ROOT, normalizeDocumentRoot, withinDocumentRoot } from "./document-root.mjs";
 
 // Pure helpers: no filesystem, Git, user lookup or document writes.
 export function normalizeOwner(value) {
@@ -10,13 +11,21 @@ export function normalizeOwner(value) {
   return value.normalize("NFC");
 }
 
-export function ownerFromPath(projectRelativePath) {
-  const [root, folder, ...rest] = projectRelativePath.split("/");
-  if (root !== "docs" || !folder?.startsWith("@")) return { status: "unassigned", value: null };
+export function ownerFromPath(projectRelativePath, { kind = "file", documentRoot = DEFAULT_DOCUMENT_ROOT } = {}) {
+  const parts = projectRelativePath.split("/");
+  try { normalizeDocumentRoot(documentRoot); }
+  catch { return { status: "invalid", value: null }; }
+  if (!withinDocumentRoot(projectRelativePath, documentRoot) || parts.some(part => !part || part === "." || part === ".." || /[\\\0]/.test(part))) return { status: "unassigned", value: null };
+  const boundary = documentRoot.split("/").length;
+  const end = kind === "directory" ? parts.length : parts.length - 1;
+  let index = end - 1;
+  while (index >= boundary && !parts[index].startsWith("@")) index--;
+  if (index < boundary) return { status: "unassigned", value: null };
+  const folder = parts[index], folderPath = parts.slice(0, index + 1).join("/");
   try {
-    return { status: "owned", value: normalizeOwner(folder), folder, descendants: rest };
+    return { status: "owned", value: normalizeOwner(folder), folder, folderPath, descendants: parts.slice(index + 1) };
   } catch {
-    return { status: "invalid", value: null, folder };
+    return { status: "invalid", value: null, folder, folderPath };
   }
 }
 

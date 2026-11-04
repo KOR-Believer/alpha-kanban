@@ -1,6 +1,6 @@
 import { headerField, scanDocumentHeader } from "./document-header.mjs";
-import { inspectLedgerFormat, inspectTicketCompatibility } from "./ledger-format.mjs";
-import { normalizeOwner } from "./document-owner.mjs";
+import { inspectLedgerFormat } from "./ledger-format.mjs";
+import { normalizeOwner, ownerFromPath } from "./document-owner.mjs";
 
 export function normalizeDocumentId(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -26,16 +26,14 @@ export function readDocumentMetadata(markdown) {
   };
 }
 
-function pathOwner(path) {
-  const parts = path.split("/");
-  if (parts.length < 3 || parts[0] !== "docs" || !parts[1]?.startsWith("@")) return { status: "unassigned", value: null };
-  try { return { status: "owned", value: normalizeOwner(parts[1]) }; }
-  catch { return { status: "invalid", value: null }; }
+function pathOwner(path, options) {
+  const { status, value } = ownerFromPath(path, options);
+  return { status, value };
 }
 
-export function analyzeDocumentMetadata(markdown, path) {
+export function analyzeDocumentMetadata(markdown, path, options = {}) {
   const metadata = readDocumentMetadata(markdown);
-  const folder = validPath(path) ? pathOwner(path) : { status: "invalid", value: null };
+  const folder = validPath(path) ? pathOwner(path, options) : { status: "invalid", value: null };
   let ownerState;
   if (!metadata.format.readable || folder.status === "invalid" || metadata.owner.status === "invalid") ownerState = "invalid";
   else if (folder.status === "unassigned") ownerState = metadata.owner.status === "missing" ? "unassigned" : "recorded-only";
@@ -62,8 +60,9 @@ export function previewDocumentMetadata(input) {
   if (![assignId, clone, reconcileOwner].every((value) => typeof value === "boolean") || !(assignId || clone || reconcileOwner)) {
     throw new MetadataPreviewError("NO_OPERATION", "Select ID assignment, explicit cloning or owner reconciliation.");
   }
-  const analysis = analyzeDocumentMetadata(markdown, path);
-  const compatibility = kind === "tickets" ? inspectTicketCompatibility(markdown) : analysis.format;
+  const analysis = analyzeDocumentMetadata(markdown, path, { documentRoot: input.documentRoot });
+  // Header edits do not require canonical ticket fields, states or progress values.
+  const compatibility = analysis.format;
   if (!compatibility.writable) throw new MetadataPreviewError(compatibility.code, "The document format cannot be transformed.");
   if (/\r(?!\n)/.test(markdown) || (markdown.includes("\r\n") && /(?<!\r)\n/.test(markdown))) {
     throw new MetadataPreviewError("MIXED_LINE_ENDINGS", "Preserve the original and resolve mixed line endings explicitly.");
@@ -81,7 +80,7 @@ export function previewDocumentMetadata(input) {
     changes.push({ field: "Document-ID", value: documentId });
   }
   if (reconcileOwner) {
-    if (analysis.pathOwner.status !== "owned" || analysis.ownerState === "invalid") throw new MetadataPreviewError("OWNER_TARGET_REQUIRED", "Owner reconciliation requires a valid current docs/@owner path.");
+    if (analysis.pathOwner.status !== "owned" || analysis.ownerState === "invalid") throw new MetadataPreviewError("OWNER_TARGET_REQUIRED", "Owner reconciliation requires a valid nearest @ directory within the document root.");
     if (analysis.owner.value !== analysis.pathOwner.value) changes.push({ field: "Owner", value: analysis.pathOwner.value });
   }
   const edits = [];
@@ -100,7 +99,9 @@ export function previewDocumentMetadata(input) {
     const after = (title.ending ? "" : eol) + additions.join(eol) + (title.ending ? eol : "");
     edits.push({ start: title.end, end: title.end, before: "", after });
   }
-  edits.sort((a, b) => a.start - b.start);
+  // An insertion at the start of an existing header line must precede its
+  // replacement in source order, so reverse application replaces it first.
+  edits.sort((a, b) => a.start - b.start || a.end - b.end);
   const after = applyEdits(markdown, edits);
   return { schema: 1, path, before: markdown, after, documentId,
     operations: { assignId, clone, reconcileOwner }, edits };

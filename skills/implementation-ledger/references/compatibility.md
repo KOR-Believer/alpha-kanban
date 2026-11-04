@@ -18,17 +18,20 @@ Keep basic templates unversioned. A document does not need a format declaration,
 
 The optional `Ledger-Format: 1` line uses the same header boundary as Owner: after the initial H1 (following any complete existing front matter), in the contiguous field/blank-line header. Stop at prose, a list, a comment, a fence or another heading. Only the exact field spelling, a single occurrence and a positive decimal integer without leading zeros are valid. Case variants, empty/noninteger values and duplicates are invalid, not unversioned. Front matter, examples and ticket bodies are not this header and remain opaque.
 
-An absent declaration is a **candidate** for the existing grammar, not proof that arbitrary Markdown or a damaged document is a valid ledger. Ticket readers additionally check structural sections, unique ticket headings, recognized states/progress and required fields. Incomplete or ambiguous ticket documents remain available as Markdown but must not be presented as a complete, editable ticket count.
+Rendering is strictly backward compatible and independent of compatibility inspection. The display parser does not call the inspector or expose its flags to the UI. Keep its existing fallbacks (unrecognized status displays as TODO; progress outside the supported steps displays as 0), without rewriting the source. Missing fields, format declarations, malformed metadata and cleanup candidates must not hide parsed cards, counts, board controls or details on either board. Markdown view remains a user choice.
 
-| Input | Read / ordinary structural write |
+Compatibility analysis supports explicit maintenance: adding selected missing metadata such as Document-ID/Owner and removing selected obsolete sections. It is never a prerequisite for viewing. Ordinary writes retain their separate structural and file-safety checks; declining an unsafe write does not change what can be read.
+
+| Input | Display / ordinary structural write |
 | --- | --- |
-| Undeclared, recognized legacy structure | Read and edit in place; preserve legacy sections and unknown fields. |
+| Undeclared, recognized legacy structure | Display with the existing parser; edit in place while preserving legacy sections and unknown fields. |
 | `Ledger-Format: 1`, recognized structure | Same grammar; preserve the declaration. |
-| Positive unsupported format | Raw Markdown only; use a tool that explicitly supports it. Never guess or downgrade. |
-| Malformed/duplicate declaration, unclosed front matter or damaged structure | Raw Markdown only; inspect and repair the declaration/structure explicitly. |
+| Positive unsupported format | Display whatever the existing parser extracts; structural writes are refused without guessing or downgrading. |
+| Missing descriptive fields/summary or mixed LF/CRLF | Display with the existing parser. Structural write checks remain independent; opening the document performs no repair. |
+| Malformed/duplicate declaration, unclosed front matter, ambiguous ticket boundaries or unknown state/progress | Retain the parser's existing extraction/fallbacks. Refuse unsafe structural writes; never use that refusal to hide parsed content. |
 | Valid extra fields, Owner or Document-ID | Preserve them byte-for-byte during ordinary ticket edits. Their presence does not authorize migration or reassignment. |
 
-Unsupported/invalid format checks apply to the shared writer and the standalone ticket-md/check-ledger tools, including `--legacy` and dry runs. Existing stale-file, locking and recovery guards still apply. Ordinary mutation preserves BOM, LF/CRLF, the final newline and every non-target area; mixed line endings are refused rather than normalized.
+Unsupported/invalid format checks apply to the shared writer and the standalone ticket-md/check-ledger tools, including `--legacy` and dry runs. Inspector `readable`/`writable` flags describe support for those structural tools, not viewer eligibility. Existing stale-file, locking and recovery guards still apply. Ordinary mutation preserves BOM, LF/CRLF, the final newline and every non-target area; mixed line endings are refused rather than normalized.
 
 ## Updating the skill
 

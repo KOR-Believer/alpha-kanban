@@ -26,6 +26,7 @@ export function inspectLedgerFormat(markdown) {
 }
 
 export function inspectTicketCompatibility(markdown) {
+  // Structural operation checks only; the display parser never uses these flags.
   const format = inspectLedgerFormat(markdown);
   if (!format.readable) return format;
   const damaged = () => ({ ...format, readable: false, writable: false, code: "NEEDS_REPAIR" });

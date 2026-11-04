@@ -75,27 +75,40 @@ You can return to the same files to continue later. Document creation and implem
 
 Usually start with tickets; add a plan or inventory when needed. Related documents share a common filename prefix. See the [document format](skills/implementation-ledger/references/ledger-format.md) and [sample tickets](examples/sample_tickets.md).
 
+### Optional: choose a document folder
+
+Place `.ak.config` in the project root and set the document directory. The directory containing the configuration is not itself the document folder.
+
+```text
+[documents]
+    root = notes
+```
+
+This selects `<project>/notes/`. Omitting `root` defaults to `docs`; nested project-relative paths such as `notes/planning` are supported. Existing files are not moved automatically. Changing the folder does not enable owner folders.
+
+Each shared setting resolves independently: **current repo → designated workspace → default**. An inherited `root = notes` still selects each repository's own `notes/`. See [document context](skills/implementation-ledger/references/document-context.md) for workspace connection and worktree inheritance.
+
 ### Optional: write documents in owner folders
 
 To distinguish each person's work in a shared repository, add this to the project's shared `.ak.config`:
 
-```ini
+```text
 [documents]
     ownerFolders = true
 ```
 
 Set your identity in the private `.ak.user`. Keep this file out of commits by adding `/.ak.user` to `.gitignore` or the local Git exclude file.
 
-```ini
+```text
 [user]
     id = @alice
 ```
 
-The skill writes new documents in `docs/@alice/` with `Owner: @alice` below the title. Without settings, or with `ownerFolders = false`, basic placement stays the same. Changing the policy or user does not move existing documents or change their Owner. An explicitly requested destination takes precedence over default placement.
+The skill writes new documents under `@alice/` in the document folder (default `docs/@alice/`) with `Owner: @alice` below the title. Without settings, or with `ownerFolders = false`, basic placement stays the same. Changing the policy or user does not move existing documents or change their Owner. An explicitly requested destination takes precedence over default placement.
 
 The shared context tool runs with Node.js and does not create settings or documents itself. Linked worktrees use their current shared policy and the original repository's private user settings. See [document context](skills/implementation-ledger/references/document-context.md) for workspace/home precedence, diagnostics and tool usage. Reading a colleague's context does not authorize executing their tickets.
 
-Connect a project root containing `docs` to see folder-based owners in the web viewer. The sidebar offers All, Unassigned, or one owner and remembers each project's selection. In All tickets, search and select multiple owner names to see work matching any of them across projects. An empty selection shows all work, and this list is remembered independently of sidebar filters. No `.ak.user` is needed, and filtering keeps the open document and its contents intact. A direct connection to `docs` or a deeper folder cannot infer owners from hidden parents; connect the project root when you need that distinction.
+Connect a project root containing `.ak.config` and the document folder (default `docs`) to see folder-based owners in the web viewer. The sidebar offers All, Unassigned, or one owner and remembers each project's selection. In All tickets, search and select multiple owner names to see work matching any of them across projects. An empty selection shows all work, and this list is remembered independently of sidebar filters. No `.ak.user` is needed, and filtering keeps the open document and its contents intact. A direct connection to the document folder or a deeper folder cannot infer owners from hidden parents; connect the project root when you need that distinction.
 
 ## 3. Update the skill
 
@@ -119,6 +132,12 @@ Open the [web viewer](https://kanban.giveit2.me/) in desktop Chrome and choose *
 You can keep all conversation and development in your AI chat and use the web app only for reading. After leaving a direction on the board, ask AI to reread the latest file. Saving does not run AI. Avoid editing the same file in AI and the browser at the same time.
 
 For guidance, use **Help → Take a quick tour** or **Create plans and tickets with AI** in the app.
+
+### Document maintenance
+
+Use this optional action to keep documents you continue to maintain aligned with the current document format as it evolves. Existing documents and boards remain readable without running maintenance.
+
+Open a document and choose **Document maintenance** to preview its proposed changes. Available operations include missing document IDs, folder-based Owner insertion or correction, and removal of obsolete guidance and templates. Only **Apply** saves the selected document. Actual ticket bodies and sections referenced by other documents are preserved.
 
 ### Local data and PWA
 

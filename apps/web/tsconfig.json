@@ -25,6 +25,8 @@
   "include": [
     "src",
     "vite.config.ts",
+    "brand.config.ts",
+    "worker.config.ts",
     "pwa.config.ts"
   ],
   "references": [

@@ -58,6 +58,17 @@ describe("all-projects board data", () => {
     expect(maximum).toBeLessThanOrEqual(6);
     expect(maximum).toBeGreaterThan(1);
   });
+  it("batches fast arrivals while publishing the first result and complete final count", async () => {
+    const files = Array.from({ length: 200 }, (_, i) => ({ ...documentFixture(first, `d_${i}`).file, absolutePath: `/work/project/docs/${i}_tickets.md` }));
+    const updates: BoardLoadProgress[] = [];
+    await loadBoard({ workspaces: async () => ({ workspaces: [first] }), files: async () => ({ files }),
+      document: async (_, id, file) => ({ ...documentFixture(first, id), file }),
+    }, { onProgress: (progress) => updates.push(progress) });
+    expect(updates.some((update) => update.data.documents.length === 1)).toBe(true);
+    expect(updates.at(-1)?.data.documents).toHaveLength(200);
+    expect(updates.at(-1)?.completedProjects).toBe(1);
+    expect(updates.length).toBeLessThan(20);
+  });
   it("reorders known tickets without dropping inaccessible project order entries", () => {
     const tickets = boardTickets({ documents, issues: [] });
     const [a, b] = tickets;

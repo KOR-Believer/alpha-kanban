@@ -30,22 +30,81 @@ function apply(f, plan) { return cli(f, ["apply", "--plan", "-", "--approve", pl
 function verify(f, id) { return cli(f, ["verify", "--id", id]); }
 function recover(f, id) { return cli(f, ["recover", "--id", id, "--approve", id]); }
 
-test("migration previews stale Progress Board rows, applies the reviewed ID and restores the original", async t => {
+test("nested Owner maintenance previews, applies, verifies and rolls back only the selected document without identity settings", async t => {
+  const f = await makeFixture(t), file = "docs/@bob/archive/@alice/24_work_plan.md";
+  const id = "33cfe3fc-a0ab-4d1e-9b8b-f30501a2bac1";
+  const source = `\uFEFF# Work\r\nOwner: @previous-owner\r\nDocument-ID: ${id}\r\n\r\n## Goal\r\n[Old PC](file:///other/pc/missing.md)\r\n`;
+  const outer = "# Outer\nOwner: @bob\n\n## Goal\nKeep\n";
+  await f.put(file, source); await f.put("docs/@bob/24_other_plan.md", outer);
+  const request = { schema: 1, operation: "migrate", scope: ["docs"], targets: [{ path: file, assignId: true, cleanupLegacy: true, reconcileOwner: true }] };
+  const analysis = analyze(f, request); assert.equal(analysis.code, 0, JSON.stringify(analysis.body));
+  const plan = analysis.body; assert.equal(plan.decision, "ready"); assert.equal(plan.actor, null);
+  assert.equal(plan.changes.length, 1); assert.equal(plan.changes[0].ownership.afterOwner, "@alice");
+  assert.equal(await readFile(path.join(f.root, file), "utf8"), source);
+  assert.equal(apply(f, plan).code, 0);
+  assert.equal(await readFile(path.join(f.root, file), "utf8"), source.replace("Owner: @previous-owner", "Owner: @alice"));
+  assert.equal(await readFile(path.join(f.root, "docs/@bob/24_other_plan.md"), "utf8"), outer);
+  assert.equal(verify(f, plan.id).body.verified, true); assert.equal(analyze(f, request).body.decision, "noop");
+  await missing(path.join(f.root, ".ak.config")); await missing(path.join(f.root, ".ak.user"));
+  assert.equal(recover(f, plan.id).code, 0); assert.equal(await readFile(path.join(f.root, file), "utf8"), source);
+
+  const invalid = "docs/@bob/@/24_work_plan.md";
+  await f.put(invalid, source.replace(`Document-ID: ${id}\r\n`, ""));
+  const kept = analyze(f, { ...request, targets: [{ path: invalid, assignId: true, reconcileOwner: true }] });
+  assert.equal(kept.code, 0, JSON.stringify(kept.body));
+  assert.equal(kept.body.migration.retained[0].code, "OWNER_PATH_UNRESOLVED");
+  assert.equal(apply(f, kept.body).code, 0);
+  const after = await readFile(path.join(f.root, invalid), "utf8");
+  assert.ok(after.includes("Owner: @previous-owner\r\n")); assert.ok(after.includes("Document-ID:"));
+});
+
+test("handoff into a nested owner requires explicit intent and checks the nearest destination against the current actor", async t => {
+  const f = await makeFixture(t), from = "docs/@bob/a.md", to = "docs/@bob/archive/@alice/a.md";
+  const source = "# Work\nOwner: @bob\n\n## Goal\nKeep\n";
+  await f.put(from, source); await f.put(".ak.user", "[user]\nid = @bob\n");
+  const request = { ...moveRequest(from, to), owner: "destination" };
+  assert.equal(analyze(f, request).body.error.code, "OWNERSHIP_INTENT_REQUIRED");
+  assert.equal(analyze(f, { ...request, intent: "handoff", actor: "current" }).body.error.code, "ACTOR_DESTINATION_MISMATCH");
+  assert.equal(await readFile(path.join(f.root, from), "utf8"), source);
+  await f.put(".ak.user", "[user]\nid = @alice\n");
+  const plan = approved(f, { ...request, intent: "handoff", actor: "current" });
+  assert.equal(plan.changes[0].ownership.afterPathOwner, "@alice");
+  assert.equal(apply(f, plan).code, 0); assert.equal(verify(f, plan.id).body.verified, true);
+  assert.equal(await readFile(path.join(f.root, to), "utf8"), source.replace("Owner: @bob", "Owner: @alice"));
+});
+
+test("moving an outer owner directory preserves the independent nested owner's identity", async t => {
+  const f = await makeFixture(t), inner = "# Inner\nOwner: @alice\n\n## Goal\nKeep\n";
+  await f.put("docs/@bob/a.md", "# Outer\nOwner: @bob\n"); await f.put("docs/@bob/archive/@alice/b.md", inner);
+  const plan = approved(f, { ...moveRequest("docs/@bob", "docs/@carol"), owner: "destination", intent: "handoff" });
+  assert.equal(apply(f, plan).code, 0); assert.equal(verify(f, plan.id).body.verified, true);
+  assert.equal(await readFile(path.join(f.root, "docs/@carol/archive/@alice/b.md"), "utf8"), inner);
+  assert.equal(await readFile(path.join(f.root, "docs/@carol/a.md"), "utf8"), "# Outer\nOwner: @carol\n");
+});
+
+test("migration previews legacy guides, templates and stale boards, applies the reviewed ID and restores the original", async t => {
   const f = await makeFixture(t), file = "docs/02_legacy_tickets.md";
   const source = (await readFile(path.join(repoRoot, "docs/02_alpha_kanban_tickets.md"), "utf8"))
     .replace("| AKB-00 | DONE | 100%", "| OLD-77 | TODO | 0%")
     .replace(/^\| AKB-01 \|.*\n/m, "")
+    .replace("Status: DONE", "Status: WATCH").replace("Progress: 100%", "Progress: 80%")
     .replace("## Progress Board\n", "## Progress Board\n\nKeep this note.\n");
   await f.put(file, source);
+  const unrelated = "# Other\n[[unrelated#section]]\n[x](file:///other/checkout/missing.md#heading)\n";
+  await f.put("README.md", unrelated);
   const request = { schema: 1, operation: "migrate", scope: ["docs"], targets: [{ path: file, assignId: true, cleanupLegacy: true }] };
-  const plan = approved(f, request);
+  const analysis = analyze(f, request); assert.equal(analysis.code, 0, JSON.stringify(analysis.body.issues));
+  const plan = analysis.body; assert.equal(plan.decision, "ready");
   assert.equal(await readFile(path.join(f.root, file), "utf8"), source);
   assert.equal(apply(f, plan).code, 0);
   const after = await readFile(path.join(f.root, file), "utf8");
   assert.equal(after, plan.changes[0].diff.after);
   assert.ok(after.includes(plan.migration.generatedIds[file]));
   assert.ok(after.includes("Keep this note.")); assert.ok(!after.includes("| OLD-77 |"));
+  for (const section of ["티켓 상태", "Progress 기준", "Ticket Template"]) assert.ok(!after.includes(`## ${section}\n`));
+  assert.ok(after.includes("Status: WATCH")); assert.ok(after.includes("Progress: 80%"));
   assert.equal(after.slice(after.indexOf("## Ticket List")), source.slice(source.indexOf("## Ticket List")));
+  assert.equal(await readFile(path.join(f.root, "README.md"), "utf8"), unrelated);
   assert.equal(verify(f, plan.id).body.verified, true);
   assert.equal(analyze(f, request).body.decision, "noop");
   assert.equal(recover(f, plan.id).code, 0);

@@ -1,5 +1,6 @@
 import { appActivity } from "./activity";
-import { PWA_PROTOCOL, SESSION_LOCK, requestWorker, type WorkerInfo } from "./protocol";
+import { PWA_PROTOCOL, RUNNING_CHANNEL, SESSION_LOCK, assertWorkerChannel, requestWorker, type WorkerInfo } from "./protocol";
+import { sameReleaseChannel } from "../../release-channel.mjs";
 
 let releaseLease: (() => void) | undefined;
 let prepared: string | undefined;
@@ -20,6 +21,7 @@ async function matchingWorker(): Promise<boolean> {
   const worker = navigator.serviceWorker.controller ?? registration?.active;
   if (!worker) return true;
   const info = await requestWorker<WorkerInfo>(worker, "AK_INFO");
+  assertWorkerChannel(info);
   return info.mode !== "app" || info.buildId === __APP_RELEASE__.buildId;
 }
 
@@ -41,7 +43,7 @@ export async function startPwaSession() {
     return false;
   }
   navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data?.protocol !== PWA_PROTOCOL || !event.source || !("scriptURL" in event.source) || new URL(event.source.scriptURL).pathname !== "/sw.js") return;
+    if (event.data?.protocol !== PWA_PROTOCOL || !sameReleaseChannel(event.data.channel, RUNNING_CHANNEL) || !event.source || !("scriptURL" in event.source) || new URL(event.source.scriptURL).href !== location.origin + "/sw.js") return;
     const { type, transaction } = event.data;
     if (type === "AK_PREPARE") {
       const ok = !prepared && appActivity.prepare();
@@ -51,14 +53,14 @@ export async function startPwaSession() {
         releaseLease?.(); releaseLease = undefined; acquiring = undefined;
         watchdog = setTimeout(() => { void resume().catch(() => location.reload()); }, 20_000);
       }
-      event.ports[0]?.postMessage({ ok, protocol: PWA_PROTOCOL, buildId: __APP_RELEASE__.buildId });
+      event.ports[0]?.postMessage({ ok, protocol: PWA_PROTOCOL, channel: RUNNING_CHANNEL, buildId: __APP_RELEASE__.buildId });
     } else if (type === "AK_RESUME" && transaction === prepared) {
       void resume().catch(() => location.reload());
     } else if (type === "AK_COMMIT" && transaction === prepared) {
       clearTimeout(watchdog);
       location.reload();
     } else if (type === "AK_VERSION") {
-      event.ports[0]?.postMessage({ protocol: PWA_PROTOCOL, buildId: __APP_RELEASE__.buildId });
+      event.ports[0]?.postMessage({ protocol: PWA_PROTOCOL, channel: RUNNING_CHANNEL, buildId: __APP_RELEASE__.buildId });
     }
   });
   window.addEventListener("beforeunload", (event) => { if (appActivity.unloadRisk) event.preventDefault(); });

@@ -2,6 +2,23 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeOwner, ownerFromPath, readOwnerHeader, checkNewOwner } from "../../skills/implementation-ledger/scripts/lib/document-owner.mjs";
 import { parseSettings } from "../../skills/implementation-ledger/scripts/lib/document-settings.mjs";
+import { normalizeDocumentRoot } from "../../skills/implementation-ledger/scripts/lib/document-root.mjs";
+
+test("document roots are portable relative paths and independent of owner policy", () => {
+  for (const root of ["docs", "notes/planning", "업무 기록", ".plans"]) assert.equal(normalizeDocumentRoot(root), root);
+  for (const root of ["", "/docs", "../notes", "docs/../notes", "C:/notes", "notes\\docs", ".", "docs//notes", ".git/notes", ".alpha-kanban", "docs.", "docs/ "]) assert.throws(() => normalizeDocumentRoot(root));
+  const config = '[documents]\nroot = "업무 기록/planning"\nownerFolders = false\n';
+  assert.equal(parseSettings(config, "config").value, false);
+  assert.equal(parseSettings(config, "config", null, "root").value, "업무 기록/planning");
+  assert.throws(() => parseSettings(config + "root = other\n", "config", null, "root"));
+  assert.equal(parseSettings("[documents]\nownerFolders = invalid\nroot = notes\n", "config", null, "root").value, "notes");
+  const options = { documentRoot: "notes/planning" };
+  assert.equal(ownerFromPath("notes/planning/@bob/@alice/file.md", options).value, "@alice");
+  assert.equal(ownerFromPath("notes/planning/@bob/@@bad/file.md", options).status, "invalid");
+  assert.equal(ownerFromPath("docs/@alice/file.md", options).status, "unassigned");
+  assert.equal(ownerFromPath("notes/@outer/planning/file.md", { documentRoot: "notes/@outer/planning" }).status, "unassigned");
+  assert.equal(ownerFromPath("docs/@alice/file.md", { documentRoot: null }).status, "invalid");
+});
 
 test("Git-style settings support comments, quoting, BOM and case-insensitive keys without merging", () => {
   assert.deepEqual(parseSettings('\uFEFF[DOCUMENTS]\r\n  OwnerFolders = "true" # shared\r\n', "config"), { present: true, value: true });
@@ -17,10 +34,13 @@ test("owner identifiers are portable single path segments, not display names or 
   for (const value of ["@", "@@team", "@a.", "@../alice", "@a/b", "@a\\b", "@two people", " @alice", "@alice ", "@a\n", "@" + "가".repeat(81)]) assert.throws(() => normalizeOwner(value));
 });
 
-test("only docs direct @ children own paths; deeper @ names inherit their existing owner", () => {
-  assert.equal(ownerFromPath("docs/@alice/research/@bob/01_plan.md").value, "@alice");
-  for (const name of ["docs/01_plan.md", "docs/research/@alice/01_plan.md", "notes/@alice/01_plan.md", "@alice/01_plan.md"]) assert.equal(ownerFromPath(name).status, "unassigned");
-  assert.equal(ownerFromPath("docs/@/01_plan.md").status, "invalid");
+test("the nearest @ directory within docs owns the file, with no outer fallback for an invalid name", () => {
+  assert.equal(ownerFromPath("docs/@bob/research/@alice/01_plan.md").value, "@alice");
+  assert.equal(ownerFromPath("docs/research/@alice/01_plan.md").value, "@alice");
+  assert.equal(ownerFromPath("docs/@bob/@alice", { kind: "directory" }).value, "@alice");
+  assert.equal(ownerFromPath("docs/@bob/@notes.md").value, "@bob");
+  for (const name of ["docs/01_plan.md", "docs/@notes.md", "notes/@alice/01_plan.md", "@alice/01_plan.md", "docs/@alice/../01_plan.md"]) assert.equal(ownerFromPath(name).status, "unassigned");
+  for (const name of ["docs/@/01_plan.md", "docs/@bob/@/01_plan.md", "docs/@bob/@@team/01_plan.md"]) assert.equal(ownerFromPath(name).status, "invalid");
 });
 
 test("Owner is recognized only in the document header and leaves body examples alone", () => {

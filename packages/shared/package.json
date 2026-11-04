@@ -6,6 +6,14 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./documentSettings": {
+      "types": "./src/documentSettings.d.mts",
+      "import": "./src/documentSettings.mjs"
+    },
+    "./documentPresentation": {
+      "types": "./src/documentPresentation.d.mts",
+      "import": "./src/documentPresentation.mjs"
+    },
     "./documentMigration": {
       "types": "./src/documentMigration.d.mts",
       "import": "./src/documentMigration.mjs"

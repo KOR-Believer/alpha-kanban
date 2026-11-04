@@ -30,7 +30,7 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   ];
   if (kind === "all") return [
     step("project-filters", "Choose which projects to see", "Use these filters to view tickets from one or more projects together."),
-    step("ticket-search", "Find a ticket across projects", "Search by ticket ID or title. Search and project filters work together and only change what this board shows."),
+    step("ticket-search", "Find a ticket across projects", "Search by ticket ID, title or body, including tickets outside the screen. Search and project filters work together."),
     step("hide-done", "Focus on unfinished work", "Hide completed tickets without changing their status or removing them from the documents. Turn this off to see them again."),
     status(), card(),
     step("ticket-project", "Continue in the project board", "Select the project name to open its board with this ticket still open. You can return to All tickets from the project header."),

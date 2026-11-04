@@ -4,11 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLanguage } from "../i18n";
 import { english, korean } from "../i18n/messages";
+import { skillHash } from "./bundle";
 import { SkillArchiveDownload } from "./SkillArchiveDownload";
 
 const errorMessage = "Could not download the skill ZIP. Reconnect to the internet and try again.";
 const filename = `implementation-ledger-${__APP_RELEASE__.skillBundle}.zip`;
 const archive = new Uint8Array([0x50, 0x4b, 3, 4, ...Array(24).fill(0)]);
+const release = { ...__APP_RELEASE__, skillArchive: await skillHash(new TextDecoder().decode(archive)) };
 
 describe("skill archive download", () => {
   let root: Root;
@@ -19,14 +21,18 @@ describe("skill archive download", () => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:skill-archive");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    await act(async () => root.render(<SkillArchiveDownload />));
+    await act(async () => root.render(<SkillArchiveDownload release={release} />));
   });
   afterEach(async () => {
     await act(async () => root.unmount()); container.remove();
     vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   });
-  async function click() {
+  async function click(settle = true) {
     await act(async () => { container.querySelector("a")!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
+    if (settle) await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(container.querySelector("a")?.getAttribute("aria-busy")).toBe("false");
+    });
   }
 
   it("fetches only the app-pinned ZIP, downloads a named blob and releases it", async () => {
@@ -45,9 +51,10 @@ describe("skill archive download", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it.each(["network", "404", "html"])("shows a translated retryable error for %s without falling back to the latest ZIP", async (failure) => {
+  it.each(["network", "404", "html", "digest"])("shows a translated retryable error for %s without falling back to the latest ZIP", async (failure) => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
-    if (failure === "network") fetch.mockRejectedValueOnce(new TypeError("offline"));
+    if (failure === "digest") fetch.mockResolvedValueOnce(new Response(new Uint8Array([...archive, 0])));
+    else if (failure === "network") fetch.mockRejectedValueOnce(new TypeError("offline"));
     else fetch.mockResolvedValueOnce(failure === "404" ? new Response("missing", { status: 404 }) : new Response("<!doctype html><html>SPA fallback</html>"));
     await click();
     expect(container.querySelector("[role=alert]")?.textContent).toBe(korean[errorMessage]);
@@ -66,7 +73,7 @@ describe("skill archive download", () => {
   it("ignores duplicate clicks and cancels a pending download when closed", async () => {
     let finish!: (response: Response) => void;
     const fetch = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = resolve; })); vi.stubGlobal("fetch", fetch);
-    await click(); await click();
+    await click(false); await click(false);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(container.querySelector("a")?.getAttribute("aria-disabled")).toBe("true");
     const signal = fetch.mock.calls[0]![1].signal as AbortSignal;

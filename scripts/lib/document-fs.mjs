@@ -116,7 +116,7 @@ export function decodeMarkdown(record) {
 }
 
 export const EXCLUDED = new Set([".git", "node_modules", ".pnpm", ".cache", ".next", "dist", "dist-browser", "build", "coverage", ".playwright-cli", "output"]);
-export async function scanWorktree(root) {
+export async function scanWorktree(root, documentRoot = "docs") {
   const documents = [], paths = [], skipped = [];
   const walk = async (directory, relative = "") => {
     let entries;
@@ -125,7 +125,7 @@ export async function scanWorktree(root) {
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       const rel = relative ? relative + "/" + entry.name : entry.name;
       if (paths.length > 20_000) fail("SCAN_LIMIT", "The scan exceeds 20,000 entries; no complete plan was produced.");
-      if (EXCLUDED.has(entry.name)) { if (entry.name !== ".git") skipped.push({ path: rel, code: "EXCLUDED_DIRECTORY" }); continue; }
+      if (EXCLUDED.has(entry.name) && !(rel === documentRoot || documentRoot.startsWith(rel + "/"))) { if (entry.name !== ".git") skipped.push({ path: rel, code: "EXCLUDED_DIRECTORY" }); continue; }
       const absolute = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) { skipped.push({ path: rel, code: "SYMLINK" }); continue; }
       if (entry.isDirectory()) {

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Native link A/B smoke</title>
+<h1>실제 폴더 A/B 검증</h1>
+<p>테스트 묶음의 fixtures만 선택하세요. 원본 파일에는 쓰지 않습니다. A는 수동 연결, B는 repo 발견과 자동 연결을 사용합니다.</p>
+<button id="root">fixtures 폴더 선택</button>
+<button id="start" disabled>다음 사례 실행</button>
+<p id="status" role="status">폴더를 선택하세요.</p>
+<div id="choices"></div>
+<pre id="results"></pre>
+<button id="download" disabled>결과 JSON 다운로드</button>
+<script type="module" src="/native-ab.js"></script>
+</html>

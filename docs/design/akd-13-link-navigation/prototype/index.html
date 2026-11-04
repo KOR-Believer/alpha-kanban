@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Alpha Kanban 문서 링크 연결과 연속 탐색 인터랙티브 시안">
+  <title>검색 개선 계획 · Alpha Kanban</title>
+  <link rel="stylesheet" href="./styles.css?v=akd13-paths-2">
+  <script src="./app.js?v=akd13-direct-location-1" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <div class="app-shell" id="product">
+    <header class="app-header" id="header"></header>
+    <div class="work-area">
+      <aside class="sidebar" id="sidebar" aria-label="프로젝트 문서"></aside>
+      <main class="main-panel" id="main" tabindex="-1"></main>
+    </div>
+  </div>
+  <details class="review-tools" id="review-tools"></details>
+  <dialog class="dialog" id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <noscript>이 시안의 문서 탐색을 사용하려면 브라우저에서 JavaScript를 허용해 주세요.</noscript>
+</body>
+</html>

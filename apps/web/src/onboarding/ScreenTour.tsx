@@ -129,7 +129,7 @@ export function TourHelp({ tour }: { tour: ReturnType<typeof useScreenTour> }) {
   return <>
     {tour.offered ? <TourButton tour={tour} /> : null}
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild><Button ref={trigger} data-tour-help="" size="sm" variant="ghost"><CircleHelp aria-hidden="true" />{t("Help")}</Button></PopoverTrigger>
+      <PopoverTrigger asChild><Button ref={trigger} data-tour-help="" size="sm" variant="ghost" title={t("Help")}><CircleHelp aria-hidden="true" /><span className="ak-toolbar-label">{t("Help")}</span></Button></PopoverTrigger>
       <PopoverContent align="end" className="grid min-w-52 gap-1" onCloseAutoFocus={(event) => {
         if (action.current) { event.preventDefault(); const next = action.current; action.current = null; requestAnimationFrame(next); }
       }}>

@@ -6,17 +6,21 @@ import { inspectLedgerFormat, inspectTicketCompatibility } from "../../skills/im
 import { scanDocumentHeader } from "../../skills/implementation-ledger/scripts/lib/document-header.mjs";
 import { previewDocumentMigrations } from "../../packages/shared/src/documentMigration.mjs";
 import { resolveDocumentContext } from "../../skills/implementation-ledger/scripts/lib/document-context.mjs";
+import { withinDocumentRoot } from "../../skills/implementation-ledger/scripts/lib/document-root.mjs";
 import { fail, hashObject, sha, portable, maybeStat, git, worktreeContext, normalizeRemote, safePath, snapshot, scanWorktree } from "./document-fs.mjs";
 
 const selected = (scopes, file) => scopes.some((scope) => file === scope || file.startsWith(scope + "/"));
 const exactKeys = (input, names, label) => {
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((key) => !names.includes(key))) fail("INVALID_REQUEST", `Unknown or invalid ${label} fields.`);
 };
-export function validateRequest(request) {
+export function validateRequest(request, documentRoot = "docs") {
   exactKeys(request, ["schema", "operation", "scope", "moves", "targets", "repositories", "output", "owner", "intent", "actor", "acknowledgements"], "request");
   if (request.schema !== 1 || !["move", "reconcile", "rebase", "migrate"].includes(request.operation)) fail("INVALID_REQUEST", "Expected schema 1 and move, reconcile, rebase or migrate.");
-  if (!Array.isArray(request.scope) || !request.scope.length) fail("INVALID_REQUEST", "Explicit docs write scope is required.");
-  for (const scope of request.scope) if (projectPath(scope) !== "docs" && !scope.startsWith("docs/")) fail("WRITE_SCOPE", "Write scope must be docs or a path below docs.");
+  if (!Array.isArray(request.scope) || !request.scope.length) fail("INVALID_REQUEST", "An explicit document write scope is required.");
+  for (const scope of request.scope) {
+    projectPath(scope);
+    if (documentRoot !== null && !withinDocumentRoot(scope, documentRoot)) fail("WRITE_SCOPE", "Write scope must stay within the configured document root.");
+  }
   if (request.output !== undefined && !["relative", "file-url"].includes(request.output)) fail("INVALID_REQUEST", "Unknown link output policy.");
   if (request.owner !== undefined && !["preserve", "destination"].includes(request.owner)) fail("INVALID_REQUEST", "Unknown owner policy.");
   if (request.intent !== undefined && !["organize", "adopt", "handoff"].includes(request.intent)) fail("INVALID_REQUEST", "Unknown ownership intent.");
@@ -25,7 +29,7 @@ export function validateRequest(request) {
   if (request.acknowledgements !== undefined && (!Array.isArray(request.acknowledgements) || request.acknowledgements.some((id) => typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)))) fail("INVALID_REQUEST", "Acknowledgements must be exact analysis fingerprints.");
   if (request.operation !== "move" && request.moves !== undefined) fail("INVALID_REQUEST", "Only move accepts moves.");
   if (!["reconcile", "migrate"].includes(request.operation) && request.targets !== undefined) fail("INVALID_REQUEST", "Only reconcile and migrate accept targets.");
-  if (request.operation === "migrate" && ["owner", "actor", "intent", "output", "repositories"].some((key) => request[key] !== undefined)) fail("INVALID_REQUEST", "Metadata migration does not change ownership or repository mappings.");
+  if (request.operation === "migrate" && ["owner", "actor", "intent", "output", "repositories"].some((key) => request[key] !== undefined)) fail("INVALID_REQUEST", "Use target.reconcileOwner for metadata correction; migration does not move documents or change repository mappings.");
   if (request.operation === "rebase" && (request.owner !== undefined || request.actor !== undefined || request.intent !== undefined)) fail("INVALID_REQUEST", "PC rebasing does not also change ownership.");
 }
 
@@ -65,28 +69,33 @@ export async function inspectRepositories(request, context) {
   return result.sort((a, b) => a.root.localeCompare(b.root));
 }
 
-function formatCheck(relative, markdown) {
+function formatCheck(relative, markdown, headerOnly = false) {
   const canonical = /_(tickets|plan|inventory)\.md$/.test(relative);
   if (!canonical && scanDocumentHeader(markdown).error === "MISSING_DOCUMENT_TITLE") return;
-  const compatibility = relative.endsWith("_tickets.md") ? inspectTicketCompatibility(markdown) : inspectLedgerFormat(markdown);
+  const compatibility = !headerOnly && relative.endsWith("_tickets.md") ? inspectTicketCompatibility(markdown) : inspectLedgerFormat(markdown);
   if (!compatibility.writable) fail(compatibility.code, "The document format cannot be structurally changed.", { path: relative });
 }
 
 /** Reads only. The caller controls where to save the returned reviewable JSON plan. */
 export async function createDocumentPlan(request, { cwd = process.cwd(), home, generatedIds } = {}) {
-  validateRequest(request);
+  validateRequest(request, null);
   const context = await worktreeContext(cwd), root = context.root;
+  const settings = await resolveDocumentContext({ operation: "root", cwd: root });
+  if (!settings.ok) fail(settings.diagnostics[0]?.code ?? "SETTINGS_UNRESOLVED", settings.diagnostics[0]?.message ?? "The document root could not be resolved.");
+  const documentRoot = settings.documentRoot.value;
+  validateRequest(request, documentRoot);
   const repos = await inspectRepositories(request, context);
   const actor = request.actor === "current" ? await resolveDocumentContext({ operation: "actor", cwd: root, ...(home ? { home } : {}) }) : null;
   if (actor && !actor.ok) fail(actor.diagnostics[0]?.code ?? "USER_REQUIRED", actor.diagnostics[0]?.message ?? "Current user could not be resolved.");
   const actorIdentity = actor ? { user: actor.user, context: actor.context } : null;
-  const scan = await scanWorktree(root), issues = [];
+  const scan = await scanWorktree(root, documentRoot), issues = [];
   const writePath = async (relative, missing = false) => {
     if (!selected(request.scope, projectPath(relative))) fail("WRITE_SCOPE", "A source or destination lies outside the selected docs scope.", { path: relative });
     return safePath(root, relative, { missing });
   };
   for (const scope of request.scope) await safePath(root, scope, { missing: true });
   for (const skipped of scan.skipped) {
+    if (request.operation === "migrate") continue; // Cleanup does not require complete move/backlink coverage.
     const insideScope = selected(request.scope, skipped.path);
     issues.push({ severity: insideScope ? "blocked" : "review", code: skipped.code, path: skipped.path, message: insideScope ? "The selected write scope contains an uninspected boundary." : "This worktree path was not inspected for backlinks." });
   }
@@ -139,7 +148,7 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
   const referenceInput = { root: portable(root), previousRoot: repos.find((repo) => repo.current)?.oldRoot ?? undefined,
     documents, moves, verifyPaths: [...ownerPaths], mappings: repos.filter((repo) => repo.oldRoot).map((repo) => ({ oldRoot: repo.oldRoot, currentRoot: portable(repo.root) })), output: request.output ?? "relative" };
   const checks = [], available = [];
-  for (const candidate of referenceTargets(referenceInput)) {
+  for (const candidate of request.operation === "migrate" ? [] : referenceTargets(referenceInput)) {
     const virtual = moves.find((move) => portable(path.join(root, move.from)) === candidate && documents.some((document) => document.previousPath === move.from));
     if (virtual) { available.push(candidate); checks.push({ target: candidate, virtual: virtual.to }); continue; }
     const repo = repos.filter((entry) => within(portable(entry.root), candidate)).sort((a, b) => b.root.length - a.root.length)[0];
@@ -155,7 +164,7 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
     if (!Array.isArray(request.targets) || !request.targets.length) fail("INVALID_REQUEST", "migrate requires a nonempty targets list.");
     for (const target of request.targets) await writePath(target.path);
   }
-  const migration = request.operation === "migrate" ? previewDocumentMigrations({ root: portable(root), documents, targets: request.targets, available, generatedIds }) : null;
+  const migration = request.operation === "migrate" ? previewDocumentMigrations({ root: portable(root), documentRoot, documents, targets: request.targets, available, generatedIds }) : null;
   const references = migration ?? analyzeReferences({ ...referenceInput, available });
   issues.push(...references.issues);
   const edits = new Map(references.changes.map((change) => [change.path, change]));
@@ -171,14 +180,15 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
     if (document && before.hash !== document.guard.hash) fail("STALE_FILE", "A document changed during analysis.");
     let after = Buffer.from(before.bytes, "base64"), ownership = null;
     if (document) {
-      formatCheck(file.from, document.markdown);
+      // Migration has operation-specific header/section checks; leave ticket bodies alone.
+      formatCheck(file.from, document.markdown, Boolean(migration));
       const metadata = readDocumentMetadata(document.markdown);
       if (metadata.documentId.value && idIndex.get(metadata.documentId.value)?.length > 1) fail("DUPLICATE_DOCUMENT_ID", "A changed document has a duplicate UUID.", { path: file.from });
       const destination = portable(path.relative(root, movePath(portable(path.join(root, file.from)), absoluteMoves)));
-      const oldOwner = analyzeDocumentMetadata(document.markdown, document.previousPath ?? file.from);
-      const newOwner = analyzeDocumentMetadata(document.markdown, destination);
+      const oldOwner = analyzeDocumentMetadata(document.markdown, document.previousPath ?? file.from, { documentRoot });
+      const newOwner = analyzeDocumentMetadata(document.markdown, destination, { documentRoot });
       const plainWithoutHeader = !/_(tickets|plan|inventory)\.md$/.test(file.from) && scanDocumentHeader(document.markdown).error === "MISSING_DOCUMENT_TITLE";
-      if (oldOwner.pathOwner.status === "invalid" || newOwner.pathOwner.status === "invalid" || (!plainWithoutHeader && (oldOwner.ownerState === "invalid" || newOwner.ownerState === "invalid"))) fail("INVALID_OWNERSHIP", "An invalid Owner header or owner folder must be resolved before changing this document.", { path: file.from });
+      if (!migration && (oldOwner.pathOwner.status === "invalid" || newOwner.pathOwner.status === "invalid" || (!plainWithoutHeader && (oldOwner.ownerState === "invalid" || newOwner.ownerState === "invalid")))) fail("INVALID_OWNERSHIP", "An invalid Owner header or owner folder must be resolved before changing this document.", { path: file.from });
       if (plainWithoutHeader && ownerPaths.has(file.from)) fail("OWNER_HEADER_REQUIRED", "Explicit Owner registration requires a document title; it is not generated by a move.", { path: file.from });
       const changingOwner = oldOwner.pathOwner.value !== newOwner.pathOwner.value || (ownerPaths.has(file.from) && newOwner.ownerState !== "aligned");
       if (changingOwner) {
@@ -190,7 +200,7 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
       const directed = physical.some(entry => entry.from === file.from) || ownerPaths.has(file.from);
       if (actorIdentity && directed && newOwner.pathOwner.value !== actorIdentity.user.value) fail("ACTOR_DESTINATION_MISMATCH", "The requested current-user destination does not match the resolved user.");
       let markdown = edits.get(file.from)?.after ?? document.markdown;
-      if (ownerPaths.has(file.from)) markdown = previewDocumentMetadata({ markdown, path: destination, reconcileOwner: true, allowPlainMarkdown: true }).after;
+      if (ownerPaths.has(file.from)) markdown = previewDocumentMetadata({ markdown, path: destination, documentRoot, reconcileOwner: true, allowPlainMarkdown: true }).after;
       ownership = { beforePathOwner: oldOwner.pathOwner.value, recordedOwner: metadata.owner.value, afterPathOwner: newOwner.pathOwner.value, afterOwner: readDocumentMetadata(markdown).owner.value, intent: request.intent ?? "organize" };
       after = Buffer.from(markdown, "utf8");
     }
@@ -204,14 +214,17 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
     }
   }
   if (changes.reduce((sum, change) => sum + Number(change.before.size), 0) > 256 * 1024 * 1024) fail("BACKUP_LIMIT", "One operation may back up at most 256 MiB; select a smaller docs scope.");
-  if ((changes.length || directories.length) && (!migration || migration.rules.length)) issues.push({ severity: "review", code: "UNSCANNED_BACKLINKS", path: "", message: "Backlinks in other worktrees, unregistered repos, chats and arbitrary prose are not checked. Confirm that this scope is sufficient." });
+  if ((changes.length || directories.length) && !migration) issues.push({ severity: "review", code: "UNSCANNED_BACKLINKS", path: "", message: "Backlinks in other worktrees, unregistered repos, chats and arbitrary prose are not checked. Confirm that this scope is sufficient." });
   const guard = { paths: scan.paths, documents: scan.documents.map((document) => ({ path: document.path, ...document.guard })), skipped: scan.skipped };
   const baseRequest = { ...request }; delete baseRequest.acknowledgements;
-  const binding = hashObject({ context, request: baseRequest, guard });
+  // Omit the unchanged default from legacy plans; nondefault values/sources are
+  // pinned in the reviewed plan and re-resolved before application/resumption.
+  const rootBinding = settings.documentRoot.source.scope === "default" ? {} : { documentRoot: settings.documentRoot };
+  const binding = hashObject({ context, request: baseRequest, guard, ...rootBinding });
   const diagnostics = issues.map((issue) => { const fingerprint = hashObject({ binding, issue }); return { ...issue, fingerprint, acknowledged: issue.severity === "review" && (request.acknowledgements ?? []).includes(fingerprint) }; });
   const decision = diagnostics.some((issue) => issue.severity === "blocked") ? "blocked" : !changes.length && !directories.length ? "noop"
     : diagnostics.some((issue) => !issue.acknowledged) ? "review" : "ready";
-  const plan = { schema: 1, engine: "document-operations-1", request, context, actor: actorIdentity, repositories: repos, scan: guard, targetChecks: checks,
+  const plan = { schema: 1, engine: "document-operations-1", request, context, ...rootBinding, actor: actorIdentity, repositories: repos, scan: guard, targetChecks: checks,
     changes, directories, references: references.references, issues: diagnostics, decision,
     ...(migration ? { migration: { generatedIds: migration.generatedIds, rules: migration.rules, retained: migration.retained } } : {}) };
   return { ...plan, id: hashObject(plan) };

@@ -9,7 +9,9 @@ import { appInstaller } from "./pwa/install";
 import { pwaClient } from "./pwa/client";
 import { startPwaSession } from "./pwa/session";
 import { initializeTheme } from "./theme";
+import { initializeBrand } from "./brand";
 
+initializeBrand();
 const stopThemeSync = initializeTheme();
 if (import.meta.hot) import.meta.hot.dispose(stopThemeSync);
 

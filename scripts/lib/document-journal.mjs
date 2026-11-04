@@ -1,12 +1,25 @@
 import { open, mkdir, readFile, rename, unlink, readdir, lstat } from "node:fs/promises";
+import { constants } from "node:fs";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fail, hashObject, maybeStat } from "./document-fs.mjs";
 
-export async function syncDirectory(directory) {
-  const handle = await open(directory, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
+export function documentPersistence(platform = process.platform) {
+  return { fileSync: "fsync", writeThrough: platform === "win32", directorySync: platform === "win32" ? "unavailable" : "fsync", powerLossRecovery: "not-guaranteed" };
+}
+export function documentWriteFlags(flags, platform = process.platform) {
+  // libuv maps O_SYNC to FILE_FLAG_WRITE_THROUGH on Windows. File fsync is still required.
+  return flags | (platform === "win32" ? constants.O_SYNC : 0);
+}
+export async function syncDirectory(directory, { platform = process.platform, openDirectory = open } = {}) {
+  const handle = await openDirectory(directory, "r");
+  try {
+    if (!(await handle.stat()).isDirectory()) fail("DIRECTORY_REQUIRED", "The storage boundary must be a directory.");
+    // Node's Windows directory handle cannot be flushed. This is an explicit capability limit,
+    // not an EPERM catch: file flush failures and all other filesystem errors still stop the operation.
+    if (platform !== "win32") await handle.sync();
+  } finally { await handle.close(); }
 }
 
 export async function operationDirectory(context, create = false) {
@@ -18,13 +31,18 @@ export async function operationDirectory(context, create = false) {
   return directory;
 }
 
-export async function saveJournal(directory, journal) {
+export async function saveJournal(directory, journal, { openFile = open, readPublished = readFile } = {}) {
   const temporary = path.join(directory, `.journal-${randomUUID()}.tmp`);
   const envelope = { checksum: hashObject(journal), journal };
-  const handle = await open(temporary, "wx", 0o600);
-  try { await handle.writeFile(JSON.stringify(envelope)); await handle.sync(); }
+  const serialized = JSON.stringify(envelope);
+  const handle = await openFile(temporary, documentWriteFlags(constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL), 0o600);
+  try { await handle.writeFile(serialized); await handle.sync(); }
   finally { await handle.close(); }
-  try { await rename(temporary, path.join(directory, journal.plan.id + ".json")); await syncDirectory(directory); }
+  try {
+    const published = path.join(directory, journal.plan.id + ".json");
+    await rename(temporary, published); await syncDirectory(directory);
+    if (await readPublished(published, "utf8") !== serialized) fail("JOURNAL_READBACK_MISMATCH", "The saved recovery journal could not be verified. No further document changes are allowed.");
+  }
   catch (error) { await unlink(temporary).catch(() => {}); throw error; }
 }
 
@@ -59,7 +77,7 @@ export async function withOperationLock(directory, action) {
   const file = path.join(directory, "active.lock");
   const record = { token: randomUUID(), pid: process.pid, host: os.hostname() };
   let handle;
-  try { handle = await open(file, "wx", 0o600); }
+  try { handle = await open(file, documentWriteFlags(constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL), 0o600); }
   catch (error) { if (error.code === "EEXIST") fail("OPERATION_LOCKED", "Another operation or an interrupted process owns this worktree lock.", { lock: await lockInfo(directory) }); throw error; }
   const inode = String((await handle.stat()).ino);
   try {

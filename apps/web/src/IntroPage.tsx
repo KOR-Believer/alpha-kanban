@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, FolderKanban } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import { AppBrand } from "./components/AppBrand";
+import { appBrand, brandedTitle } from "./brand";
 import { useTranslation } from "./i18n";
 import { LanguageSelector } from "./components/LanguageSelector";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -16,9 +18,9 @@ export function IntroPage() {
   const description = t("Plan with AI and see the whole picture in Kanban. The implementation-ledger skill records scope, decisions, implementation, and verification in Markdown. Follow progress and read the reasoning behind each task.");
   useEffect(() => {
     const oldTitle = document.title;
-    document.title = t("Alpha Kanban | Plan with AI, review in Kanban");
+    document.title = brandedTitle(t("Alpha Kanban | Plan with AI, review in Kanban"));
     const metadata = [
-      ["name", "description", description], ["property", "og:title", "Alpha Kanban"],
+      ["name", "description", description], ["property", "og:title", appBrand.name],
       ["property", "og:description", description], ["property", "og:type", "website"],
     ];
     const restore = metadata.map(([attribute, name, content]) => {
@@ -38,7 +40,7 @@ export function IntroPage() {
   </div>;
   return <div className="ak-intro-page" id="top">
     <header className="ak-intro-header"><div className="ak-intro-wrap">
-      <Link to="/" className="ak-public-brand ak-focus-ring"><FolderKanban aria-hidden="true" />{t("Alpha Kanban")}</Link>
+      <Link to="/" className="ak-public-brand ak-focus-ring"><AppBrand /></Link>
       <nav aria-label={t("Introduction navigation")}>
         <a href="#kanban" className="ak-intro-section-link ak-focus-ring">{t("Board")}</a>
         <a href="#workflow" className="ak-intro-section-link ak-focus-ring">{t("Workflow")}</a>

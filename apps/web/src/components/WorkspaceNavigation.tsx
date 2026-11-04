@@ -4,6 +4,8 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
+import { useQuery } from "@tanstack/react-query";
+import { browserRepository } from "../browser/repository";
 
 export function WorkspaceSwitcherTrigger({ workspace, isLoading, onClick }: {
   workspace?: WorkspaceSummary;
@@ -25,20 +27,28 @@ export function WorkspaceSwitcherTrigger({ workspace, isLoading, onClick }: {
       <span className="ak-body-muted truncate text-xs">{workspace?.root ?? t("Open recent or browse a workspace")}</span>
     </span>
     <span className="flex shrink-0 items-center gap-2">
-      {workspace ? <WorkspaceStatusBadge hasDocs={workspace.hasDocs} isAvailable={workspace.isAvailable} /> : null}
+      {workspace ? <WorkspaceDocumentCount workspace={workspace} /> : null}
       {isLoading ? <Loader2 className="size-3 animate-spin text-[var(--ak-ink-muted)]" aria-hidden="true" /> : <ChevronDown className="size-3 text-[var(--ak-ink-muted)]" aria-hidden="true" />}
     </span>
   </button>;
 }
 
-export function WorkspaceStatusBadge({ hasDocs, isAvailable = true }: {
-  hasDocs: boolean;
+export function WorkspaceStatusBadge({ count, pending = false, isAvailable = true }: {
+  count?: number;
+  pending?: boolean;
   isAvailable?: boolean;
 }) {
-  const { t } = useTranslation();
-  return <Badge variant={!isAvailable ? "warning" : hasDocs ? "default" : "muted"}>
-    {t(isAvailable ? (hasDocs ? "docs" : "empty") : "missing")}
+  const { t, i18n } = useTranslation();
+  return <Badge variant={!isAvailable ? "warning" : count ? "default" : "muted"}
+    title={isAvailable && count === undefined ? t(pending ? "Counting documents…" : "Document count is unavailable. Refresh to try again.") : undefined}>
+    {!isAvailable ? t("Reconnect needed") : count === undefined ? t(pending ? "Documents …" : "Documents —") : t("Documents {{countLabel}}", { countLabel: new Intl.NumberFormat(i18n.language).format(count) })}
   </Badge>;
+}
+
+function WorkspaceDocumentCount({ workspace }: { workspace: WorkspaceSummary }) {
+  const query = useQuery({ queryKey: ["document-count", workspace.id], queryFn: () => browserRepository.documentCount(workspace.id),
+    enabled: workspace.isAvailable, retry: false, staleTime: 60_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
+  return <WorkspaceStatusBadge count={query.isError ? undefined : query.data} pending={query.isPending} isAvailable={workspace.isAvailable} />;
 }
 
 export function WorkspaceButton({ isSelected, onSelect, workspace, disabled }: {
@@ -60,7 +70,7 @@ export function WorkspaceButton({ isSelected, onSelect, workspace, disabled }: {
   >
     <span className="flex min-w-0 items-center justify-between gap-2">
       <span className="truncate text-sm font-medium text-[var(--ak-ink)]">{workspace.label}</span>
-      <WorkspaceStatusBadge hasDocs={workspace.hasDocs} isAvailable={workspace.isAvailable} />
+      <WorkspaceDocumentCount workspace={workspace} />
     </span>
     <span className="ak-body-muted break-all text-xs leading-4">{workspace.root}</span>
   </button>;

@@ -16,7 +16,7 @@ afterAll(() => rmSync(temp, { recursive: true, force: true }));
 const withHeader = (header: string) => base.replace(/^(# .+\n)/, `$1\n${header}\n`);
 const run = (tool: string, args: string[]) => spawnSync(process.execPath, [join(root, `skills/implementation-ledger/scripts/${tool}.mjs`), ...args], { encoding: "utf8" });
 
-describe("one format contract across browser parser, writers and independent helpers", () => {
+describe("structural write checks stay separate from backward-compatible reading", () => {
   const cases: Array<[string, string, boolean]> = [
     ["unversioned", base, true], ["explicit current", withHeader("Ledger-Format: 1"), true],
     ["future", withHeader("Ledger-Format: 2"), false], ["old unknown zero", withHeader("Ledger-Format: 0"), false],
@@ -35,7 +35,7 @@ describe("one format contract across browser parser, writers and independent hel
     writeFileSync(file, source);
     const result = inspectTicketCompatibility(source);
     expect(result.writable).toBe(supported);
-    expect(parseTicketDocument(source).compatibility).toEqual(result);
+    expect(parseTicketDocument(source)).not.toHaveProperty("compatibility");
     for (const tool of ["ticket-md", "check-ledger"]) {
       const execution = run(tool, tool === "ticket-md" ? ["show", file, "TEST-01"] : [file, "--legacy"]);
       expect(execution.status, execution.stderr + execution.stdout).toBe(supported ? 0 : 1);
@@ -64,6 +64,51 @@ describe("one format contract across browser parser, writers and independent hel
     expect(updated).toContain(header.replaceAll("\n", eol));
     if (eol === "\r\n") expect(updated.replaceAll("\r\n", "")).not.toContain("\n");
     expect(appendUserInstruction(source, "TEST-01", "기록 보존", { date: "2026-11-01" })).toContain(header.replaceAll("\n", eol));
+  });
+
+  it.each([
+    ["missing scope", (text: string) => text.replace(/^제외 범위:\n[\s\S]*?(?=^완료 기준:)/m, "")],
+    ["missing descriptive fields", (text: string) => text.replace(/^(?:구현 범위|제외 범위|검증):\n[\s\S]*?(?=^[^\s:#-][^\n]*:)/gm, "")],
+    ["missing Status summary", (text: string) => text.replace(/^## Status\n[\s\S]*?(?=^## )/m, "")],
+    ["missing total", (text: string) => text.replace(/^- 현재 진행률:.*\n/m, "")],
+    ["malformed total", (text: string) => text.replace(/^- 현재 진행률:.*$/m, "- 현재 진행률: 기록 없음")],
+    ["mixed newlines", (text: string) => text.replace("\n", "\r\n")],
+  ])("reads tickets without requiring cleanup: %s", (_name, change) => {
+    const source = change(base);
+    expect(source).not.toBe(base);
+    const parsed = parseTicketDocument(source);
+    expect(inspectTicketCompatibility(source)).toMatchObject({ writable: false, code: "NEEDS_REPAIR" });
+    expect(parsed.tickets.map(({ id, status, progress }) => ({ id, status, progress })))
+      .toEqual(parseTicketDocument(base).tickets.map(({ id, status, progress }) => ({ id, status, progress })));
+    for (const mutate of [
+      () => updateTicketStatusAndProgress(source, "TEST-01", { status: "READY", progress: 25 }),
+      () => appendUserInstruction(source, "TEST-01", "No write"),
+      () => appendProgressNote(source, "TEST-01", "No write"),
+    ]) expect(mutate).toThrow(expect.objectContaining({ code: "NEEDS_REPAIR" }));
+  });
+
+  it.each([
+    ["legacy state", base.replace("Status: TODO", "Status: WATCH")],
+    ["80 percent", base.replace("Progress: 0%", "Progress: 80%")],
+    ["duplicate field", base.replace("Status: TODO", "Status: TODO\nStatus: DONE")],
+    ["duplicate section", base + "\n## Ticket List\n"],
+    ["future declaration", withHeader("Ledger-Format: 99")],
+    ["invalid declaration", withHeader("Ledger-Format: v1")],
+    ["duplicate declaration", withHeader("Ledger-Format: 1\nLedger-Format: 1")],
+  ])("retains tickets and summaries independently of maintenance checks: %s", (_name, source) => {
+    expect(inspectTicketCompatibility(source).writable).toBe(false);
+    const parsed = parseTicketDocument(source);
+    expect(parsed.tickets.map(({ id }) => id)).toEqual(["TEST-01"]);
+    expect(parsed.status).toEqual(parseTicketDocument(base).status);
+    expect(parsed).not.toHaveProperty("compatibility");
+  });
+
+  it("preserves the existing TODO and 0 percent display fallbacks without normalizing the source", () => {
+    const source = base.replace("Status: TODO", "Status: WATCH").replace("Progress: 0%", "Progress: 80%");
+    writeFileSync(file, source);
+    const parsed = parseTicketDocument(readFileSync(file, "utf8"));
+    expect(parsed.tickets[0]).toMatchObject({ id: "TEST-01", status: "TODO", progress: 0 });
+    expect(readFileSync(file, "utf8")).toBe(source);
   });
 
   it("never appends a ticket note into trailing non-ticket sections", () => {

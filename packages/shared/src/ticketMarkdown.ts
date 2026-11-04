@@ -120,12 +120,9 @@ const FIELD_NAME_SET = new Set<string>([
 ]);
 
 export function parseTicketDocument(markdown: string): TicketDocument {
-  const compatibility = inspectTicketCompatibility(markdown);
-  const document = toPublicDocument(parseTicketDocumentInternal(markdown));
-  return { ...document, compatibility,
-    ...(!compatibility.readable ? { status: {} } : {}),
-    ...(compatibility.status === "unsupported" || compatibility.status === "invalid" ? { tickets: [] } : {}),
-  };
+  // Reading retains the legacy parser's fallbacks. Maintenance and write checks
+  // must never suppress cards, details, or summary counts.
+  return toPublicDocument(parseTicketDocumentInternal(markdown));
 }
 
 function assertWritableFormat(markdown: string) {

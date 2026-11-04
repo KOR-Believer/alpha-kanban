@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PwaClient } from "./client";
+import { PwaClient, parseRelease } from "./client";
 import type { ReleaseInfo } from "./releases";
 import { skillHash } from "../skills/bundle";
 import { appActivity } from "./activity";
@@ -61,7 +61,7 @@ describe("prepared release binding", () => {
     await client.check();
     expect(client.getSnapshot().prepared?.buildId).toBe(release(2).buildId);
     await client.apply(release(2).buildId);
-    expect(workerCall).toHaveBeenCalledWith(registration.waiting, "AK_APPLY", { buildId: release(2).buildId }, 15_000);
+    expect(workerCall).toHaveBeenCalledWith(registration.waiting, "AK_APPLY", { buildId: release(2).buildId, channel: "stable" }, 15_000);
   });
   it("does not apply a replacement worker using previously read notes", async () => {
     registration.waiting = worker(3);
@@ -91,5 +91,55 @@ describe("prepared release binding", () => {
     appActivity.resume();
     expect(await applying).toBe(false);
     expect(appActivity.frozen).toBe(false);
+  });
+});
+
+describe("release channel boundaries", () => {
+  it("accepts historical releases only on stable and rejects malformed channel/origin", () => {
+    expect(parseRelease(release(1), "stable")).toEqual(release(1));
+    expect(() => parseRelease(release(1), "canary")).toThrow(/channel/);
+    for (const channel of [null, "", "preview", "canary"]) expect(() => parseRelease({ ...release(1), channel }, "stable")).toThrow(/channel/);
+    expect(parseRelease({ ...release(1), channel: "canary" }, "canary").channel).toBe("canary");
+    expect(() => parseRelease({ ...release(1), channel: "stable", canonicalOrigin: "https://kanban-canary.giveit2.me" }, "stable")).toThrow(/origin/);
+  });
+  it("clears a previously prepared update when its worker switches channels, even offline", async () => {
+    const normal = workerCall.getMockImplementation()!;
+    workerCall.mockImplementation(async (target, type) => target === registration.waiting && type === "AK_INFO"
+      ? { protocol: 1, mode: "app", ready: true, channel: "canary", buildId: release(2).buildId, release: { ...release(2), channel: "canary" } }
+      : normal(target, type));
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    await client.check();
+    expect(client.getSnapshot()).toMatchObject({ status: "failed", prepared: undefined, next: undefined });
+    expect(await client.apply(release(2).buildId)).toBe(false);
+    await expect(client.preparedSkillBundle(release(2))).rejects.toThrow(/channel/);
+    expect(workerCall.mock.calls.some((call) => call[1] === "AK_APPLY")).toBe(false);
+  });
+  it("rejects a channel conflict between a worker envelope and its release", async () => {
+    workerCall.mockResolvedValue({ protocol: 1, mode: "app", ready: true, channel: "stable", buildId: release(2).buildId, release: { ...release(2), channel: "canary" } });
+    expect(await client.apply(release(2).buildId)).toBe(false);
+    expect(workerCall.mock.calls.some((call) => call[1] === "AK_APPLY")).toBe(false);
+  });
+  it("does not download a cross-channel network release when no matching update is prepared", async () => {
+    registration.waiting = null;
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ...release(3), channel: "canary" }), { headers: { "content-type": "application/json" } }));
+    registration.update.mockClear();
+    await client.check();
+    expect(registration.update).not.toHaveBeenCalled();
+    expect(client.getSnapshot()).toMatchObject({ status: "failed", prepared: undefined, next: undefined });
+  });
+  it("canary rejects channel-less workers and applies only explicitly matching canary workers", async () => {
+    const canary = { ...release(1), channel: "canary" as const };
+    const candidate = new PwaClient(canary);
+    await candidate.start();
+    expect(candidate.getSnapshot().status).toBe("failed");
+    workerCall.mockImplementation(async (target, type) => type === "AK_INFO"
+      ? { protocol: 1, mode: "app", ready: true, channel: "canary", buildId: release(target.n).buildId, release: { ...release(target.n), channel: "canary" } }
+      : { ok: true });
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ ...release(3), channel: "canary" }), { headers: { "content-type": "application/json" } }));
+    const matching = new PwaClient(canary);
+    await matching.start();
+    await vi.waitFor(() => expect(matching.getSnapshot().status).toBe("ready"));
+    expect(await matching.apply(release(2).buildId)).toBe(true);
+    expect(workerCall).toHaveBeenCalledWith(registration.waiting, "AK_APPLY", { buildId: release(2).buildId, channel: "canary" }, 15_000);
   });
 });

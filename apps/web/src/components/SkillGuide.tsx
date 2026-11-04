@@ -6,12 +6,9 @@ import { Button, buttonVariants } from "./ui/button";
 import { RequestDialog } from "./intro/RequestDialog";
 import { SkillUpdatesButton } from "../skills/SkillUpdates";
 import { SkillArchiveDownload } from "../skills/SkillArchiveDownload";
+import { skillAgentRequest, skillChannelLabel, skillDistribution } from "../skills/distribution";
 
-export const SKILL_SOURCE_URL = "https://github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger";
-export const INSTALL_REQUEST = "Check the bundled implementation-ledger skill at {{url}}. Verify its source and available version, including the entire skill folder and its references. Compare it with my existing skill and preserve personal changes. Explain the installation method and changes first; ask before overwriting anything. Do not invent release tags or download URLs.";
-export const INTRO_INSTALL_REQUEST = "Use $skill-installer to install implementation-ledger from this GitHub path:\n\n{{url}}\n\nResolve the source to a full commit before downloading. Install the entire folder from that same commit, including references, assets, scripts, agents, and licenses, not only SKILL.md. Verify the installed file hashes and report the chosen commit. Find the personal skill location recognized by my Codex environment. If it is already installed, compare the changes first. Back up the entire installation, preserve my customizations, and ask before overwriting. Report the location and whether Codex recognizes it. Do not change project documents or code.";
-export const UPDATE_REQUEST = "Find the location and source of my installed implementation-ledger and compare it with this official source:\n\n{{url}}\n\nResolve the source to a full commit and compare the entire folder at that commit, including SKILL.md, references, assets, scripts, agents, and licenses. Verify installed file hashes after an approved update and report the chosen commit. Explain the changes and any conflicts with personal customizations first. Back up the entire installation, preserve my edits, and ask before overwriting. Ask me to resolve conflicts that need a choice. Do not invent versions or release tags. Do not change project documents or code. Report the installation location, applied source, main changes, and whether Codex recognizes it.";
-export const INSTALL_COMPLETION = "Only after installation succeeds, print the actual installed directory as copyable text in your final chat or console response. Explain that registering this folder is optional for checking and confirming future updates in Alpha Kanban. Provide this registration link: https://kanban.giveit2.me/intro#updates . Never include the personal directory in the URL or report a failed installation as complete.";
+const distribution = skillDistribution();
 
 const workflow = [
   ["Draft a plan with your AI", "Discuss what you want to build with your AI and use implementation-ledger to draft a plan."],
@@ -34,7 +31,7 @@ export function SkillInstallDialog({ mode = "install", expanded = false }: { mod
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
-  const text = t(mode === "update" ? UPDATE_REQUEST : expanded ? INTRO_INSTALL_REQUEST : INSTALL_REQUEST, { url: SKILL_SOURCE_URL }) + "\n\n" + t(INSTALL_COMPLETION);
+  const text = skillAgentRequest(t, mode);
   return <>
     <Button ref={opener} variant="outline" size="sm" onClick={() => setOpen(true)}><Copy aria-hidden="true" />{mode === "update" ? t("Review and copy update request") : t("Review and copy install request")}</Button>
     <RequestDialog open={open} onOpenChange={setOpen} returnFocus={opener.current} text={text}
@@ -42,6 +39,7 @@ export function SkillInstallDialog({ mode = "install", expanded = false }: { mod
       success={mode === "update" ? "Update request copied. Paste it into Codex to compare your installation." : expanded ? "Installation request copied. Paste it into Codex to install the skill." : "Copied. Paste this request into your AI tool."}>
           <details className="mt-4 text-sm">
             <summary className="ak-focus-ring cursor-pointer">{t("Manual installation")}</summary>
+            <p className="mt-3">{t(skillChannelLabel(distribution.channel))} · <code>{distribution.version}</code></p>
             <ol className="mt-3 list-decimal space-y-3 pl-5">
               <li>{t("Before replacing an existing implementation-ledger skill, back it up and compare the changes.")}</li>
               <li>{t("Place the complete extracted folder at this location:")}<code className="block break-all">{"~/.codex/skills/implementation-ledger/"}</code><p className="mt-1 text-muted-foreground">{t("If {{variable}} is set, use {{path}} instead.", { variable: "CODEX_HOME", path: "$CODEX_HOME/skills/implementation-ledger/" })}</p></li>
@@ -72,24 +70,24 @@ export function SkillInstallPanel({ variant = "compact" }: { variant?: "compact"
     if (window.location.hash !== hash) window.location.hash = hash;
   }
   if (variant === "intro") return <div className="ak-intro-skill" id="updates">
-    <div><p className="ak-intro-eyebrow">{t("Skill installation and updates")}</p><h2>{"implementation-ledger"}</h2><p>{t("Give your AI a shared structure for scope, decisions, implementation results, and verification in Markdown.")}</p><p>{t("Install with Codex first. Register the installed folder to include a backed-up skill update when you confirm an app update. Personal changes are never overwritten.")}</p></div>
+    <div><p className="ak-intro-eyebrow">{t("Skill installation and updates")}</p><h2>{"implementation-ledger"}</h2><p>{t("Give your AI a shared structure for scope, decisions, implementation results, and verification in Markdown.")}</p><p>{t("Install with Codex first. Register the installed folder to compare updates and confirm a backed-up replacement. Personal changes require a separate review and overwrite confirmation.")}</p></div>
     <div><div className="ak-intro-skill-modes" role="group" aria-label={t("Installation mode")}>
       <Button variant={mode === "install" ? "secondary" : "ghost"} aria-pressed={mode === "install"} onClick={() => selectMode("install")}>{t("First installation")}</Button>
       <Button variant={mode === "update" ? "secondary" : "ghost"} aria-pressed={mode === "update"} onClick={() => selectMode("update")}>{t("Update an existing skill")}</Button>
-    </div><h3>{mode === "install" ? t("Install the complete folder from the official source") : t("Compare before updating your skill")}</h3>
-      <a href={SKILL_SOURCE_URL} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>{"KOR-Believer / alpha-kanban"}<ArrowUpRight aria-hidden="true" /></a>
-      <code>{"master / skills / implementation-ledger"}</code>
+    </div><h3>{mode === "install" ? t("Install the complete folder supplied by this app") : t("Compare before updating your skill")}</h3>
+      <a href={distribution.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>{t("View bundled skill")}<ArrowUpRight aria-hidden="true" /></a>
+      <code>{t(skillChannelLabel(distribution.channel))}{" · "}{distribution.version}</code>
       <p>{mode === "install" ? t("Include reference files and templates. If the skill already exists, compare it, back it up, preserve personal changes, and confirm before replacing it.") : t("Compare the whole installed folder with the official source. Review the changes and conflicts, keep a full backup, and confirm before replacing anything.")}</p>
       <SkillInstallDialog mode={mode} expanded />
       {mode === "update" ? <div className="mt-3"><SkillUpdatesButton /></div> : null}
-      <p className="ak-intro-skill-caption">{t("Copy the request into Codex, where your local files can be accessed. Internet access is needed to download or update the skill from GitHub.")}</p>
+      <p className="ak-intro-skill-caption">{t("Copy the request into Codex, where your local files can be accessed. Internet access is needed to fetch this app’s pinned bundle.")}</p>
     </div>
   </div>;
   return <div data-tour="skill-install" className="ak-skill-install">
     <div><h3>{"implementation-ledger"}</h3><p>{t("Give your AI a shared structure for writing plans and tickets.")}</p></div>
     <div className="flex flex-wrap items-center gap-2">
       <SkillInstallDialog />
-      <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={SKILL_SOURCE_URL} target="_blank" rel="noreferrer">{t("View skill source")}<ArrowUpRight aria-hidden="true" /></a>
+      <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={distribution.url} target="_blank" rel="noreferrer">{t("View bundled skill")}<ArrowUpRight aria-hidden="true" /></a>
     </div>
   </div>;
 }

@@ -1,4 +1,9 @@
-import { BrowserMarkdownImage, BrowserMarkdownLink } from "./browser/MarkdownResources";
+import { VirtualTicketList } from "./components/tickets/VirtualTicketList";
+import { TicketSearchInput, TicketSearchExcerpt, SearchHighlight } from "./components/tickets/TicketSearch";
+import { matchesTicketSearch, normalizeTicketQuery } from "./ticketSearch";
+import { MarkdownDocumentReader as SharedMarkdownDocumentReader, DocumentTypeBadge, documentTypeLabel, documentTypeIcon } from "./components/MarkdownDocumentReader";
+import { useLinkedNavigation } from "./browser/linkedNavigation";
+import { LinkedDocumentPage } from "./browser/LinkedDocumentPage";
 import { DocumentMaintenance } from "./browser/DocumentMaintenance";
 import { browserRepository, BrowserFileError } from "./browser/repository";
 import { subscribeFileEvents } from "./browser/fileEvents";
@@ -7,19 +12,18 @@ import { documentRouteId } from "./appRoute";
 import { t, locale, useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandIcon, ChannelBadge } from "@/components/AppBrand";
 import { PwaMenu } from "./pwa/PwaMenu";
 import { SkillUpdatesButton } from "./skills/SkillUpdates";
 import { ProjectGuide } from "@/components/ProjectGuide";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { errorSummary, errorDetails } from "@/i18n/errors";
 import {
-  useCallback, useEffect, useMemo, useRef, useState,
+  useCallback, useDeferredValue, useEffect, useMemo, useRef, useState,
   type CSSProperties, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   APP_NAME, TICKET_PROGRESS_BY_STATUS, markdownFileChangeEventSchema,
   type DocumentSetSummary, type MarkdownDocumentResponse, type MarkdownFileChangeEvent,
@@ -29,7 +33,7 @@ import {
 } from "@alpha-kanban/shared";
 import {
   AlertCircle, Archive, ArrowDown, ArrowUp, BookOpen, Check, CircleDot, FileText,
-  Filter, FolderKanban, LayoutGrid, ListChecks, Loader2, RefreshCcw, Save, Search, X,
+  Filter, LayoutGrid, ListChecks, Loader2, RefreshCcw, Save, Search, X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +84,6 @@ export const BOARD_STATUSES: TicketStatus[] = [
   "DONE",
   "DEFERRED",
 ];
-const MARKDOWN_HEADING_HIGHLIGHT_CLASS = "ak-markdown-heading-highlight";
 const SIDEBAR_WIDTH_STORAGE_KEY = "alpha-kanban.sidebarWidth";
 const DOCUMENT_SET_SORT_STORAGE_KEY = "alpha-kanban.documentSetSort";
 const DOCUMENT_FILTERS_STORAGE_KEY = "alpha-kanban.documentFilters";
@@ -238,6 +241,7 @@ export async function appendTicketInstruction(
 }
 
 export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: boolean }) {
+  const linked = useLinkedNavigation();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const appShellRef = useRef<HTMLDivElement>(null);
@@ -318,6 +322,10 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     () => sortedDocumentSets.flatMap((documentSet) => documentSet.documents),
     [sortedDocumentSets],
   );
+  const [ticketSearch, setTicketSearch] = useState("");
+  const boardScroll = useRef<HTMLDivElement>(null);
+  const deferredTicketSearch = useDeferredValue(ticketSearch);
+  useEffect(() => { boardScroll.current?.scrollTo({ top: 0 }); }, [deferredTicketSearch]);
   const firstPlanningFile = allFiles.find((file) => file.type !== "markdown");
   const defaultFile = (defaultDocument?.workspaceId === selectedWorkspaceId
     ? allFiles.find((file) => file.id === defaultDocument?.fileId)
@@ -326,7 +334,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     ? allFiles.find((file) => file.id === preferredFilePath)
     : undefined;
   const listedSelectedFile = isProjectGuideOpen ? undefined : preferredFilePath ? preferredFile : defaultFile;
-  const resolvedSelectedFileId = isProjectGuideOpen ? undefined : preferredFilePath ?? listedSelectedFile?.id;
+  const savedFileId = defaultDocument?.workspaceId === selectedWorkspaceId ? defaultDocument?.fileId : undefined;
+  const resolvedSelectedFileId = isProjectGuideOpen ? undefined : preferredFilePath ?? listedSelectedFile?.id ?? (!documentSetsQuery.isSuccess ? savedFileId : undefined);
+  useEffect(() => { setTicketSearch(""); }, [selectedWorkspaceId, resolvedSelectedFileId]);
   const isProjectGuideVisible = isProjectGuideOpen ||
     (canLoadWorkspace && documentSetsQuery.isSuccess && !resolvedSelectedFileId && !firstPlanningFile);
   const selectedFileQuery = useQuery({
@@ -350,7 +360,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       canLoadWorkspace &&
         resolvedSelectedFileId &&
         selectedFile &&
-        (!isTicketsDocument || ticketViewMode === "markdown" || ticketQuery.data?.document.compatibility?.readable === false),
+        (!isTicketsDocument || ticketViewMode === "markdown"),
     ),
     queryFn: () => fetchMarkdownDocument(selectedWorkspaceId ?? "", resolvedSelectedFileId ?? ""),
     queryKey: markdownDocumentKey(selectedWorkspaceId, resolvedSelectedFileId),
@@ -360,7 +370,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       BOARD_STATUSES.map((status) => [status, []]),
     );
 
-    for (const ticket of ticketQuery.data?.document.compatibility?.readable === false ? [] : ticketQuery.data?.document.tickets ?? []) {
+    for (const ticket of ticketQuery.data?.document.tickets ?? []) {
       grouped.get(ticket.status)?.push(ticket);
     }
 
@@ -373,9 +383,11 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     }
 
     return grouped;
-  }, [ticketQuery.data?.document.tickets, ticketQuery.data?.document.compatibility]);
+  }, [ticketQuery.data?.document.tickets]);
+  // Keep an already-read ticket mounted if a move removes its old handle/listing.
+  // This snapshot preserves drafts; it is never a substitute for the write guard.
   const selectedTicket =
-    isTicketsDocument && ticketViewMode === "board"
+    ticketViewMode === "board" && (!selectedFile || isTicketsDocument)
       ? ticketQuery.data?.document.tickets.find((ticket) => ticket.id === selectedTicketId)
       : undefined;
   const isTicketDetailOpen = Boolean(selectedTicket);
@@ -585,15 +597,14 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       return;
     }
 
-    if (isTicketsDocument) {
-      await Promise.all([
+    const results = isTicketsDocument || ticketQuery.data
+      ? await Promise.all([
         ticketQuery.refetch(),
         ...(ticketViewMode === "markdown" ? [markdownQuery.refetch()] : []),
-      ]);
-    } else {
-      await markdownQuery.refetch();
-    }
+      ])
+      : [await markdownQuery.refetch()];
     await queryClient.invalidateQueries({ queryKey: documentSetsKey(selectedWorkspaceId) });
+    if (results.some((result) => result.isError)) return;
     setExternalFileChange(null);
   }
 
@@ -676,8 +687,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }
 
   const boardTour = useScreenTour("project", {
-    enabled: canLoadWorkspace && !isTicketDetailOpen,
-    eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && ticketQuery.data?.document.compatibility?.readable !== false && Boolean(ticketQuery.data?.document.tickets.length),
+    enabled: !linked.id && canLoadWorkspace && !isTicketDetailOpen,
+    eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
     scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}`,
   });
   const tourFile = allFiles.find((file) => file.id === lastBoardFile.current?.id && file.type === "tickets") ?? allFiles.find((file) => file.type === "tickets");
@@ -700,27 +711,29 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       <main
         className="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-secondary)] max-[860px]:h-auto max-[860px]:min-h-dvh max-[860px]:overflow-visible"
       >
-        <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-4 py-2 max-[720px]:flex-wrap">
+        <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--ak-hairline)] bg-[var(--ak-header-surface)] px-4 py-2 max-[720px]:flex-wrap">
           <button
             className="ak-row flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--ak-canvas-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ak-focus)]"
             onClick={handleGoToStartPage}
             type="button"
           >
-            <FolderKanban className="size-5 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-            <span className="ak-title truncate text-sm">{APP_NAME}</span>
+            <BrandIcon className="size-5 shrink-0 text-[var(--ak-ink-muted)]" />
+            <span className="ak-project-brand-name ak-title truncate text-sm">{APP_NAME}</span>
+            <ChannelBadge icon={false} />
           </button>
 
           <BrowserProjectSwitcher workspaces={workspacesQuery.data?.workspaces ?? []} selectedWorkspaceId={selectedWorkspaceId} onSelect={handleWorkspaceSelect} />
 
           <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
-            <SkillUpdatesButton placement="toolbar" />
-            <TourHelp tour={boardTour} />
             <LanguageSelector />
             <ThemeToggle surface="--ak-surface" />
+            <span aria-hidden="true" className="ak-toolbar-divider" />
+            <SkillUpdatesButton placement="toolbar" />
+            <TourHelp tour={boardTour} />
             <PwaMenu />
-            <Button data-tour="all-tickets" onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
+            <Button data-tour="all-tickets" title={t("All tickets")} onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
               <LayoutGrid aria-hidden="true" />
-              {t("All tickets")}
+              <span className="ak-toolbar-label">{t("All tickets")}</span>
             </Button>
             <BrowserFilesMenu />
           </div>
@@ -807,8 +820,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
             width={sidebarWidth}
           />
 
+          <div className={`min-h-0 min-w-0 ${linked.id ? "max-[860px]:h-[calc(100dvh-4rem)]" : ""}`}>
           <section
-            className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+            className={`${linked.id ? "hidden" : "grid"} h-full min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden`}
             aria-labelledby="workspace-title"
           >
             <header className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-3 max-[720px]:flex-col max-[720px]:items-start">
@@ -842,7 +856,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
               </div>
               {!isProjectGuideVisible ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
                 {selectedFile ? <DocumentMaintenance key={selectedFile.id} file={selectedFile} /> : null}
-                {selectedFile?.type === "tickets" && ticketQuery.data?.document.compatibility?.readable !== false ? (
+                {selectedFile?.type === "tickets" ? (
                   <TicketDocumentViewToggle
                     mode={ticketViewMode}
                     onChange={handleTicketViewChange}
@@ -857,13 +871,19 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                       : markdownQuery.isLoading
                   }
                   markdownDocument={markdownQuery.data}
-                  selectedDocumentSet={ticketQuery.data?.document.compatibility?.readable === false ? undefined : selectedDocumentSet}
-                  ticketCount={ticketQuery.data?.document.compatibility?.readable === false ? undefined : ticketQuery.data?.document.tickets.length ?? 0}
+                  selectedDocumentSet={selectedDocumentSet}
+                  ticketCount={ticketQuery.data?.document.tickets.length ?? 0}
                 />
               </div> : null}
             </header>
 
-            <div className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" && ticketQuery.data?.document.compatibility?.readable !== false ? "ak-project-board-scroll" : "p-5"}`}>
+            <div>
+              {isTicketsDocument && ticketViewMode === "board" && !isProjectGuideVisible ? <div className="ak-all-board-toolbar">
+                <TicketSearchInput value={ticketSearch} onChange={setTicketSearch} />
+                {ticketSearch ? <span className="text-xs text-muted-foreground" role="status">{t("{{count}} tickets", { count: ticketQuery.data?.document.tickets.filter((ticket) => matchesTicketSearch(ticket, normalizeTicketQuery(deferredTicketSearch))).length ?? 0 })}</span> : null}
+              </div> : null}
+            </div>
+            <div ref={boardScroll} data-board-scroll className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" ? "ak-project-board-scroll" : "p-5"}`}>
               <DocumentContent
                 documentSetsError={documentSetsQuery.error}
                 documentSetsIsError={documentSetsQuery.isError}
@@ -896,15 +916,19 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 workspacesError={workspacesQuery.isError}
                 workspacesIsLoading={workspacesQuery.isLoading}
                 ticketsByStatus={ticketsByStatus}
+                searchQuery={deferredTicketSearch}
               />
             </div>
           </section>
+          {linked.id ? <LinkedDocumentPage key={linked.id} /> : null}
+          </div>
         </div>
       </main>
 
-      {selectedTicket && resolvedSelectedFileId && ticketQuery.data && ticketQuery.data.document.compatibility?.writable !== false ? (
+      {selectedTicket && resolvedSelectedFileId && ticketQuery.data ? (
         <TicketDetailDrawer
           key={`${selectedWorkspaceId}:${resolvedSelectedFileId}:${selectedTicket.id}`}
+          searchQuery={deferredTicketSearch}
           presentation={ticketPresentation}
           onClose={() => handleTicketSelect()}
           onAppendInstruction={handleAppendTicketInstruction}
@@ -913,7 +937,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           externalFileChange={externalFileChange}
           onExternalFileReload={reloadExternalFileChange}
           ticket={selectedTicket}
-          file={selectedFile}
+          file={selectedFile ?? ticketQuery.data.file}
         />
       ) : null}
 
@@ -1374,6 +1398,7 @@ function DocumentContent({
   ticketIsLoading,
   ticketViewMode,
   ticketsByStatus,
+  searchQuery,
   workspaceError,
   workspacesError,
   workspacesIsLoading,
@@ -1403,6 +1428,7 @@ function DocumentContent({
   ticketIsLoading: boolean;
   ticketViewMode: TicketDocumentViewMode;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
+  searchQuery?: string;
   workspaceError: Error | null;
   workspacesError: boolean;
   workspacesIsLoading: boolean;
@@ -1466,18 +1492,6 @@ function DocumentContent({
     return <BoardState title={t("Document unavailable")} />;
   }
 
-  if (ticketDocument?.document.compatibility?.readable === false) {
-    return <div className="flex min-h-0 flex-1 flex-col">
-      <div role="status" className="ak-all-board-notice text-sm text-muted-foreground">
-        {t(ticketDocument.document.compatibility.code === "UNSUPPORTED_FORMAT"
-          ? "This document format is not supported. View the Markdown and use a tool that supports its format to edit it."
-          : "The document format needs repair. View the Markdown and correct the format before editing tickets.")}
-      </div>
-      <MarkdownDocumentReader document={markdownDocument} documentSet={selectedDocumentSet} error={markdownError}
-        file={selectedFile} isError={markdownIsError} isLoading={markdownIsLoading} onFileSelect={onFileSelect} />
-    </div>;
-  }
-
   if (selectedFile.type !== "tickets" || ticketViewMode === "markdown") {
     return (
       <MarkdownDocumentReader
@@ -1515,11 +1529,13 @@ function DocumentContent({
       onTicketSelect={onTicketSelect}
       onSaveStatus={onTicketStatusChange}
       ticketsByStatus={ticketsByStatus}
+      searchQuery={searchQuery}
     />
   );
 }
 
-export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByStatus }: {
+export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByStatus, searchQuery = "" }: {
+  searchQuery?: string;
   document: TicketDocumentResponse;
   onTicketSelect: (ticketId: string) => void;
   onSaveStatus: SaveTicketStatus;
@@ -1529,6 +1545,7 @@ export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByS
   const [dragged, setDragged] = useState<{ document: TicketDocumentResponse; ticketId: string }>();
   const [overStatus, setOverStatus] = useState<TicketStatus>();
   const [pendingMove, setPendingMove] = useState<TicketMove>();
+  const filtered = useMemo(() => new Map([...ticketsByStatus].map(([status, tickets]) => [status, tickets.filter((ticket) => matchesTicketSearch(ticket, normalizeTicketQuery(searchQuery)))])), [ticketsByStatus, searchQuery]);
 
   function resetDrag() {
     setDragged(undefined);
@@ -1552,8 +1569,10 @@ export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByS
             file={document.file}
             onTicketSelect={onTicketSelect}
             status={status}
-            tickets={document.document.compatibility?.readable === false ? [] : ticketsByStatus.get(status) ?? []}
-            dragDisabled={Boolean(pendingMove) || document.document.compatibility?.writable === false}
+            tickets={filtered.get(status) ?? []}
+            searchQuery={searchQuery}
+            draggedKey={dragged?.ticketId}
+            dragDisabled={Boolean(pendingMove)}
             isDragOver={overStatus === status}
             onDragStart={(event, ticketId) => {
               event.dataTransfer.setData("application/x-alpha-kanban-ticket", ticketId);
@@ -1622,106 +1641,8 @@ function MarkdownDocumentReader({
     );
   }
 
-  const headingIdsByLine = createHeadingIdsByLine(document.outline);
-
-  return (
-    <div className="grid h-full min-h-0 min-w-[840px] grid-cols-[260px_minmax(0,1fr)] items-stretch gap-4 max-[960px]:h-auto max-[960px]:min-w-0 max-[960px]:grid-cols-1">
-      <aside className="ak-panel flex min-h-0 flex-col overflow-hidden max-[960px]:max-h-[40dvh]">
-        <div className="shrink-0 border-b border-[var(--ak-hairline)] px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <DocumentTypeBadge type={file.type} />
-            {file.sequenceNumber !== undefined ? (
-              <Badge variant="muted">#{file.sequenceNumber}</Badge>
-            ) : null}
-          </div>
-          <h3 className="ak-title mt-2 truncate text-sm" title={documentSet?.label ?? file.slug}>
-            {documentSet?.label ?? file.slug}
-          </h3>
-          <p className="ak-body-muted mt-1 break-all text-xs">{file.workspaceRelativePath}</p>
-        </div>
-
-        <div className="ak-scroll-area grid min-h-0 flex-1 content-start gap-4 overflow-auto p-4">
-          <section className="grid gap-2">
-            <h4 className="ak-muted-label">{t("Linked docs")}</h4>
-            <div className="grid gap-1">
-              {(documentSet?.documents ?? [file]).map((linkedFile) => (
-                <button
-                  className={[
-                    "ak-row flex min-w-0 items-center justify-between gap-2 px-2 py-1.5 text-left text-xs transition-colors",
-                    linkedFile.id === file.id ? "ak-row-active" : "",
-                  ].join(" ")}
-                  key={linkedFile.id}
-                  onClick={() => onFileSelect(linkedFile)}
-                  title={linkedFile.relativePath}
-                  type="button"
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    {(() => {
-                      const Icon = documentTypeIcon(linkedFile.type);
-                      return <Icon className="size-3 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />;
-                    })()}
-                    <span className="truncate">{documentTypeLabel(linkedFile.type)}</span>
-                  </span>
-                  {linkedFile.id === file.id ? <Check className="size-3" aria-hidden="true" /> : null}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {documentSet?.ticketProgress?.totalTickets !== undefined ? (
-            <section className="grid gap-2">
-              <h4 className="ak-muted-label">{t("Ticket progress")}</h4>
-              <div className="ak-panel-muted px-3 py-2 text-sm">
-                {t("{{done}} / {{total}} tickets done", { done: documentSet.ticketProgress.doneTickets ?? 0, total: documentSet.ticketProgress.totalTickets })}
-              </div>
-            </section>
-          ) : null}
-
-          <section className="grid gap-2">
-            <h4 className="ak-muted-label">{t("Outline")}</h4>
-            {document.outline.length > 0 ? (
-              <ol className="grid gap-1 text-xs leading-5 text-[var(--ak-ink-muted)]">
-                {document.outline.map((heading) => {
-                  const headingId = headingIdsByLine[heading.line];
-                  return (
-                  <li
-                    className="min-w-0"
-                    key={`${heading.line}-${heading.title}`}
-                    style={{ paddingLeft: `${Math.max(0, heading.level - 1) * 8}px` }}
-                  >
-                    <button
-                      className="ak-focus-ring grid w-full min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-2 rounded-[var(--ak-radius-sm)] px-1 py-1 text-left transition-colors hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]"
-                      onClick={() => scrollToMarkdownHeading(headingId)}
-                      title={heading.title}
-                      type="button"
-                    >
-                      <span className="text-[var(--ak-ink-faint)]">{t("Line {{line}}", { line: heading.line })}</span>
-                      <span className="truncate">{heading.title}</span>
-                    </button>
-                  </li>
-                  );
-                })}
-              </ol>
-            ) : (
-              <p className="text-xs text-[var(--ak-ink-faint)]">{t("No headings")}</p>
-            )}
-          </section>
-        </div>
-      </aside>
-
-      <article className="ak-panel flex min-h-0 min-w-0 flex-col overflow-hidden max-[960px]:h-[calc(100dvh-10rem)]">
-        <div className="shrink-0 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-4">
-            <p className="ak-muted-label">{t("{{type}} reader", { type: documentTypeLabel(file.type) })}</p>
-          <h3 className="ak-title mt-1 break-words text-lg">
-            {document.outline[0]?.title ?? file.filename}
-          </h3>
-        </div>
-        <div className="ak-scroll-area min-h-0 flex-1 overflow-auto px-5 py-4">
-          <MarkdownMessage content={document.markdown} headingIdsByLine={headingIdsByLine} file={file} />
-        </div>
-      </article>
-    </div>
-  );
+  return <SharedMarkdownDocumentReader document={document} documentSet={documentSet} file={file}
+    onFileSelect={(id) => onFileSelect(documentSet?.documents.find((entry) => entry.id === id) ?? file)} />;
 }
 
 function BoardState({
@@ -1757,6 +1678,8 @@ function BoardState({
 
 function KanbanColumn({
   file,
+  searchQuery = "",
+  draggedKey,
   onTicketSelect,
   status,
   tickets,
@@ -1769,6 +1692,8 @@ function KanbanColumn({
   onDrop,
 }: {
   file: MarkdownFileSummary;
+  searchQuery?: string;
+  draggedKey?: string;
   onTicketSelect: (ticketId: string) => void;
   status: TicketStatus;
   tickets: TicketItem[];
@@ -1802,23 +1727,25 @@ function KanbanColumn({
             {t("Empty")}
           </div>
         ) : null}
-        {tickets.map((ticket) => (
+        <VirtualTicketList items={tickets} itemKey={(ticket) => ticket.id} pinnedKey={draggedKey}>{(ticket) => (
           <TicketCard
             key={ticket.id}
             file={file}
             onSelect={() => onTicketSelect(ticket.id)}
             ticket={ticket}
+            searchQuery={searchQuery}
             draggable={!dragDisabled}
             onDragStart={(event) => onDragStart(event, ticket.id)}
             onDragEnd={onDragEnd}
           />
-        ))}
+        )}</VirtualTicketList>
       </div>
     </section>
   );
 }
 
 function TicketCard({
+  searchQuery = "",
   file,
   onSelect,
   ticket,
@@ -1828,6 +1755,7 @@ function TicketCard({
 }: {
   file: MarkdownFileSummary;
   onSelect: () => void;
+  searchQuery?: string;
   ticket: TicketItem;
   draggable: boolean;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
@@ -1836,6 +1764,7 @@ function TicketCard({
   const { t } = useTranslation();
   return (
     <article
+      data-ticket-key={ticket.id}
       data-tour="board-card"
       className="ak-card transition-colors hover:border-border hover:bg-muted"
       draggable={draggable}
@@ -1843,6 +1772,7 @@ function TicketCard({
       onDragEnd={onDragEnd}
     >
       <button
+        data-ticket-open
         aria-label={t("Open {{id}}", { id: ticket.id })}
         className="block w-full cursor-grab p-3 text-left active:cursor-grabbing"
         onClick={onSelect}
@@ -1856,8 +1786,9 @@ function TicketCard({
           <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge>
         </div>
         <h4 className="mt-2 line-clamp-3 break-words text-sm font-medium leading-5 text-[var(--ak-ink)]">
-          {ticket.title}
+          <SearchHighlight text={ticket.title} query={searchQuery} />
         </h4>
+        <TicketSearchExcerpt ticket={ticket} query={searchQuery} />
         <div className="ak-body-muted mt-3 grid gap-1.5 text-xs">
           <TicketProgressBar progress={ticket.progress} />
           <PropertyRow
@@ -1875,6 +1806,7 @@ function TicketCard({
 }
 
 export function TicketDetailDrawer({
+  searchQuery = "",
   file,
   externalFileChange,
   presentation,
@@ -1904,6 +1836,7 @@ export function TicketDetailDrawer({
   ) => Promise<void>;
   onReload: () => Promise<unknown>;
   onOpenInWorkspace?: () => void;
+  searchQuery?: string;
   ticket: TicketItem;
 }) {
   const { t } = useTranslation();
@@ -2026,6 +1959,7 @@ export function TicketDetailDrawer({
           </section>
 
           <div className="grid gap-6 py-5">
+            <TicketSearchExcerpt ticket={ticket} query={searchQuery} detail />
             <CanonicalSection title={t("Repository")} items={ticket.repository} />
             <CanonicalSection title={t("Depends on")} items={ticket.dependsOn} />
             <CanonicalSection tourAnchor="ticket-scope" title={t("목표")} items={ticket.goal} />
@@ -2266,171 +2200,6 @@ function LogTimeline({
   );
 }
 
-function MarkdownMessage({
-  content,
-  headingIdsByLine,
-  file,
-}: {
-  content: string;
-  headingIdsByLine?: Record<number, string>;
-  file?: MarkdownFileSummary;
-}) {
-  const remarkPlugins = headingIdsByLine
-    ? [remarkGfm, remarkHeadingIds(headingIdsByLine)]
-    : [remarkGfm];
-
-  return (
-    <div className="ak-markdown">
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={({
-        img: ({ src, alt }) => <BrowserMarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} file={file} />,
-        a: ({ href, children }) => <BrowserMarkdownLink href={href} file={file}>{children}</BrowserMarkdownLink>,
-      })}>{content}</ReactMarkdown>
-    </div>
-  );
-}
-
-function createHeadingIdsByLine(
-  outline: MarkdownDocumentResponse["outline"],
-): Record<number, string> {
-  return Object.fromEntries(
-    outline.map((heading) => [
-      heading.line,
-      `md-heading-${heading.line}-${slugifyHeading(heading.title)}`,
-    ]),
-  );
-}
-
-function scrollToMarkdownHeading(id?: string): void {
-  if (!id) {
-    return;
-  }
-
-  const target = document.getElementById(id);
-  if (!target) {
-    return;
-  }
-
-  target.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
-  });
-
-  const scrollContainer = target.closest(".ak-scroll-area");
-  let didHighlight = false;
-
-  const highlight = () => {
-    if (didHighlight) {
-      return;
-    }
-    didHighlight = true;
-    flashMarkdownHeading(target);
-  };
-
-  if (scrollContainer && "onscrollend" in scrollContainer) {
-    const fallbackTimeout = window.setTimeout(highlight, 700);
-    scrollContainer.addEventListener(
-      "scrollend",
-      () => {
-        window.clearTimeout(fallbackTimeout);
-        highlight();
-      },
-      { once: true },
-    );
-    return;
-  }
-
-  window.setTimeout(highlight, 450);
-}
-
-function flashMarkdownHeading(target: HTMLElement): void {
-  const existingTimeout = Number(target.dataset.akHighlightTimeout);
-  if (Number.isFinite(existingTimeout) && existingTimeout > 0) {
-    window.clearTimeout(existingTimeout);
-  }
-
-  target.classList.remove(MARKDOWN_HEADING_HIGHLIGHT_CLASS);
-  void target.offsetWidth;
-  target.classList.add(MARKDOWN_HEADING_HIGHLIGHT_CLASS);
-  const timeout = window.setTimeout(() => {
-    target.classList.remove(MARKDOWN_HEADING_HIGHLIGHT_CLASS);
-    delete target.dataset.akHighlightTimeout;
-  }, 1_200);
-  target.dataset.akHighlightTimeout = String(timeout);
-}
-
-function slugifyHeading(value: string): string {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || "section";
-}
-
-function remarkHeadingIds(headingIdsByLine: Record<number, string>) {
-  return function attachHeadingIds() {
-    return function transformMarkdownTree(tree: unknown): void {
-      visitMarkdownAst(tree, (node) => {
-        if (node.type !== "heading") {
-          return;
-        }
-
-        const line = node.position?.start?.line;
-        const id = typeof line === "number" ? headingIdsByLine[line] : undefined;
-        if (!id) {
-          return;
-        }
-
-        const data = ensureRecordProperty(node, "data");
-        const hProperties = ensureRecordProperty(data, "hProperties");
-        hProperties.id = id;
-      });
-    };
-  };
-}
-
-type MarkdownAstNode = Record<string, unknown> & {
-  children?: unknown[];
-  position?: {
-    start?: {
-      line?: number;
-    };
-  };
-  type?: unknown;
-};
-
-function visitMarkdownAst(
-  value: unknown,
-  visitor: (node: MarkdownAstNode) => void,
-): void {
-  if (!isRecord(value)) {
-    return;
-  }
-
-  const node = value as MarkdownAstNode;
-  visitor(node);
-
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      visitMarkdownAst(child, visitor);
-    }
-  }
-}
-
-function ensureRecordProperty(
-  target: Record<string, unknown>,
-  key: string,
-): Record<string, unknown> {
-  const current = target[key];
-  if (isRecord(current)) {
-    return current;
-  }
-
-  const next: Record<string, unknown> = {};
-  target[key] = next;
-  return next;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -2451,32 +2220,6 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
-function DocumentTypeBadge({ type }: { type: MarkdownFileType }) {
-  useTranslation();
-  return (
-    <Badge variant={type === "tickets" ? "default" : "outline"}>
-      {documentTypeLabel(type)}
-    </Badge>
-  );
-}
-
-function documentTypeLabel(type: MarkdownFileType): string {
-  return {
-    inventory: t("Inventory"),
-    markdown: t("Markdown"),
-    plan: t("Plan"),
-    tickets: t("Tickets"),
-  }[type];
-}
-
-function documentTypeIcon(type: MarkdownFileType) {
-  return {
-    inventory: Archive,
-    markdown: FileText,
-    plan: BookOpen,
-    tickets: ListChecks,
-  }[type];
-}
 
 function PropertyRow({ label, value }: { label: string; value: string }) {
   return (

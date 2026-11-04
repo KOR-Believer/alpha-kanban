@@ -1,73 +1,89 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileCog } from "lucide-react";
+import { FileCog, Loader2 } from "lucide-react";
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
 import { Button } from "../components/ui/button";
-import { Checkbox } from "../components/ui/checkbox";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { useTranslation } from "../i18n";
 import { errorSummary } from "../i18n/errors";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { browserRepository, type BrowserMigration } from "./repository";
-
-export function changedLines(before: string, after: string) {
-  const a = before.split(/\r?\n/), b = after.split(/\r?\n/);
-  let start = 0, end = 0;
-  while (start < a.length && start < b.length && a[start] === b[start]) start++;
-  while (end < a.length - start && end < b.length - start && a[a.length - end - 1] === b[b.length - end - 1]) end++;
-  return { before: a.slice(Math.max(0, start - 2), Math.min(a.length, a.length - end + 2)).join("\n"), after: b.slice(Math.max(0, start - 2), Math.min(b.length, b.length - end + 2)).join("\n") };
-}
+import { CodeDiff } from "../components/CodeDiff";
 
 export function DocumentMaintenance({ file }: { file: MarkdownFileSummary }) {
+  return <DocumentMaintenanceForFile key={`${file.workspaceId}:${file.id}`} file={file} />;
+}
+
+function DocumentMaintenanceForFile({ file }: { file: MarkdownFileSummary }) {
   const { t } = useTranslation(), queryClient = useQueryClient();
-  const [open, setOpen] = useState(false), [assignId, setAssignId] = useState(false), [cleanupLegacy, setCleanupLegacy] = useState(false);
-  const [plan, setPlan] = useState<BrowserMigration>(), [scopeConfirmed, setScopeConfirmed] = useState(false);
-  const [busy, setBusy] = useState(false), [error, setError] = useState<Error>();
-  usePwaDraft(open && (assignId || cleanupLegacy || busy));
-  const reset = () => { setPlan(undefined); setError(undefined); setScopeConfirmed(false); };
-  const close = () => { if (busy) return; setOpen(false); setAssignId(false); setCleanupLegacy(false); reset(); };
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true); setError(undefined);
-    try { await action(); } catch (error) { setError(error instanceof Error ? error : new Error(String(error))); }
-    finally { setBusy(false); }
+  const [open, setOpen] = useState(false), [plan, setPlan] = useState<BrowserMigration>();
+  const [busy, setBusy] = useState<"preview" | "apply">(), [error, setError] = useState<Error>();
+  const request = useRef(0), inFlight = useRef<typeof busy>(undefined);
+  const previewAbort = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => { request.current++; previewAbort.current?.abort(); }, []);
+  usePwaDraft(open);
+  const close = () => {
+    if (inFlight.current === "apply") return;
+    previewAbort.current?.abort(); previewAbort.current = undefined;
+    request.current++; inFlight.current = undefined;
+    setBusy(undefined); setOpen(false); setPlan(undefined); setError(undefined);
+  };
+  const preview = async () => {
+    if (inFlight.current) return;
+    const current = ++request.current;
+    const controller = new AbortController(); previewAbort.current = controller;
+    inFlight.current = "preview"; setBusy("preview"); setOpen(true); setPlan(undefined); setError(undefined);
+    try {
+      const next = await browserRepository.previewMigration(file.workspaceId, file.id, { assignId: true, cleanupLegacy: true, reconcileOwner: true, allowPlainMarkdown: file.type === "markdown" }, undefined, controller.signal);
+      if (request.current === current) setPlan(next);
+    } catch (cause) {
+      if (request.current === current) setError(cause instanceof Error ? cause : new Error(String(cause)));
+    } finally {
+      if (request.current === current) { previewAbort.current = undefined; inFlight.current = undefined; setBusy(undefined); }
+    }
+  };
+  const apply = async () => {
+    if (inFlight.current || !plan || plan.preview.decision !== "ready" || error) return;
+    const current = ++request.current;
+    inFlight.current = "apply"; setBusy("apply"); setError(undefined);
+    try {
+      await browserRepository.applyMigration(plan);
+      if (request.current === current) { setOpen(false); setPlan(undefined); }
+      await queryClient.invalidateQueries();
+    } catch (cause) {
+      if (request.current === current) { setPlan(undefined); setError(cause instanceof Error ? cause : new Error(String(cause))); }
+    } finally {
+      if (request.current === current) { inFlight.current = undefined; setBusy(undefined); }
+    }
   };
   return <>
-    <Button size="sm" variant="outline" onClick={() => setOpen(true)}><FileCog />{t("Document maintenance")}</Button>
+    <Button size="sm" variant="outline" onClick={() => void preview()}><FileCog />{t("Document maintenance")}</Button>
     <Dialog open={open} onOpenChange={(value) => { if (!value) close(); }}>
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]" showCloseButton={false} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]" showCloseButton={false} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (busy === "apply") event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>{t("Document maintenance")}</DialogTitle>
-          <DialogDescription>{t("Choose what to change, then review the preview before saving. Only this document will be written.")}</DialogDescription>
+          <DialogDescription>{t("Keep documents you continue to use aligned with the current document format. Review the changes, then apply them to save only this document. Maintenance is optional; existing documents remain readable.")}</DialogDescription>
           <p className="break-all text-xs text-muted-foreground">{file.relativePath}</p>
         </DialogHeader>
         <DialogBody className="grid gap-4">
-          <div className="grid gap-3 text-sm">
-            <label className="flex items-start gap-2"><Checkbox checked={assignId} disabled={busy} onCheckedChange={(value) => { setAssignId(value === true); reset(); }} />{t("Assign a document ID if missing")}</label>
-            <label className="flex items-start gap-2"><Checkbox checked={cleanupLegacy} disabled={busy} onCheckedChange={(value) => { setCleanupLegacy(value === true); reset(); }} />{t("Clean up the old Progress Board")}</label>
-          </div>
+          <p className="text-sm text-muted-foreground">{t("Available changes include missing document IDs, folder-based Owner correction, and removal of obsolete guidance and templates.")}</p>
+          {busy === "preview" ? <p className="flex items-center gap-2 text-sm" role="status"><Loader2 className="size-4 animate-spin" aria-hidden="true" />{t("Preparing document preview…")}</p> : null}
           {plan ? <div className="grid gap-3 text-sm" aria-live="polite">
-            {plan.preview.decision === "noop" ? <p>{t("No changes are needed for the selected options.")}</p> : null}
-            {plan.preview.retained.map((item, index) => <p key={index}>{t(item.code === "LEGACY_NOTES_PRESERVED" ? "The heading and notes outside the table will be kept." : "No supported Progress Board table was found. This section will be kept.")}</p>)}
+            {plan.preview.decision === "noop" ? <p>{t("No document changes are needed.")}</p> : null}
+            {plan.preview.retained.map((item, index) => <p key={index}>{t(item.code === "OWNER_PATH_UNRESOLVED" ? "Owner is kept because the document has no confirmed owner folder." : item.code === "LEGACY_REFERENCED_SECTION" ? "{{section}} will be kept to preserve an existing link." : item.code === "LEGACY_NOTES_PRESERVED" ? "Additional content in {{section}} will be kept." : "No recognized legacy content was found in {{section}}. This section will be kept.", { section: item.section })}</p>)}
             {plan.preview.issues.map((issue, index) => <div key={index} className="text-destructive"><p>{issue.path}</p><p>{t(migrationIssueMessage(issue.code))}</p><code className="text-xs">{issue.code}</code></div>)}
-            {plan.preview.changes.map((change) => {
-              const diff = changedLines(change.before, change.after);
-              return <section key={change.path} className="grid gap-2">
+            {plan.preview.changes.map((change) => <section key={change.path} className="grid min-w-0 gap-2">
                 <h3 className="break-all font-semibold">{change.path}</h3>
-                <h4 className="text-xs font-medium text-muted-foreground">{t("Before")}</h4><pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-3 text-xs">{diff.before}</pre>
-                <h4 className="text-xs font-medium text-muted-foreground">{t("After")}</h4><pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-3 text-xs">{diff.after}</pre>
-              </section>;
-            })}
-            {plan.preview.rules.length > 0 && plan.preview.decision === "ready" ? <label className="flex items-start gap-2"><Checkbox checked={scopeConfirmed} disabled={busy} onCheckedChange={(value) => setScopeConfirmed(value === true)} />{t("I reviewed the reference scope: this project only, excluding hidden and dependency folders. Links from other projects or chats are not checked.")}</label> : null}
+                <CodeDiff before={change.before} after={change.after} />
+              </section>)}
+            {plan.preview.rules.length > 0 ? <p className="text-xs text-muted-foreground">{t("Only links affected by this cleanup are checked within the connected project. Other documents are not changed.")}</p> : null}
           </div> : null}
           {error ? <p role="alert" className="text-sm text-destructive">{errorSummary(error)}</p> : null}
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" disabled={busy} onClick={close}>{t("Cancel")}</Button>
-          {!plan || plan.preview.decision === "blocked" || error ? <Button disabled={busy || !(assignId || cleanupLegacy)} onClick={() => void run(async () => { setScopeConfirmed(false); setPlan(await browserRepository.previewMigration(file.workspaceId, file.id, { assignId, cleanupLegacy, allowPlainMarkdown: file.type === "markdown" })); })}>{t("Preview changes")}</Button> : <Button disabled={busy || plan.preview.decision !== "ready" || (plan.preview.rules.length > 0 && !scopeConfirmed)} onClick={() => void run(async () => {
-            await browserRepository.applyMigration(plan);
-            setOpen(false); setAssignId(false); setCleanupLegacy(false); reset();
-            await queryClient.invalidateQueries();
-          })}>{t("Apply reviewed changes")}</Button>}
+          <Button variant="outline" disabled={busy === "apply"} onClick={close}>{t("Cancel")}</Button>
+          {error || plan?.preview.decision === "blocked" ? <Button variant="outline" disabled={Boolean(busy)} onClick={() => void preview()}>{t("Refresh preview")}</Button> : null}
+          <Button disabled={Boolean(busy) || plan?.preview.decision !== "ready" || Boolean(error)} onClick={() => void apply()}>{t("Apply reviewed changes")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -76,7 +92,8 @@ export function DocumentMaintenance({ file }: { file: MarkdownFileSummary }) {
 
 export function migrationIssueMessage(code: string) {
   if (["DELETED_OR_UNKNOWN_ANCHOR", "ANCHOR_UNCERTAIN"].includes(code)) return "A section link cannot be preserved. Keep the section or correct its references first.";
-  if (["OUTSIDE_WRITE_SCOPE", "ABSOLUTE_REFERENCE_UNVERIFIED", "INCOMPLETE_REFERENCE_SCOPE"].includes(code)) return "This cleanup needs a wider reference check. Use the document CLI, or select ID assignment only.";
+  if (["OUTSIDE_WRITE_SCOPE", "ABSOLUTE_REFERENCE_UNVERIFIED", "INCOMPLETE_REFERENCE_SCOPE"].includes(code)) return "This cleanup needs a wider reference check. Use the document CLI to inspect the affected files.";
+  if (code === "TICKET_BODY_CHANGED") return "Ticket content will be preserved. Correct the section links before applying cleanup.";
   if (["UNSUPPORTED_FORMAT", "INVALID_FORMAT", "NEEDS_REPAIR"].includes(code)) return "This document format cannot be changed. Review the original Markdown with a supporting tool.";
   return "A document or reference could not be verified. Review the original Markdown before making changes.";
 }

@@ -12,10 +12,10 @@ export type MetadataPreview = {
 };
 export function normalizeDocumentId(value: unknown): string | null;
 export function readDocumentMetadata(markdown: string): DocumentMetadata;
-export function analyzeDocumentMetadata(markdown: string, path: string): MetadataAnalysis;
+export function analyzeDocumentMetadata(markdown: string, path: string, options?: { documentRoot?: string | null }): MetadataAnalysis;
 export function previewDocumentMetadata(input: {
   markdown: string; path: string; assignId?: boolean; clone?: boolean; reconcileOwner?: boolean;
-  allowPlainMarkdown?: boolean; generateId?: () => string;
+  allowPlainMarkdown?: boolean; generateId?: () => string; documentRoot?: string | null;
 }): MetadataPreview;
 export function resumeMetadataPreview(preview: MetadataPreview, current: string, currentPath: string): string;
 export function indexDocumentIds(entries: Array<{ projectId: string; localId: string; path: string; documentId?: string | null }>): Array<{

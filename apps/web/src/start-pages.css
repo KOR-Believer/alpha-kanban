@@ -2,7 +2,7 @@
   .ak-start-page, .ak-intro-page { background: var(--background); color: var(--foreground); letter-spacing: 0; }
   .ak-public-brand { display: inline-flex; align-items: center; gap: var(--ak-space-xs); font-size: 16px; font-weight: 600; text-decoration: none; white-space: nowrap; }
   .ak-public-brand svg { width: 22px; height: 22px; color: var(--muted-foreground); }
-  .ak-start-navigation { min-height: 64px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ak-space-md); padding: var(--ak-space-sm) var(--ak-space-xxl); border-bottom: 1px solid var(--border); }
+  .ak-start-navigation { min-height: 64px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ak-space-md); padding: var(--ak-space-sm) var(--ak-space-xxl); border-bottom: 1px solid var(--border); background: var(--ak-header-background); }
   .ak-start-navigation nav, .ak-intro-header nav { display: flex; align-items: center; gap: var(--ak-space-xs); flex-wrap: wrap; }
   .ak-start-content { display: grid; gap: var(--ak-space-md); padding: var(--ak-space-xl) var(--ak-space-xxl); width: 100%; max-width: 1600px; margin-inline: auto; }
   .ak-start-heading { display: grid; gap: var(--ak-space-md); }
@@ -75,7 +75,7 @@
     .ak-guide-step-example { grid-column: 2; }
   }
   .ak-intro-wrap { width: 100%; max-width: 1264px; margin: 0 auto; padding-inline: var(--ak-space-xxl); }
-  .ak-intro-header { border-bottom: 1px solid var(--border); }
+  .ak-intro-header { border-bottom: 1px solid var(--border); background: var(--ak-header-background); }
   .ak-intro-header > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ak-space-lg); min-height: 72px; }
   .ak-intro-section-link { font-size: 13px; text-decoration: none; padding: var(--ak-space-xs); }
   .ak-intro-hero { padding-top: 44px; }

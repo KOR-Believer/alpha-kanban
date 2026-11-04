@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko" data-release-channel="stable">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Alpha Kanban 공식 문서와 릴리즈 — 독립 인터랙티브 디자인 시안">
+  <title>소개와 첫 작업 · Alpha Kanban</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./visual-guides.css?v=3">
+  <script src="./releases.js" defer></script>
+  <script src="./content.js?v=handoff-1" defer></script>
+  <script src="./visual-guides.js?v=4" defer></script>
+  <script src="./app.js?v=visual-guides-3" defer></script>
+</head>
+<body>
+  <a class="skip" id="skip-link" href="#main">본문으로 건너뛰기</a>
+  <header class="site-header"><div class="header-inner"></div></header>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Documentation"><p class="sidebar-heading" id="sidebar-label">공식 문서</p><nav id="sidebar-content"></nav><p class="nav-bottom" id="sidebar-foot"></p></aside>
+    <main id="main" tabindex="-1"><noscript><h1>Alpha Kanban 문서</h1><p>문서 탐색과 검색을 사용하려면 브라우저에서 JavaScript를 허용하세요.</p></noscript></main>
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </div>
+  <footer class="site-footer"><div class="footer-inner"><span>Alpha Kanban <span aria-hidden="true">·</span> <span id="footer-note"></span></span><nav id="footer-links" aria-label="Footer"></nav></div></footer>
+  <aside class="review-area" aria-label="시안 검토 도구">
+    <details id="review-panel"><summary id="review-summary">시안 검토 도구 · 제품 영역 밖</summary>
+      <div class="review-controls">
+        <label><span id="review-channel-label">검토 채널</span><select id="review-channel" aria-labelledby="review-channel-label"><option value="stable">Stable · 정식</option><option value="canary">Canary</option></select></label>
+        <label><span id="review-state-label">대표 상태</span><select id="review-state" aria-labelledby="review-state-label"></select></label>
+        <button id="review-open" type="button" class="btn">상태 열기</button>
+        <a class="btn" id="review-notes-link" href="./review-notes.md">검토 노트 보기</a>
+      </div><p class="review-help" id="review-help"></p>
+    </details>
+  </aside>
+  <dialog id="search-dialog" aria-labelledby="search-title">
+    <div class="dialog-head"><h2 id="search-title">문서 검색</h2><button type="button" class="btn ghost icon-btn close-dialog" aria-label="닫기"></button></div>
+    <div class="dialog-body">
+      <label class="search-label" id="search-label" for="search-input">공식 문서에서 찾기</label>
+      <div class="search-field"><input id="search-input" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="true" autocomplete="off" spellcheck="false"><button type="button" id="search-clear" class="btn ghost icon-btn" aria-label="검색어 지우기" hidden></button></div>
+      <p class="search-status" id="search-status" role="status" aria-live="polite"></p>
+      <div class="search-results" id="search-results" role="listbox" aria-label="검색 결과"></div>
+    </div><div class="dialog-footer" id="search-footer"></div>
+  </dialog>
+  <dialog id="menu-dialog" aria-labelledby="menu-title"><div class="dialog-head"><h2 id="menu-title">문서 탐색</h2><button type="button" class="btn ghost icon-btn close-dialog" aria-label="닫기"></button></div><nav id="menu-links" class="dialog-nav"></nav></dialog>
+  <dialog id="copy-dialog" aria-labelledby="copy-title" aria-describedby="copy-help"><div class="dialog-head"><h2 id="copy-title">텍스트 복사</h2><button type="button" class="btn ghost icon-btn close-dialog" aria-label="닫기"></button></div><div class="dialog-body od-stack"><p id="copy-help"></p><label for="manual-copy" class="sr-only">복사할 텍스트 · Text to copy</label><textarea id="manual-copy" class="manual-copy code" readonly></textarea></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

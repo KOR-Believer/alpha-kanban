@@ -14,7 +14,9 @@ let headerSurface: HeaderSurface = "--background";
 const listeners = new Set<() => void>();
 
 function syncThemeColor() {
-  const color = getComputedStyle(document.documentElement).getPropertyValue(headerSurface).trim();
+  const tokens = getComputedStyle(document.documentElement);
+  const channelSurface = headerSurface === "--ak-surface" ? "--ak-header-surface" : "--ak-header-background";
+  const color = tokens.getPropertyValue(channelSurface).trim() || tokens.getPropertyValue(headerSurface).trim();
   if (!color) return;
   let meta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (!meta) {

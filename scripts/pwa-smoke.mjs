@@ -16,7 +16,9 @@ await exec("node", ["scripts/package-browser-assets.mjs"], { cwd: root });
 const versions = {};
 const authoredRelease = JSON.parse(await readFile(resolve(root, "apps/web/releases.json"), "utf8")).at(-1);
 const noteA = { id: "smoke-a", sequence: 1, date: "2026-10-25", notify: true, notes: { ko: ["이전 테스트 릴리즈"], en: ["Previous test release"] } };
-const noteB = { ...authoredRelease, id: "smoke-b", sequence: 2, notes: { ko: ["적용 대상 B의 변경 내용", ...authoredRelease.notes.ko], en: ["Changes in prepared release B", ...authoredRelease.notes.en] } };
+// Exercise the explicitly compatible branch with controlled snapshots. Production
+// releases can correctly remain unknown; they must not decide this fixture's path.
+const noteB = { ...authoredRelease, id: "smoke-b", sequence: 2, notes: { ko: ["적용 대상 B의 변경 내용", ...authoredRelease.notes.ko], en: ["Changes in prepared release B", ...authoredRelease.notes.en] }, skill: { compatibility: "compatible", notes: { ko: ["격리 테스트 스냅샷"], en: ["Isolated test snapshots"] } } };
 for (const [name, mode] of [["a", "app"], ["b", "app"], ["recovery", "recovery"], ["retired", "retired"]]) {
   const dir = resolve(process.env.PWA_SMOKE_BUILD_DIR ?? output, name);
   if (!process.env.PWA_SMOKE_BUILD_DIR) {
@@ -159,7 +161,8 @@ async function assertThemeColor(page, surface, dark) {
   await page.waitForFunction(({ surface, dark }) => {
     const root = document.documentElement;
     const metas = document.querySelectorAll('meta[name="theme-color"]');
-    const color = getComputedStyle(root).getPropertyValue(surface).trim();
+    const headerToken = surface === "--ak-surface" ? "--ak-header-surface" : "--ak-header-background";
+    const color = getComputedStyle(root).getPropertyValue(headerToken).trim();
     return root.classList.contains("dark") === dark && metas.length === 1 &&
       !metas[0].hasAttribute("media") && metas[0].content === color && CSS.supports("color", color);
   }, { surface, dark });
@@ -178,7 +181,22 @@ async function original(page) { return page.evaluate(async () => {
   const project = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-project");
   return (await (await (await project.getDirectoryHandle("docs")).getFileHandle("01_smoke_tickets.md")).getFile()).text();
 }); }
-const fixture = `# PWA Smoke\n\n## Status\n- 현재 진행률: 0 / 1 tickets\n\n## Ticket List\n\n### PWA-01. Offline smoke ticket\n\nStatus: TODO\nProgress: 0%\nRepository:\n\n- smoke-project\n\nPriority: P1\nType: Feature\nDepends on:\n\n- 없음\n\n목표:\n\n- 오프라인 저장\n\n현재 문제:\n\n- 없음\n\n구현 범위:\n\n- 테스트\n\n제외 범위:\n\n- 없음\n\n완료 기준:\n\n- [ ] 확인\n\n검증:\n\n- [ ] 확인\n\n사용자 지시:\n\n진행 메모:\n`;
+const fixture = `# PWA Smoke\n\n[Saved colleague link](/Users/colleague/product/docs/linked.md)\n\n## Status\n- 현재 진행률: 0 / 1 tickets\n\n## Ticket List\n\n### PWA-01. Offline smoke ticket\n\nStatus: TODO\nProgress: 0%\nRepository:\n\n- smoke-project\n\nPriority: P1\nType: Feature\nDepends on:\n\n- 없음\n\n목표:\n\n- 오프라인 저장\n\n현재 문제:\n\n- 없음\n\n구현 범위:\n\n- 테스트\n\n제외 범위:\n\n- 없음\n\n완료 기준:\n\n- [ ] 확인\n\n검증:\n\n- [ ] 확인\n\n사용자 지시:\n\n진행 메모:\n`;
+
+async function openSavedLink(page, name) {
+  await page.getByRole("button", { name: "마크다운", exact: true }).click();
+  const sourceUrl = page.url();
+  await page.getByRole("link", { name: "Saved colleague link", exact: true }).click();
+  const reader = page.locator("section[aria-label]").filter({ has: page.locator("[data-linked-document]") });
+  await reader.getByText("PERSISTED LINK TARGET", { exact: true }).waitFor();
+  await reader.getByText(/읽기 전용/).waitFor();
+  assert.match(new URL(page.url()).searchParams.get("linked"), /^ld_/);
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  await page.screenshot({ path: resolve(output, `linked-document-${name}.png`) });
+  await reader.getByRole("button", { name: "출발 문서로 돌아가기", exact: true }).click();
+  await page.waitForURL(sourceUrl);
+  await page.getByRole("button", { name: "보드", exact: true }).click();
+}
 
 try {
   context = await launch();
@@ -236,6 +254,8 @@ try {
     const docs = await project.getDirectoryHandle("docs", { create: true });
     const file = await docs.getFileHandle("01_smoke_tickets.md", { create: true });
     const writable = await file.createWritable(); await writable.write(fixture); await writable.close();
+    const linked = await docs.getFileHandle("linked.md", { create: true });
+    const linkedWriter = await linked.createWritable(); await linkedWriter.write("# Linked document\n\nPERSISTED LINK TARGET\n"); await linkedWriter.close();
     window.showDirectoryPicker = async () => project;
   }, fixture);
   await page.getByRole("button", { name: "프로젝트 열기", exact: true }).click();
@@ -290,11 +310,25 @@ try {
     localStorage.setItem("alpha-kanban.allTickets.filters", JSON.stringify({ projectIds: [], hideDone: false, search: "" }));
     localStorage.setItem("pwa-smoke-setting", "preserve");
     const db = await new Promise((done) => { const request = indexedDB.open("alpha-kanban.browser.v1", 1); request.onsuccess = () => done(request.result); });
-    await new Promise((done) => { const tx = db.transaction("records", "readwrite"); tx.objectStore("records").put({ id: "pending-smoke", fileId: "not-the-ticket", before: "original", intended: "uncertain" }, "recovery:pending-smoke"); tx.oncomplete = done; }); db.close();
+    const project = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-project");
+    const docs = await project.getDirectoryHandle("docs");
+    const linked = await docs.getFileHandle("linked.md");
+    const scopeId = location.pathname.split("/")[2];
+    const prefix = "/Users/colleague/product";
+    await new Promise((done, reject) => {
+      const tx = db.transaction("records", "readwrite"); const store = tx.objectStore("records");
+      store.put({ id: "pending-smoke", fileId: "not-the-ticket", before: "original", intended: "uncertain" }, "recovery:pending-smoke");
+      store.put({ id: "pwa-link-fixture", revision: "pwa-link-v1", scopeId, sourceLabel: "pwa-smoke-project", prefix, example: prefix + "/docs/linked.md", handle: project, label: "pwa-smoke-project", remotes: [], method: "manual" }, `link-mapping:v1:map:${encodeURIComponent(scopeId)}:${encodeURIComponent(prefix)}`);
+      store.put({ id: "ld_pwa-fixture", handle: linked }, "link-mapping:v1:document:linked%3Apwa-link-fixture:docs%2Flinked.md");
+      tx.oncomplete = done; tx.onerror = () => reject(tx.error);
+    }); db.close();
     const cache = await caches.open("unrelated-app-cache"); await cache.put("/unrelated", new Response("kept"));
     await navigator.serviceWorker.register("/other/sw.js", { scope: "/other/" });
   });
+  // Persist the page identity through the real navigation flow before comparing updates.
+  await openSavedLink(page, "before-update");
   let before = await snapshot(page);
+  assert(before.records.some(([key]) => key === "link-mapping:v1:page:ld_pwa-fixture"));
   record("Initial precache and persisted real FileSystem handles (OPFS, not OS picker)");
   await openMenu(page);
   await page.getByText("오프라인 사용 준비 완료", { exact: true }).waitFor();
@@ -326,7 +360,7 @@ try {
   await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor();
   await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).waitFor();
   assert.equal(await page.getByRole("checkbox").count(), 0);
-  await page.getByText("Codex에서 이 스킬을 사용하는 작업이 있다면 끝난 뒤 업데이트하세요.", { exact: true }).waitFor();
+  await page.getByText("AI에서 이 스킬을 쓰는 작업과 다른 Alpha Kanban 앱의 스킬 변경을 마친 뒤 적용하세요. 검증이 끝날 때까지 이 창을 열어두세요.", { exact: true }).waitFor();
   await page.screenshot({ path: resolve(output, "release-before-update.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: resolve(output, "release-combined-narrow.png") });
@@ -365,8 +399,11 @@ try {
   await second.keyboard.press("Escape");
   const unresponsive = await context.newPage();
   const unresponsiveCdp = await context.newCDPSession(unresponsive);
-  await unresponsiveCdp.send("Network.setBypassServiceWorker", { bypass: true });
-  await unresponsive.goto(origin + "/?smoke-unresponsive");
+  // Freeze an actual client after mounting. A navigation fallback can otherwise
+  // replace the synthetic no-script response with a fully responsive app page.
+  await unresponsive.goto(origin + "/");
+  await unresponsive.getByRole("button", { name: "앱 설치 및 업데이트", exact: true }).waitFor();
+  await unresponsiveCdp.send("Emulation.setScriptExecutionDisabled", { value: true });
   await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).click();
   await page.getByText(/다른 앱 창의 작성 중인 내용도/).waitFor();
   assert.equal((await workerInfo(page)).buildId, versions.a.release.buildId);
@@ -492,6 +529,9 @@ try {
   assert.deepEqual(await snapshot(page), before);
   assert.equal(await original(page), savedBeforeUpdate);
   record("Two-window update, connection/document IDs, settings and recovery preservation");
+  await openSavedLink(page, "after-update");
+  assert.deepEqual(await snapshot(page), before);
+  record("Saved colleague link and linked document identity survive the PWA update (OPFS)");
 
   await context.close(); networkUnavailable = true; context = await launch(true); page = context.pages()[0];
   if (installed) {
@@ -513,6 +553,10 @@ try {
   await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor(); await page.keyboard.press("Escape");
   record("Release history remains readable on an offline cold launch");
   await page.goto(origin + "/all"); await page.getByText("Offline smoke ticket", { exact: true }).waitFor();
+  await page.goto(projectUrl);
+  await openSavedLink(page, "cold-offline");
+  assert.deepEqual(await snapshot(page), before);
+  record("Saved colleague link reopens after a complete offline Chrome restart (OPFS)");
   await page.goto(projectUrl); await page.getByText("Offline smoke ticket", { exact: true }).click();
   await page.getByRole("textbox", { name: "수동 지시", exact: true }).fill("오프라인 지시 저장");
   await page.getByRole("button", { name: "문서에 추가", exact: true }).click();

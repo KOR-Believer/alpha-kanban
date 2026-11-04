@@ -19,16 +19,78 @@ async function fixture(content = ledger) {
 }
 
 describe("path owners without personal settings or migration", () => {
+  it("reuses the parsed listing for display but rechecks bytes for writes and forced reads", async () => {
+    const f = await fixture();
+    const shown = await f.repository.listedTickets(f.workspaceId, f.summary);
+    const reads = f.file.bodyReads;
+    const again = await f.repository.tickets(f.workspaceId, f.fileId, false);
+    expect(again.document).toBe(shown.document);
+    expect(f.file.bodyReads).toBe(reads);
+    // Force reads still hash current bytes; equal timestamps/sizes are not write guards.
+    f.file.content = f.file.content.replace("goal", "next");
+    await expect(f.repository.patch(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, status: "DONE", progress: 100 })).rejects.toMatchObject({ code: "STALE_FILE" });
+    const fresh = await f.repository.tickets(f.workspaceId, f.fileId);
+    expect(fresh.document).not.toBe(shown.document);
+    expect(fresh.document.tickets[0]?.searchText).toContain("next");
+    expect(f.file.writes).toBe(0);
+  });
+  it("checks multiple known files concurrently with a fixed upper bound", async () => {
+    const f = await fixture();
+    const docs = f.project.children.get("docs") as FakeDirectory;
+    let active = 0, maximum = 0;
+    for (let i = 0; i < 18; i++) {
+      const file = docs.file(`${i + 2}_test_tickets.md`);
+      const read = file.getFile.bind(file);
+      vi.spyOn(file, "getFile").mockImplementation(async () => {
+        active++; maximum = Math.max(maximum, active);
+        try { await new Promise((resolve) => setTimeout(resolve, 1)); return await read(); }
+        finally { active--; }
+      });
+    }
+    await f.repository.files(f.workspaceId, true);
+    expect(maximum).toBeGreaterThan(1);
+    expect(maximum).toBeLessThanOrEqual(6);
+    maximum = 0;
+    expect(await f.repository.files(f.workspaceId)).toHaveLength(19);
+    expect(maximum).toBeGreaterThan(1);
+    expect(maximum).toBeLessThanOrEqual(6);
+  });
+  it("reads an incomplete legacy ledger without cleanup while rejecting writes before backup or mutation", async () => {
+    const source = ledger.replace("제외 범위:\n- none\n", "");
+    const f = await fixture(source);
+    const document = (await f.repository.tickets(f.workspaceId, f.fileId)).document;
+    expect(document).not.toHaveProperty("compatibility");
+    expect(document.tickets).toHaveLength(2);
+    expect(document.tickets[0]?.missingFields).toContain("제외 범위");
+    expect((await f.repository.documentSets(f.workspaceId)).sets[0]?.ticketProgress).toMatchObject({ doneTickets: 0, totalTickets: 2 });
+    await expect(f.repository.patch(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, status: "DONE", progress: 100 })).rejects.toMatchObject({ code: "NEEDS_REPAIR" });
+    await expect(f.repository.append(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, kind: "manual", text: "No write" })).rejects.toMatchObject({ code: "NEEDS_REPAIR" });
+    expect(f.file.writes).toBe(0);
+    expect(f.file.content).toBe(source);
+    expect(await f.repository.recoveries()).toEqual([]);
+  });
   it.each(["Ledger-Format: 99", "Ledger-Format: 1\nLedger-Format: 1"])("refuses all browser writes for %s without a recovery write", async (header) => {
     const source = ledger.replace(/^(# .+\n)/, `$1\n${header}\n`);
     const f = await fixture(source);
-    expect((await f.repository.tickets(f.workspaceId, f.fileId)).document.compatibility?.writable).toBe(false);
-    expect((await f.repository.documentSets(f.workspaceId)).sets[0]?.ticketProgress).toBeUndefined();
+    expect((await f.repository.tickets(f.workspaceId, f.fileId)).document.tickets).toHaveLength(2);
+    expect((await f.repository.documentSets(f.workspaceId)).sets[0]?.ticketProgress).toMatchObject({ doneTickets: 0, totalTickets: 2 });
     expect((await f.repository.markdown(f.workspaceId, f.fileId)).markdown).toBe(source);
     const code = header.includes("99") ? "UNSUPPORTED_FORMAT" : "INVALID_FORMAT";
     await expect(f.repository.patch(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, status: "DONE", progress: 100 })).rejects.toMatchObject({ code });
     await expect(f.repository.append(f.workspaceId, f.fileId, "TEST-01", { ...f.guard, kind: "manual", text: "No write" })).rejects.toMatchObject({ code });
     expect(f.file.writes).toBe(0); expect(f.file.content).toBe(source);
+    expect(await f.repository.recoveries()).toEqual([]);
+  });
+  it("lists legacy summaries and tickets with parser fallbacks without writing or migrating them", async () => {
+    const source = ledger.replace("Status: READY", "Status: WATCH").replace("Progress: 25%", "Progress: 80%");
+    const f = await fixture(source);
+    expect((await f.repository.files(f.workspaceId)).map(({ id }) => id)).toEqual([f.fileId]);
+    const document = (await f.repository.tickets(f.workspaceId, f.fileId)).document;
+    expect(document.tickets).toHaveLength(2);
+    expect(document.tickets[0]).toMatchObject({ id: "TEST-01", status: "TODO", progress: 0 });
+    expect((await f.repository.documentSets(f.workspaceId)).sets[0]?.ticketProgress).toMatchObject({ doneTickets: 0, totalTickets: 2 });
+    expect(f.file.content).toBe(source);
+    expect(f.file.writes).toBe(0);
     expect(await f.repository.recoveries()).toEqual([]);
   });
   it("discovers owners and separates equal filenames/IDs while leaving configuration and Markdown untouched", async () => {
@@ -41,7 +103,7 @@ describe("path owners without personal settings or migration", () => {
     const atFilename = docs.file("@notes.md", "# A normal document\n");
     const config = f.project.file(".ak.config", "[documents]\nownerFolders = false\n");
     const user = f.project.file(".ak.user", "invalid private settings");
-    config.read = "denied"; user.read = "denied";
+    user.read = "denied";
     f.repository.invalidateListings();
     const files = await f.repository.files(f.workspaceId);
     expect(files.map((file) => [file.relativePath, file.pathOwner?.status, file.pathOwner?.value])).toEqual([
@@ -50,7 +112,7 @@ describe("path owners without personal settings or migration", () => {
       ["docs/@alice/01_test_tickets.md", "owned", "@alice"],
       ["docs/@bob/01_test_tickets.md", "owned", "@bob"],
       ["docs/@notes.md", "unassigned", null],
-      ["docs/research/@alice/01_test_tickets.md", "unassigned", null],
+      ["docs/research/@alice/01_test_tickets.md", "owned", "@alice"],
     ].sort((a, b) => a[0]!.localeCompare(b[0]!)));
     expect(new Set(files.map((file) => file.id)).size).toBe(6);
     expect((await f.repository.documentSets(f.workspaceId)).sets).toHaveLength(6);
@@ -62,7 +124,7 @@ describe("path owners without personal settings or migration", () => {
     f.project.children.delete(".ak.config"); f.project.children.delete(".ak.user");
     f.repository.invalidateListings();
     expect(await f.repository.files(f.workspaceId)).toEqual(files);
-    expect([config, user].map((file) => file.reads)).toEqual([0, 0]);
+    expect(config.reads).toBeGreaterThan(0); expect(user.reads).toBe(0);
     expect([f.file, alice, bob, invalid, deeper, atFilename, config, user].every((file) => file.writes === 0)).toBe(true);
     expect(alice.content).toContain("Owner: @bob");
   });
@@ -194,6 +256,80 @@ describe("project-scoped UUID analysis without replacing browser handle identity
 });
 
 describe("browser-local identity and reads", () => {
+  it("counts Markdown outside docs without reading files, writes, or false zeroes on permission loss", async () => {
+    const storage = new MemoryStorage(), repository = new BrowserRepository(storage, testLocks());
+    const project = new FakeDirectory("project");
+    project.directory("docs");
+    const rootFile = project.file("README.md", "# Readme"), nested = project.directory("notes").file("plan.MD", "# Plan");
+    project.directory("node_modules").file("ignored.md"); project.directory(".git").file("ignored.md"); project.file("image.png", "not Markdown");
+    await repository.connect(project.handle(), "project");
+    const workspace = (await repository.workspaces()).workspaces[0]!;
+    const traversal = vi.spyOn(project, "values"); const keys = [...storage.records.keys()];
+    expect(await repository.documentCount(workspace.id)).toBe(2);
+    expect(await repository.documentCount(workspace.id)).toBe(2);
+    expect(traversal).toHaveBeenCalledTimes(1);
+    expect(rootFile.reads + nested.reads).toBe(0); expect([...storage.records.keys()]).toEqual(keys);
+    project.file("new.md", "# New"); repository.invalidateListings();
+    expect(await repository.documentCount(workspace.id)).toBe(3);
+    project.read = "denied";
+    await expect(repository.documentCount(workspace.id)).rejects.toMatchObject({ code: "PERMISSION_REQUIRED" });
+  });
+
+  it("counts each overlapping connection's own scope and reuses ticket discovery without reading other bodies", async () => {
+    const repository = new BrowserRepository(new MemoryStorage(), testLocks());
+    const project = new FakeDirectory("project"), nested = project.directory("notes");
+    const ticket = project.file("01_test_tickets.md"), plan = project.file("02_test_plan.md", "# Plan");
+    nested.file("external.md", "# Separate");
+    await repository.connect(project.handle(), "project"); await repository.connect(nested.handle(), "project");
+    const workspaces = (await repository.workspaces()).workspaces;
+    const main = workspaces.find((workspace) => workspace.label === "project")!, child = workspaces.find((workspace) => workspace.label === "notes")!;
+    await repository.ticketFiles(main.id);
+    const traversal = vi.spyOn(project, "values");
+    expect(await repository.documentCount(main.id)).toBe(2); expect(traversal).not.toHaveBeenCalled();
+    expect(await repository.documentCount(child.id)).toBe(1);
+    expect(plan.reads).toBe(0); expect(ticket.bodyReads).toBe(1);
+  });
+
+  it("limits project count walks to two and shares concurrent requests for the same project", async () => {
+    const root = new FakeDirectory("workspace"), repository = new BrowserRepository(new MemoryStorage(), testLocks());
+    const projects = Array.from({ length: 4 }, (_, index) => root.directory(`project-${index}`));
+    for (const project of projects) project.file("README.md", "# Example");
+    await repository.connect(root.handle(), "root");
+    const ids = (await repository.workspaces()).workspaces.map((workspace) => workspace.id);
+    const release: Array<() => void> = [];
+    let active = 0, peak = 0, started = 0;
+    for (const project of projects) {
+      const original = project.values.bind(project);
+      vi.spyOn(project, "values").mockImplementation(async function* () {
+        active++; started++; peak = Math.max(peak, active);
+        try {
+          await new Promise<void>((resolve) => release.push(resolve));
+          yield* original();
+        } finally { active--; }
+      });
+    }
+    const counts = [...ids, ids[0]!].map((id) => repository.documentCount(id));
+    await vi.waitFor(() => expect(started).toBe(2));
+    release[0]!();
+    await vi.waitFor(() => expect(started).toBe(3));
+    release[1]!();
+    await vi.waitFor(() => expect(started).toBe(4));
+    release[2]!(); release[3]!();
+    expect(await Promise.all(counts)).toEqual([1, 1, 1, 1, 1]);
+    expect(peak).toBe(2);
+    expect(projects.every((project) => vi.mocked(project.values).mock.calls.length === 1)).toBe(true);
+  });
+
+  it("keeps an interrupted discovery count unavailable rather than publishing a partial number", async () => {
+    const repository = new BrowserRepository(new MemoryStorage(), testLocks());
+    const project = new FakeDirectory("project"); project.file("one.md");
+    let child = project; for (let i = 0; i < 32; i++) child = child.directory("deeper");
+    await repository.connect(project.handle(), "project"); const id = (await repository.workspaces()).workspaces[0]!.id;
+    await expect(repository.documentCount(id)).rejects.toMatchObject({ code: "SCAN_LIMIT" });
+    project.children.delete("deeper");
+    expect(await repository.documentCount(id)).toBe(1);
+  });
+
   it("persists opaque identities and reads body, hash and modification time from the same file", async () => {
     const f = await fixture();
     const second = new BrowserRepository(f.storage, f.lock);

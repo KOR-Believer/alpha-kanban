@@ -8,6 +8,7 @@ import { ContextError } from "./context-error.mjs";
 import { parseSettings } from "./document-settings.mjs";
 import { checkNewOwner, ownerFromPath } from "./document-owner.mjs";
 import { readDocumentMetadata } from "./document-metadata.mjs";
+import { DEFAULT_DOCUMENT_ROOT } from "./document-root.mjs";
 
 const exec = promisify(execFile);
 const unused = () => ({ status: "not-needed", value: null, source: null });
@@ -103,7 +104,7 @@ async function readText(target) {
   return new TextDecoder("utf-8", { fatal: true }).decode(await readFile(target));
 }
 
-async function setting(root, kind, scope) {
+async function setting(root, kind, scope, selectedKey = null) {
   const file = path.join(root, `.ak.${kind}`);
   let text;
   try { text = await readText(file); }
@@ -111,7 +112,7 @@ async function setting(root, kind, scope) {
     if (error.code === "ENOENT") return null;
     throw new ContextError("SETTINGS_READ_FAILED", "Could not read a regular UTF-8 settings file.", { source: file });
   }
-  const parsed = parseSettings(text, kind, file);
+  const parsed = parseSettings(text, kind, file, selectedKey);
   return parsed.present ? { status: "known", value: parsed.value, source: { scope, path: file } } : null;
 }
 
@@ -151,12 +152,12 @@ async function safeTarget(root, input, kind) {
   return target;
 }
 
-async function ownerDirectory(root, owner) {
-  const docs = await safeTarget(root, "docs", "directory");
+async function ownerDirectory(root, owner, parent = "docs") {
+  const docs = await safeTarget(root, parent, "directory");
   const entries = await statOrMissing(docs) ? await readdir(docs, { withFileTypes: true }) : [];
   const matches = entries.filter(entry => entry.name.normalize("NFC").toLowerCase() === owner.toLowerCase());
   if (matches.length > 1 || (matches.length === 1 && matches[0].name.normalize("NFC") !== owner)) throw new ContextError("OWNER_COLLISION", "Owner folders differ only in case or Unicode spelling. Resolve the collision explicitly.", { source: docs, owner });
-  return safeTarget(root, path.join("docs", matches[0]?.name ?? owner), "directory");
+  return safeTarget(root, path.join(parent, matches[0]?.name ?? owner), "directory");
 }
 
 async function nextNumber(scope) {
@@ -167,6 +168,8 @@ async function nextNumber(scope) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const target = path.join(dir, entry.name);
       if (++visited > 20000) throw new ContextError("NUMBER_SCAN_LIMIT", "Cannot determine the next number from an incomplete directory scan.", { source: dir });
+      // Each nested @ directory starts its own numbering scope, including malformed names.
+      if (entry.isDirectory() && entry.name.startsWith("@")) continue;
       if (entry.isSymbolicLink()) throw new ContextError("NUMBER_SCAN_LINK", "Numbering cannot traverse symbolic links.", { source: target });
       if (entry.isDirectory()) {
         if (entry.name === ".git" || await statOrMissing(path.join(target, ".git"))) throw new ContextError("NESTED_REPOSITORY", "Numbering cannot cross a nested repository.", { source: target });
@@ -185,12 +188,12 @@ async function nextNumber(scope) {
 }
 
 /** Read-only context for skill-created documents; home is injectable for isolated callers/tests. */
-export async function resolveDocumentContext({ operation = "new", cwd = process.cwd(), target, baseDir = "docs", home = os.homedir(), withId = false } = {}) {
-  const result = { ok: false, operation, context: null, policy: unused(), user: unused(), document: null, numbering: null, diagnostics: [] };
+export async function resolveDocumentContext({ operation = "new", cwd = process.cwd(), target, baseDir, home = os.homedir(), withId = false } = {}) {
+  const result = { ok: false, operation, context: null, policy: unused(), documentRoot: unused(), user: unused(), document: null, numbering: null, diagnostics: [] };
   try {
-    if (!["new", "edit", "actor", "check-new"].includes(operation)) throw new ContextError("INVALID_REQUEST", "Unknown operation.");
+    if (!["new", "edit", "actor", "root", "check-new"].includes(operation)) throw new ContextError("INVALID_REQUEST", "Unknown operation.");
     if (["edit", "check-new"].includes(operation) && !target) throw new ContextError("INVALID_REQUEST", "This operation requires --target.");
-    if (operation === "actor" && target) throw new ContextError("INVALID_REQUEST", "actor does not accept a document target.");
+    if (["actor", "root"].includes(operation) && target) throw new ContextError("INVALID_REQUEST", "This operation does not accept a document target.");
     if (typeof withId !== "boolean" || (withId && operation !== "new")) throw new ContextError("INVALID_REQUEST", "withId only applies to an explicitly requested new document ID.");
     const context = result.context = await projectContext(cwd);
     let workspace;
@@ -211,15 +214,33 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
       if (!chosen) throw new ContextError("USER_REQUIRED", "Set user.id in a private .ak.user before requesting a user-dependent location or scope.");
       return chosen.value;
     };
+    if (operation !== "actor") {
+      result.documentRoot = { status: "unresolved", value: null, source: null };
+      try {
+        let chosen = await setting(context.projectRoot, "config", "repo", "root");
+        if (!chosen) {
+          const workspace = await workspaceOnce();
+          if (workspace) chosen = await setting(workspace, "config", "workspace", "root");
+        }
+        result.documentRoot = chosen ?? { status: "known", value: DEFAULT_DOCUMENT_ROOT, source: { scope: "default", path: null } };
+      } catch (error) {
+        // Reading/editing an existing body never depends on settings recovery.
+        if (operation !== "edit") throw error;
+        result.diagnostics.push(error instanceof ContextError ? error.diagnostic : { code: "READ_FAILED", message: error.message });
+      }
+    }
+    const documentRoot = result.documentRoot.value;
     if (operation === "actor") {
       await actor();
+    } else if (operation === "root") {
+      // Pure settings lookup, shared by native operation planning and guards.
     } else if (operation === "edit" || operation === "check-new") {
       const file = await safeTarget(context.projectRoot, target, "file");
-      const owner = ownerFromPath(relative(context.projectRoot, file));
+      const owner = ownerFromPath(relative(context.projectRoot, file), { documentRoot });
       result.document = { path: file, relativePath: relative(context.projectRoot, file), pathOwner: owner, createDirectory: false, ownerAction: "preserve", ownerHeader: null };
       if (operation === "check-new") {
         if (owner.status === "invalid") throw new ContextError("INVALID_OWNER", "The target has an invalid owner folder.", { source: file });
-        if (owner.value) await ownerDirectory(context.projectRoot, owner.value);
+        if (owner.value) await ownerDirectory(context.projectRoot, owner.value, path.dirname(owner.folderPath));
         const markdown = await readText(file);
         result.document.recordedOwner = checkNewOwner(markdown, owner.value);
         const metadata = readDocumentMetadata(markdown);
@@ -238,17 +259,18 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
           if (workspace) policy = await setting(workspace, "config", "workspace");
         }
         result.policy = policy ?? { status: "known", value: false, source: { scope: "default", path: null } };
-        destination = result.policy.value ? await ownerDirectory(context.projectRoot, await actor()) : await safeTarget(context.projectRoot, baseDir, "directory");
+        destination = result.policy.value ? await ownerDirectory(context.projectRoot, await actor(), documentRoot) : await safeTarget(context.projectRoot, baseDir ?? documentRoot, "directory");
       }
-      const owner = ownerFromPath(relative(context.projectRoot, destination));
+      let owner = ownerFromPath(relative(context.projectRoot, destination), { kind: "directory", documentRoot });
       if (owner.status === "invalid") throw new ContextError("INVALID_OWNER", "The target has an invalid owner folder.", { source: destination });
       if (owner.value && target === undefined && result.policy.value === false) throw new ContextError("EXPLICIT_OWNER_TARGET", "Use --target only when the owner folder was explicitly requested; an existing @ folder does not enable ownerFolders.", { source: destination });
       if (owner.value) {
-        const scope = await ownerDirectory(context.projectRoot, owner.value);
+        const scope = await ownerDirectory(context.projectRoot, owner.value, path.dirname(owner.folderPath));
         // Use the existing Unicode spelling, without renaming the folder.
         destination = path.join(scope, ...owner.descendants);
         await safeTarget(context.projectRoot, destination, "directory");
         result.numbering = await nextNumber(scope);
+        owner = ownerFromPath(relative(context.projectRoot, destination), { kind: "directory", documentRoot });
       } else result.numbering = { mode: "existing-convention", scope: destination };
       result.document = {
         path: destination, relativePath: relative(context.projectRoot, destination), pathOwner: owner,

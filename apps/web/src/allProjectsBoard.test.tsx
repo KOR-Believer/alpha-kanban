@@ -4,8 +4,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TicketDocumentResponse } from "@alpha-kanban/shared";
+import { parseTicketDocument } from "@alpha-kanban/shared/ticketMarkdown";
+import { ledger } from "./browser/browserFixtures";
 import { AllProjectsBoard, allTicketsKey } from "./AllProjectsBoard";
-import { BOARD_FILTERS_KEY, type BoardData } from "./allProjectsData";
+import { boardTickets, BOARD_FILTERS_KEY, type BoardData } from "./allProjectsData";
 import { documentFixture, projectFixture } from "./allProjectsFixtures";
 import { setLanguage, t } from "./i18n";
 import { browserRepository } from "./browser/repository";
@@ -36,6 +38,9 @@ describe("all-projects document workflow", () => {
   beforeEach(async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     vi.clearAllMocks();
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(640);
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1200);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(190);
     window.localStorage.clear();
     await setLanguage("ko");
     window.localStorage.setItem("alpha-kanban.ticketDetailMode", "modal");
@@ -68,16 +73,33 @@ describe("all-projects document workflow", () => {
   });
   async function mount(expectedCards = 2) {
     await act(async () => root.render(<QueryClientProvider client={client}><AllProjectsBoard /></QueryClientProvider>));
-    for (let attempt = 0; attempt < 30 && document.querySelectorAll("[data-ticket-key]").length !== expectedCards; attempt++) {
+    for (let attempt = 0; attempt < 30 && (expectedCards < 80 ? document.querySelectorAll("[data-ticket-key]").length : boardTickets(client.getQueryData<BoardData>(allTicketsKey)).length) !== expectedCards; attempt++) {
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
     }
-    expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(expectedCards);
+    if (expectedCards < 80) expect(document.querySelectorAll("[data-ticket-key]")).toHaveLength(expectedCards);
+    else {
+      expect(boardTickets(client.getQueryData<BoardData>(allTicketsKey))).toHaveLength(expectedCards);
+      expect(document.querySelectorAll("[data-ticket-key]").length).toBeGreaterThan(0);
+      expect(document.querySelectorAll("[data-ticket-key]").length).toBeLessThan(expectedCards);
+    }
   }
-  it("excludes unsupported formats from cards and links to the raw document instead", async () => {
-    documents[first.id]!.document.compatibility = { status: "unsupported", version: "99", readable: false, writable: false, code: "UNSUPPORTED_FORMAT" };
-    await mount(1);
-    expect(container.textContent).toContain(t("Some documents need a supported format or repair. Open their Markdown to review them."));
-    expect(container.querySelector('details a')?.getAttribute("href")).toContain("d_first");
+  it.each(["", "Ledger-Format: 99", "Ledger-Format: 1\nLedger-Format: 1"])("includes legacy cards, counts and details independently of maintenance (%s)", async (header) => {
+    const source = ledger.replace("# Browser test", `# Browser test\n\n${header}`)
+      .replaceAll("Test ticket", `Fixture ${first.id}`).replace("제외 범위:\n- none\n", "")
+      .replace("Status: READY", "Status: WATCH").replace("Progress: 25%", "Progress: 80%");
+    documents[first.id]!.document = parseTicketDocument(source);
+    await mount(3);
+    expect(column("TODO").contains(card())).toBe(true);
+    expect(card().textContent).toContain("0%");
+    expect(card().getAttribute("draggable")).toBe("true");
+    expect(container.textContent).toContain(t("{{count}} tickets", { count: 3 }));
+    await act(async () => ticketLink().click());
+    const detail = document.querySelector('[role="dialog"]')!;
+    expect(detail.textContent).toContain(`Fixture ${first.id}`);
+    expect(detail.textContent).toContain("old direction");
+    expect(detail.textContent).toContain("old note");
+    expect(detail.querySelector('form[data-tour="ticket-instructions"]')).not.toBeNull();
+    expect(detail.querySelector("[role=combobox]")).not.toBeNull();
     expect(api.patch).not.toHaveBeenCalled(); expect(api.append).not.toHaveBeenCalled();
   });
   function card(id = first.id) {
@@ -198,6 +220,23 @@ describe("all-projects document workflow", () => {
     expect([...picker.querySelectorAll("label")].map((label) => label.textContent)).toEqual([t("Unassigned"), "@alice", "@bob"]);
     await act(async () => picker.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1]!.click());
     expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(50);
+  });
+
+  it("finds an offscreen body-only match and opens it without dropping detail drafts", async () => {
+    const response = documents[first.id]!;
+    response.document.tickets = Array.from({ length: 250 }, (_, i) => ({ ...response.document.tickets[0]!,
+      id: `BIG-${i}`, title: `Ticket ${i}`, searchText: `### BIG-${i}. Ticket ${i}\n${i === 249 ? "Hidden cobalt phrase" : "Ordinary body"}` }));
+    api.workspaces.mockResolvedValue({ workspaces: [first] });
+    await mount(250);
+    expect(container.querySelector('[data-ticket-key$="#BIG-249"]')).toBeNull();
+    await enter(container.querySelector<HTMLInputElement>(`input[aria-label="${t("Search tickets")}"]`)!, "cobalt phrase");
+    expect(container.querySelectorAll("[data-ticket-key]")).toHaveLength(1);
+    expect(container.querySelector("mark")?.textContent).toBe("cobalt phrase");
+    await act(async () => container.querySelector<HTMLAnchorElement>('[data-ticket-key] a.ak-focus-ring.mt-2')!.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("Match in ticket body"));
+    await enter(instructionInput(), "Preserve search result draft");
+    await act(async () => { await setLanguage("en"); });
+    expect([...document.querySelectorAll("textarea")].some((input) => input.value === "Preserve search result draft")).toBe(true);
   });
 
   it("reports a path-only owner change while preserving the open draft", async () => {

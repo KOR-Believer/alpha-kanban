@@ -13,7 +13,11 @@
     "test:pwa": "node scripts/pwa-smoke.mjs",
     "test:tours": "node scripts/tours-smoke.mjs",
     "dev": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/web dev",
-    "build": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/web build",
+    "build": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/web build && node scripts/check-browser-release.mjs",
+    "check:release": "node scripts/check-browser-release.mjs",
+    "test:channels": "node --test scripts/test/release-channel.test.mjs",
+    "test:maintenance-worker": "node --test scripts/test/maintenance-worker.test.mjs",
+    "test:channel-builds": "node scripts/test-channel-builds.mjs",
     "preview": "pnpm --filter @alpha-kanban/web preview",
     "typecheck": "pnpm --filter @alpha-kanban/web typecheck",
     "install:skill": "node scripts/install-implementation-ledger-skill.mjs",
@@ -22,8 +26,8 @@
     "test:ledger": "node --test scripts/test/document-context.test.mjs scripts/test/document-owner.test.mjs",
     "build:document-cli": "node scripts/build-document-cli.mjs",
     "test:skill-distribution": "node --test --test-concurrency=1 scripts/test/skill-distribution.test.mjs",
-    "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs scripts/test/document-migration.test.mjs",
-    "test": "pnpm test:ledger && pnpm test:documents && pnpm test:skill-distribution && pnpm -r --if-present test"
+    "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-journal.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs scripts/test/document-migration.test.mjs scripts/test/document-root.test.mjs",
+    "test": "pnpm test:channels && pnpm test:ledger && pnpm test:documents && pnpm test:maintenance-worker && pnpm test:skill-distribution && pnpm -r --if-present test"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

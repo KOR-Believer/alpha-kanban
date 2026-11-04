@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 import { PrecacheController, PrecacheRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { ASSET_LOCK, CACHE_PREFIX, PWA_PROTOCOL, SESSION_LOCK, requestWorker } from "./protocol";
+import { ASSET_LOCK, CACHE_PREFIX, PWA_PROTOCOL, RUNNING_CHANNEL, SESSION_LOCK, requestWorker } from "./protocol";
+import { assertReleaseOrigin, sameReleaseChannel } from "../../release-channel.mjs";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null; integrity?: string }> };
 const buildId = __APP_RELEASE__.buildId;
@@ -20,12 +21,15 @@ let transaction: string | undefined;
 let prepared: WindowClient[] = [];
 let releaseTransition: (() => void) | undefined;
 
-self.addEventListener("install", (event) => event.waitUntil(self.navigator.locks.request(ASSET_LOCK, { mode: "shared" }, () => precache.install(event))));
+self.addEventListener("install", (event) => event.waitUntil((async () => {
+  assertReleaseOrigin(RUNNING_CHANNEL, self.location.origin);
+  await self.navigator.locks.request(ASSET_LOCK, { mode: "shared" }, () => precache.install(event));
+})()));
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     await precache.activate(event);
     // No unconditional claim/reload. Only clients that agreed to this transaction reload.
-    for (const client of prepared) client.postMessage({ type: "AK_COMMIT", protocol: PWA_PROTOCOL, transaction });
+    for (const client of prepared) client.postMessage({ type: "AK_COMMIT", protocol: PWA_PROTOCOL, channel: RUNNING_CHANNEL, transaction });
     releaseTransition?.();
   })());
 });
@@ -42,8 +46,8 @@ async function apply() {
   prepared = await windows();
   try {
     await Promise.all(prepared.map(async (client) => {
-      const reply = await requestWorker<{ ok: boolean; protocol: number }>(client, "AK_PREPARE", { transaction }, 3000);
-      if (!reply.ok || reply.protocol !== PWA_PROTOCOL) throw new Error("busy");
+      const reply = await requestWorker<{ ok: boolean; protocol: number; channel?: string }>(client, "AK_PREPARE", { transaction }, 3000);
+      if (!reply.ok || reply.protocol !== PWA_PROTOCOL || !sameReleaseChannel(reply.channel, RUNNING_CHANNEL)) throw new Error("busy");
     }));
     if (!await ready()) throw new Error("incomplete");
     let decide!: (acquired: boolean) => void;
@@ -69,7 +73,7 @@ async function apply() {
 
 function cancel() {
   releaseTransition?.();
-  for (const client of prepared) client.postMessage({ type: "AK_RESUME", protocol: PWA_PROTOCOL, transaction });
+  for (const client of prepared) client.postMessage({ type: "AK_RESUME", protocol: PWA_PROTOCOL, channel: RUNNING_CHANNEL, transaction });
   prepared = []; transaction = undefined;
 }
 
@@ -80,8 +84,8 @@ async function collectOldAssets() {
       if (!assets) return;
       for (const client of await windows()) {
         try {
-          const reply = await requestWorker<{ buildId: string }>(client, "AK_VERSION", {}, 1000);
-          if (reply.buildId !== buildId) return;
+          const reply = await requestWorker<{ buildId: string; channel?: string }>(client, "AK_VERSION", {}, 1000);
+          if (reply.buildId !== buildId || !sameReleaseChannel(reply.channel, RUNNING_CHANNEL)) return;
         } catch { return; }
       }
       // Keep a prepared update too. A newly waiting worker may share this origin's caches.
@@ -94,11 +98,12 @@ async function collectOldAssets() {
 self.addEventListener("message", (event) => {
   if (event.data?.protocol !== PWA_PROTOCOL || !event.source || !("url" in event.source) || new URL(event.source.url).origin !== self.location.origin) return;
   const reply = (value: unknown) => event.ports[0]?.postMessage(value);
-  if (event.data.type === "AK_INFO") event.waitUntil(ready().then((isReady) => reply({ protocol: PWA_PROTOCOL, buildId, ready: isReady, mode: "app", release: __APP_RELEASE__ })));
+  if (event.data.type === "AK_INFO") event.waitUntil(ready().then((isReady) => reply({ protocol: PWA_PROTOCOL, channel: RUNNING_CHANNEL, buildId, ready: isReady, mode: "app", release: __APP_RELEASE__ })));
   if (event.data.type === "AK_CLIENTS") event.waitUntil(windows().then((clients) => reply({ count: clients.length })));
   if (event.data.type === "AK_APPLY") {
-    if (event.data.buildId && event.data.buildId !== buildId) reply({ ok: false, reason: "Update target changed." });
+    if (!sameReleaseChannel(event.data.channel, RUNNING_CHANNEL)) reply({ ok: false, reason: "Update channel changed." });
+    else if (event.data.buildId && event.data.buildId !== buildId) reply({ ok: false, reason: "Update target changed." });
     else event.waitUntil(apply().then(reply));
   }
-  if (event.data.type === "AK_COLLECT") event.waitUntil(collectOldAssets().then(() => reply({ ok: true })));
+  if (event.data.type === "AK_COLLECT" && sameReleaseChannel(event.data.channel, RUNNING_CHANNEL)) event.waitUntil(collectOldAssets().then(() => reply({ ok: true })));
 });

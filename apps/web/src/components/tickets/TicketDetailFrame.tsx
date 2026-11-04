@@ -1,13 +1,15 @@
 import { useTranslation } from "@/i18n";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Check, ChevronDown, ExternalLink, FileText, Maximize2, Minimize2, MoveDiagonal2, PanelRight, RectangleHorizontal, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChannelBadge } from "@/components/AppBrand";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { TicketDetailMode } from "../../appRoute";
 import type { ResizeEdge, TicketDetailPresentation } from "./useTicketDetailPresentation";
 import { usePwaDraft } from "../../pwa/usePwaDraft";
 import { TourButton, useScreenTour } from "../../onboarding/ScreenTour";
+import { useLinkedNavigation } from "../../browser/linkedNavigation";
 
 const views = [
   { mode: "side", label: "Side peek", icon: PanelRight },
@@ -25,12 +27,19 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  const linked = useLinkedNavigation();
   usePwaDraft(hasDraft || isBusy);
+  const draftOwner = useRef({});
+  useLayoutEffect(() => {
+    const owner = draftOwner.current;
+    linked.protectDraft(owner, hasDraft, isBusy);
+    return () => linked.protectDraft(owner, false, false);
+  }, [hasDraft, isBusy, linked.protectDraft]);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [pendingExit, setPendingExit] = useState<"close" | "workspace" | null>(null);
   const tourContainer = useRef<HTMLDivElement>(null);
   const tour = useScreenTour("detail", {
-    enabled: !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
+    enabled: !linked.id && !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
     eligible: false, scope: `${ticketId}:${presentation.mode}`, container: tourContainer,
   });
   const returnFocus = useRef(typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null);
@@ -58,6 +67,9 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
     setViewMenuOpen(false);
   }
 
+  // Draft state is owned by the still-mounted detail component; keep its PWA guard
+  // while suspending this portal's focus trap during connected-page navigation.
+  if (linked.id) return null;
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestExit("close"); }}>
       <DialogContent ref={tourContainer} layout="custom" showCloseButton={false} aria-describedby={undefined}
@@ -76,6 +88,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
           <div className="ak-ticket-detail-toolbar">
             <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
               <FileText className="size-4 shrink-0" aria-hidden="true" /><span className="truncate">{ticketId}</span>
+              <ChannelBadge />
             </span>
             <div className="ak-drawer-actions">
               <TourButton tour={tour} labelKey="Tour ticket details" />

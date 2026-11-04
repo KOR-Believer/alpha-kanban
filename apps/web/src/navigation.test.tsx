@@ -8,8 +8,12 @@ import { buildDocumentSets } from "@alpha-kanban/shared/documents";
 import { createAppRouter } from "./router";
 import { buildAppRoute } from "./appRoute";
 import { projectFixture, documentFixture } from "./allProjectsFixtures";
-import { browserRepository } from "./browser/repository";
+import { browserRepository, browserLinkMappings } from "./browser/repository";
 import { setLanguage } from "./i18n";
+import { FakeDirectory, MemoryStorage, testLocks } from "./browser/browserFixtures";
+import { LinkMappings } from "./browser/linkMappings";
+import { linkedRoute } from "./browser/linkedNavigation";
+import { appActivity } from "./pwa/activity";
 
 describe("application navigation history", () => {
   const workspace = projectFixture("workspace/project", "bw_test");
@@ -281,6 +285,47 @@ describe("application navigation history", () => {
     expect(browserRepository.markdown).not.toHaveBeenCalledWith(workspace.id, earlierFile.id);
     expect(router.state.location.href).toBe(projectHref);
     expect(router.history.length).toBe(1);
+  });
+
+  it("preserves the source ticket draft through connected pages and confirms leaving its source", async () => {
+    const target = new FakeDirectory("target"); target.file("linked.md", "# Linked page\n\nRead only\n");
+    const service = new LinkMappings(new MemoryStorage(), async () => [], { lock: testLocks() });
+    const context = { scopeId: workspace.id, label: workspace.label, root: new FakeDirectory("source").handle(), path: "docs/source.md", documentId: response.file.id };
+    const attempt = await service.attempt(context, "/old/target/linked.md");
+    const opened = await service.save(context, attempt.location, "/old/target", { handle: target.handle(), label: "target" });
+    for (const method of ["document", "openDocument"] as const) vi.spyOn(browserLinkMappings, method).mockImplementation(service[method].bind(service) as never);
+    const source = buildAppRoute({ workspaceId: workspace.id, filePath: response.file.id, ticketId: "TEST-01" });
+    await render([source]);
+    const input = document.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, "Keep this draft");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(appActivity.unloadRisk).toBe(true);
+    await act(async () => { await router.navigate({ href: linkedRoute(source, opened.context.documentId) }); }); await settle();
+    expect(document.querySelector('.ak-ticket-detail-shell')).toBeNull();
+    expect(container.querySelector('[data-linked-document]')?.textContent).toContain("Linked page");
+    expect(appActivity.unloadRisk).toBe(true); expect(appActivity.prepare()).toBe(false);
+    await travel("back");
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe("Keep this draft");
+    expect(router.state.location.href).toBe(source);
+    expect(appActivity.unloadRisk).toBe(true);
+    await travel("forward");
+    const linkedHref = router.state.location.href;
+    await act(async () => { void router.navigate({ href: "/" }); }); await settle();
+    expect(router.state.location.href).toBe(linkedHref);
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("작성 중인 내용을 버릴까요?");
+    const cancel = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "취소")!;
+    await act(async () => cancel.click()); await settle();
+    expect(router.state.location.href).toBe(linkedHref);
+    await travel("back");
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe("Keep this draft");
+    await travel("forward");
+    await act(async () => { void router.navigate({ href: "/" }); }); await settle();
+    const discard = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "버리고 이동")!;
+    await act(async () => discard.click()); await settle();
+    expect(router.state.location.href).toBe("/");
+    expect(appActivity.unloadRisk).toBe(false);
   });
 
   it.each(["missing-ticket", "markdown-view", "non-ticket-document"])("ignores an unavailable detail without rewriting its deep link (%s)", async (kind) => {

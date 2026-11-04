@@ -1,6 +1,7 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { BookOpen, Download, HardDrive, MonitorDown, RefreshCw, Wrench } from "lucide-react";
 import { useTranslation } from "../i18n";
+import { ChannelBadge } from "../components/AppBrand";
 import { Button, buttonVariants } from "../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { appInstaller } from "./install";
@@ -33,7 +34,7 @@ export function PwaMenu() {
       if (openNotes.current) { event.preventDefault(); openNotes.current = false; requestAnimationFrame(() => openReleaseNotes(trigger.current)); }
     }}>
       <div className="grid gap-3 text-sm">
-        <div><h2 className="font-semibold">{t("Alpha Kanban")}</h2><p className="mt-1 text-xs text-muted-foreground">{t("Build {{id}}", { id: __APP_RELEASE__.buildId })}</p></div>
+        <div><div className="ak-channel-title"><h2 className="font-semibold">{t("Alpha Kanban")}</h2><ChannelBadge /></div><p className="mt-1 text-xs text-muted-foreground">{t("Build {{id}}", { id: __APP_RELEASE__.buildId })}</p></div>
         {install.available ? <Button variant="outline" disabled={install.prompting} onClick={() => void appInstaller.install()}><Download aria-hidden="true" />{t("Install app")}</Button> : <p className="text-muted-foreground">{t(install.installed ? "App is installed" : "You can also check installation options in the Chrome menu.")}</p>}
         {install.failed ? <p role="alert">{t("Installation was not completed. Try the Chrome menu.")}</p> : null}
         <div className="border-t border-border pt-3" aria-live="polite">

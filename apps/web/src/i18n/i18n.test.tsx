@@ -14,6 +14,12 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("UI language", () => {
+  it("explains a failed maintenance analysis with a retry action in both languages", async () => {
+    const message = "Document analysis could not finish. Try the preview again.";
+    expect(errorSummary(new Error(message))).toBe("문서 분석을 완료하지 못했습니다. 미리보기를 다시 시도해 주세요.");
+    await setLanguage("en");
+    expect(errorSummary(new Error(message))).toBe(message);
+  });
   it("localizes format and duplicate-ID errors with a concrete next action", async () => {
     for (const code of ["UNSUPPORTED_FORMAT", "INVALID_FORMAT", "DUPLICATE_DOCUMENT_ID"]) {
       const error = Object.assign(new Error("technical details"), { code });
@@ -78,10 +84,25 @@ describe("UI language", () => {
     expect(t("Unassigned")).toBe("미지정");
     expect(t("Search owners")).toBe("소유자 검색");
     expect(t("Remove owner {{owner}}", { owner: "@alice" })).toBe("@alice 선택 해제");
+    expect(t("Available changes include missing document IDs, folder-based Owner correction, and removal of obsolete guidance and templates.")).toContain("폴더에 맞춘 Owner 교정");
+    expect(t("Owner is kept because the document has no confirmed owner folder.")).toBe("소유자 폴더를 확인할 수 없어 Owner는 그대로 둡니다.");
     await setLanguage("en");
     expect(t("All")).toBe("All");
     expect(t("Unassigned")).toBe("Unassigned");
     expect(t("Remove owner {{owner}}", { owner: "@alice" })).toBe("Remove owner @alice");
+    expect(t("Available changes include missing document IDs, folder-based Owner correction, and removal of obsolete guidance and templates.")).toContain("folder-based Owner correction");
+    expect(t("Owner is kept because the document has no confirmed owner folder.")).toBe("Owner is kept because the document has no confirmed owner folder.");
+  });
+
+  it("localizes explicit skill replacement consent and backup retention separately from normal updates", async () => {
+    expect(t("Review reinstall")).toBe("재설치 내용 확인");
+    expect(t("Back up and reinstall")).toBe("백업 후 다시 설치");
+    expect(t("I have reviewed the changes and agree to replace this installation, including personal changes and extra files.")).toContain("추가 파일");
+    expect(t("Backups stay on this site in this browser and are not automatically deleted, even after restoring or disconnecting.")).toContain("자동으로 지우지 않습니다");
+    expect(t("Total backup file contents: {{size}}.", { size: "327 kB" })).toContain("327 kB");
+    await setLanguage("en");
+    expect(t("Review reinstall")).toBe("Review reinstall");
+    expect(t("This installation differs from known official bundles. Regular updates will not replace it.")).toContain("Regular updates will not replace it");
   });
 
   it("localizes the launcher and intro while preserving URLs in installation requests", async () => {

@@ -5,6 +5,7 @@ For hosting configuration and release checks, see [Deployment](deployment.md). L
 ## Boundaries
 
 - Production origin: `https://kanban.giveit2.me`; worker URL `/sw.js`; manifest id/start/scope `/`.
+- Canary uses the separate `https://kanban-canary.giveit2.me` origin when deployed. `AK_RELEASE_CHANNEL` selects the channel independently of normal/recovery/retired mode. Use the same explicit channel for every incident artifact, verify its deployment target with `pnpm check:release`, and preserve each origin's data separately. This configuration does not establish that the canary origin is live.
 - Verify actual production response headers and installation behavior for each release; local preview checks do not establish deployment success.
 - Chrome desktop is the target. A standalone PWA window does not add Node privileges, filesystem-wide access, AI execution or permanent folder watching.
 - App build ID is a content hash plus an optional CI `AK_RELEASE_REVISION`. Skill bundle hash is separately reported in release metadata. Semantic skill/Markdown compatibility remains owned by AKL-10..13; null is unknown, not a guessed version.
@@ -29,6 +30,8 @@ of overwriting `dist-browser` or touching user browser data.
 It uninstalls the test app and removes the temporary Chrome profile after checking
 preservation. `PWA_KEEP_PROFILE=1` retains that isolated profile for debugging;
 delete it after inspection. Logs, build artifacts and screenshots remain available.
+
+For a canary incident, run the same commands with `AK_RELEASE_CHANNEL=canary` in its separate checkout. Worker activation, offline fallback, retirement metadata and repair requests must match that channel. Channel-less metadata belongs only to historical stable releases. Do not copy a canary rescue build to the stable origin.
 
 - **Normal**: complete integrity-checked Workbox precache, conditional install entry and controlled update UI.
 - **Recovery**: a request-neutral worker at the same `/sw.js`, normal app without new registration code. Activation normally waits until old controlled windows close. This removes the broken fetch behavior without depending on the old app bundle running. Keep old caches initially.

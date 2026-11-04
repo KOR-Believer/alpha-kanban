@@ -1,14 +1,22 @@
 /* Always publish at /sw.js. Recovery has no fetch handler or imported app code. */
 const mode = "__RESCUE_MODE__";
+const channel = "__RELEASE_CHANNEL__";
+const buildId = "__RESCUE_BUILD_ID__";
+const blockedOrigins = "__OTHER_CHANNEL_ORIGINS__";
+const matchesChannel = (value) => value === channel || (value === undefined && channel === "stable");
 const prefix = "alpha-kanban-app-v1-";
 const appClients = async () => (await self.clients.matchAll({ type: "window", includeUncontrolled: true }))
   .filter((client) => new URL(client.url).origin === self.location.origin && /^\/(?:index\.html|intro|all|w\/[^/]+)?\/?$/.test(new URL(client.url).pathname));
+
+self.addEventListener("install", (event) => event.waitUntil(Promise.resolve().then(() => {
+  if (blockedOrigins.includes(self.location.origin)) throw new Error("Release channel and hosted origin do not match.");
+})));
 
 async function finishRetirement() {
   try {
     const response = await fetch("/release.json", { cache: "no-store", signal: AbortSignal.timeout(10_000) });
     const release = await response.json();
-    if (!response.ok || release.app !== "alpha-kanban" || release.mode !== "retired" || release.protocol !== 1) return;
+    if (!response.ok || release.app !== "alpha-kanban" || release.mode !== "retired" || release.protocol !== 1 || !matchesChannel(release.channel)) return;
     await self.navigator.locks.request("alpha-kanban:pwa-session-v1", { ifAvailable: true }, async (lock) => {
       if (!lock) return;
       await self.navigator.locks.request("alpha-kanban:pwa-assets-v1", { ifAvailable: true }, async (assets) => {
@@ -27,8 +35,8 @@ async function completeOfflineCache() {
     const cache = await caches.open(name);
     const marker = await cache.match("/offline-ready.json");
     if (!marker) continue;
-    const { keys } = await marker.json();
-    if (Array.isArray(keys) && keys.length && (await Promise.all(keys.map((key) => cache.match(key)))).every(Boolean)) return cache;
+    const { keys, channel: cacheChannel } = await marker.json();
+    if (matchesChannel(cacheChannel) && Array.isArray(keys) && keys.length && (await Promise.all(keys.map((key) => cache.match(key)))).every(Boolean)) return cache;
   }
 }
 
@@ -58,9 +66,10 @@ if (mode === "retired") {
 self.addEventListener("message", (event) => {
   if (event.data?.protocol !== 1 || !event.source || !("url" in event.source) || new URL(event.source.url).origin !== self.location.origin) return;
   const reply = (value) => event.ports[0]?.postMessage(value);
-  if (event.data.type === "AK_INFO") reply({ protocol: 1, mode, ready: false, buildId: mode });
+  if (event.data.type === "AK_INFO") reply({ protocol: 1, channel, mode, ready: false, buildId });
   if (event.data.type === "AK_CLIENTS") event.waitUntil(appClients().then((clients) => reply({ count: clients.length })));
   if (event.data.type === "AK_APPLY") event.waitUntil((async () => {
+    if (!matchesChannel(event.data.channel)) { reply({ ok: false, reason: "channel" }); return; }
     // A broken app need not respond: the operator can ask the user to close its windows.
     if ((await appClients()).length) { reply({ ok: false, reason: "busy" }); return; }
     await self.skipWaiting();

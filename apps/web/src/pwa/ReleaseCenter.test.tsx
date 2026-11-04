@@ -137,13 +137,18 @@ describe("one confirmation for app and registered skill", () => {
   async function open() {
     mock.path = "/intro"; mock.state = { status: "ready", offlineReady: true, prepared: release(2) };
     skills.state = "update";
-    skills.review = { connection: { name: "test-skill" }, bundle: { version: "1234567890ab" }, changes: [{ path: "SKILL.md", kind: "change" }] } as SkillReview;
+    skills.review = { connection: { name: "test-skill" }, files: [{ path: "SKILL.md", content: "Before instructions\n" }], bundle: { version: "1234567890ab", files: [{ path: "SKILL.md", content: "After instructions\n" }] }, changes: [{ path: "SKILL.md", kind: "change" }] } as SkillReview;
     await render(release(1)); await act(async () => openReleaseNotes());
   }
   it("shows files and an advisory, with no stopped-task checkbox or writes on dismissal", async () => {
     await open();
     expect(dialog()?.textContent).toContain("SKILL.md");
-    expect(dialog()?.textContent).toContain("끝난 뒤 업데이트");
+    expect(dialog()?.textContent).toContain("다른 Alpha Kanban 앱의 스킬 변경을 마친 뒤 적용");
+    expect(dialog()?.textContent).toContain("정식 제공 스킬");
+    const details = dialog()!.querySelector("details")!;
+    await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
+    expect(details.querySelector('[data-change="removed"] code')?.textContent).toBe("Before instructions");
+    expect(details.querySelector('[data-change="added"] code')?.textContent).toBe("After instructions");
     expect(document.querySelector('[role="checkbox"]')).toBeNull();
     await click("나중에");
     expect(skills.approve).not.toHaveBeenCalled(); expect(mock.apply).not.toHaveBeenCalled();

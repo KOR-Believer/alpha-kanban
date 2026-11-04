@@ -21,7 +21,8 @@ describe("display theme", () => {
     window.localStorage.clear();
     const css = readFileSync(resolve(import.meta.dirname, "styles.css"), "utf8");
     styles = document.createElement("style");
-    styles.textContent = `:root {${css.match(/:root\s*\{([^}]+)\}/)![1]}} .dark {${css.match(/\.dark\s*\{([^}]+)\}/)![1]}}`;
+    styles.textContent = `:root {${css.match(/:root\s*\{([^}]+)\}/)![1]}} .dark {${css.match(/\.dark\s*\{([^}]+)\}/)![1]}}` +
+      [...css.matchAll(/:root\[data-release-channel="canary"\](?:\.dark)?\s*\{[^}]+\}/g)].map(([rule]) => rule).join("\n");
     document.head.append(styles);
     await setLanguage("ko");
     stop = initializeTheme();
@@ -35,6 +36,7 @@ describe("display theme", () => {
     stop();
     container.remove();
     document.documentElement.classList.remove("dark");
+    delete document.documentElement.dataset.releaseChannel;
     styles.remove();
     document.head.querySelectorAll('meta[name="theme-color"]').forEach((element) => element.remove());
     vi.restoreAllMocks();
@@ -99,6 +101,29 @@ describe("display theme", () => {
     setTheme("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(meta().content).toBe(surface("--background"));
+  });
+
+  it("uses canary header surfaces in both themes while keeping work-status colors and drafts", async () => {
+    const statusColors = () => ["--ak-success", "--ak-warning", "--destructive"].map(surface);
+    const stableLight = statusColors();
+    setTheme("dark");
+    const stableDark = statusColors();
+    document.documentElement.dataset.releaseChannel = "canary";
+    await act(async () => root.render(<><ThemeToggle /><textarea defaultValue="unfinished instruction" /></>));
+    const draft = container.querySelector("textarea")!;
+    expect(meta().content).toBe(surface("--ak-header-background"));
+    expect(statusColors()).toEqual(stableDark);
+    await act(async () => setTheme("light"));
+    expect(meta().content).toBe(surface("--ak-header-background"));
+    expect(meta().content).not.toBe(surface("--background"));
+    expect(statusColors()).toEqual(stableLight);
+    await act(async () => root.render(<><ThemeToggle surface="--ak-surface" /><textarea defaultValue="unfinished instruction" /></>));
+    expect(meta().content).toBe(surface("--ak-header-surface"));
+    await act(async () => setTheme("dark"));
+    expect(meta().content).toBe(surface("--ak-header-surface"));
+    expect(container.querySelector("textarea")).toBe(draft);
+    expect(draft.value).toBe("unfinished instruction");
+    expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1);
   });
 
   it("syncs across tabs without responding to unrelated preference changes", async () => {

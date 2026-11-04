@@ -26,6 +26,15 @@ The build output is `apps/web/dist-browser`. Preview defaults to [http://127.0.0
 
 The `dev:browser`, `build:browser`, and `preview:browser` commands are aliases for these commands.
 
+`AK_RELEASE_CHANNEL=stable|canary` selects a build channel; omitting it preserves the stable default. Use separate checkouts and preview origins for channel comparisons. Each checkout still emits `apps/web/dist-browser`; do not run opposing channel builds concurrently in one checkout or reuse an already connected browser origin for the other channel.
+
+```sh
+pnpm test:channels
+pnpm test:channel-builds
+```
+
+The first command checks channel selection and deployment guards. The second captures the current source, including uncommitted work, and packages/builds it in two isolated directories under ignored `output/`. It reuses installed dependencies without changing local development assets or creating deployment branches. The report compares release histories, app identities, repair metadata, offline integrity and skill contents, and rejects the opposite deployment target. These local results do not establish public hosting or native PWA installation behavior.
+
 ## Validate changes
 
 Run checks appropriate to the changed behavior:
@@ -42,6 +51,19 @@ pnpm build
 
 For browser flows, use desktop Chrome:
 
+`pnpm test:maintenance-worker` checks the development decoder resolution and executes the built document-analysis Worker without a DOM. It runs as part of `pnpm test`. The [maintenance performance report](docs/document_maintenance_performance.md) describes the native-folder benchmark, the synthetic fixture generator, and the distinction between preview speed and guarded saving.
+
+The [local link connection guide](docs/browser_link_connections.md) describes read-only link mapping and its boundaries. `pnpm --filter @alpha-kanban/web test src/browser/linkMappings.test.ts src/browser/LocalLinkDialog.test.tsx` checks path/repo resolution and the connection UI. For an isolated A/B report, set `AKD10_AB_REPORT` to an ignored output JSON path when running `linkMappings.test.ts`. The report uses fake handles, separate experiment storage/cache namespaces, and first-use/reuse measurements; it is not a native filesystem benchmark. Use disposable native folders for Chrome picker, permission, restart and persistence checks.
+
+Prepare a portable native smoke kit in a new empty directory:
+
+```sh
+node scripts/prepare-link-smoke.mjs --out output/link-smoke --build
+node scripts/package-link-smoke.mjs output/link-smoke output/link-smoke.zip
+```
+
+The kit includes two prebuilt PWA releases, fictional colleague-PC paths, nested repositories/forks/checkouts, read-only native A/B and boundary pages, a freshly rebuilt standalone document CLI and a hash verifier. Its README covers isolated Chrome profiles and Windows execution using Node.js 24 and Git, without pnpm or a source checkout. Packaging includes only the named assets and fixtures; it excludes browser profiles, logs and CLI journals. `node native-cli.mjs` creates fresh disposable Git worktrees and writes `native-cli-<platform>.json`; its ten cases include deliberate process interruption followed by explicit unlock/resume and unlock/recover using a smoke-only worker. `node verify.mjs` checks all 32 protected fixture files. `RETEST.md` narrows follow-up Windows checks to the CLI, target candidate labels, unsaved connection inputs across language/theme changes and individual folder revocation. Native A/B uses real directory-picker handles and its own IndexedDB. The boundary page calls production services with native handles to check inaccessible Git metadata and incomplete discovery; it is separate from app UI interaction. `pnpm test:pwa` checks saved-link persistence across updates and a complete offline browser restart with OPFS. Record these as different kinds of evidence. Never clear site data or revoke folder access in the contributor's existing profile.
+
 ```sh
 # With the development app running on port 5187:
 pnpm test:tours
@@ -54,7 +76,7 @@ PWA smoke tests cover installation, offline operation, updates, recovery, and re
 
 ## Release and skill changes
 
-Add end-user changes in Korean and English to `apps/web/releases.json`. Records use a stable logical `id`, increasing `sequence`, ISO `date`, `notify`, and `notes.ko`/`notes.en`. Preserve published records. Rebuilding a release keeps its ID; a later public change gets a new record. Use `notify: false` for internal-only changes that should remain in manual history without an automatic notice. Local records are not evidence of deployment.
+Add end-user changes in Korean and English to `apps/web/releases.json` for stable or `apps/web/releases.canary.json` for canary. Records use a stable logical `id`, increasing `sequence`, ISO `date`, `notify`, and `notes.ko`/`notes.en`. Preserve published records. Rebuilding a release keeps its ID; a later public change gets a new record. Use `notify: false` for changes that should remain in manual history without an automatic notice; keep development-process notes out of both files. Local records are not evidence of deployment.
 
 Builds validate this history and embed the same current notes in the page, worker and `release.json`. Applying an update binds to the prepared worker, not a more recent network response. Test that distinction whenever the update protocol changes.
 

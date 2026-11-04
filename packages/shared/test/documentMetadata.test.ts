@@ -13,7 +13,10 @@ describe("optional document metadata analysis", () => {
     [ownedPath, "", "legacy-adoption"], [ownedPath, "Owner: @bob", "reconcile"],
     [ownedPath, "Owner: @alice", "aligned"], [ownedPath, "Owner: invalid", "invalid"],
     [ownedPath, "Owner: @alice\nOwner: @alice", "invalid"], [ownedPath, "owner: @alice", "invalid"],
-    ["docs/@@bad/01_search_plan.md", "", "invalid"], ["docs/nested/@alice/01_search_plan.md", "", "unassigned"],
+    ["docs/@@bad/01_search_plan.md", "", "invalid"], ["docs/nested/@alice/01_search_plan.md", "", "legacy-adoption"],
+    ["docs/@bob/@alice/01_search_plan.md", "Owner: @bob", "reconcile"],
+    ["docs/@bob/@alice/01_search_plan.md", "Owner: @alice", "aligned"],
+    ["docs/@bob/@/01_search_plan.md", "Owner: @bob", "invalid"],
   ])("classifies %s / %s without deriving history or requiring an ID", (path, header, expected) => {
     const markdown = source.replace("\n", `\n${header}\n`);
     const before = markdown;
@@ -33,6 +36,12 @@ describe("optional document metadata analysis", () => {
     expect(preview.after.replace(`Document-ID: ${id}\n`, "")).toBe(markdown);
     expect(preview.after).not.toContain("Ledger-Format:");
     expect(preview.after).not.toContain("Owner: @alice");
+  });
+
+  it("adds only a missing ID to incomplete legacy tickets without validating or normalizing ticket values", () => {
+    const markdown = "# Legacy\n\n## Ticket List\n\n### OLD-01. Work\nStatus: WATCH\nProgress: 80%\n사용자 지시:\n- 2026-07-10: Keep actual direction.\n";
+    const preview = previewDocumentMetadata({ markdown, path: "docs/01_legacy_tickets.md", assignId: true, generateId: () => id });
+    expect(preview.after.replace(`Document-ID: ${id}\n`, "")).toBe(markdown);
   });
 
   it.each(["bad", "00000000-0000-0000-0000-000000000000", "33cfe3fc-a0ab-1d1e-9b8b-f30501a2bac1", `${id}\nDocument-ID: ${id}`])("refuses invalid or duplicate ID %s instead of replacing it", (value) => {
@@ -75,7 +84,7 @@ describe("optional document metadata analysis", () => {
       expect(() => previewDocumentMetadata({ markdown, path, assignId: true })).toThrow();
     }
     expect(() => previewDocumentMetadata({ markdown: source, path: "../01_test_plan.md", assignId: true })).toThrow();
-    expect(() => previewDocumentMetadata({ markdown: source, path, reconcileOwner: true })).toThrow(/current docs/);
+    expect(() => previewDocumentMetadata({ markdown: source, path, reconcileOwner: true })).toThrow(/nearest @ directory/);
     expect(() => resumeMetadataPreview({ ...preview, after: "tampered" }, source, "notes.md")).toThrow(/changed/);
   });
 
@@ -85,6 +94,16 @@ describe("optional document metadata analysis", () => {
     expect(previewDocumentMetadata({ markdown: both.after, path: ownedPath, assignId: true, reconcileOwner: true }).edits).toEqual([]);
     const ownerOnly = previewDocumentMetadata({ markdown: source, path: ownedPath, reconcileOwner: true });
     expect(ownerOnly.after).toContain("Owner: @alice"); expect(ownerOnly.after).not.toContain("Document-ID");
+  });
+
+  it.each(["\n", "\r\n"])("can insert an ID and replace Owner directly after the title at the same source boundary: %j", (eol) => {
+    const markdown = "\uFEFF" + "# Plan\nOwner: @bob\n\n## Goal\nKeep [link](other.md)\n".replaceAll("\n", eol);
+    const target = "docs/@bob/archive/@alice/01_search_plan.md";
+    const preview = previewDocumentMetadata({ markdown, path: target, assignId: true, reconcileOwner: true, generateId: () => id });
+    const expected = markdown.replace("Owner: @bob", `Document-ID: ${id}${eol}Owner: @alice`);
+    expect(preview.after).toBe(expected);
+    expect(resumeMetadataPreview(preview, markdown, target)).toBe(expected);
+    expect(resumeMetadataPreview(preview, expected, target)).toBe(expected);
   });
 
   it("indexes duplicate files within a project but never merges clones/checkouts or missing/invalid IDs", () => {

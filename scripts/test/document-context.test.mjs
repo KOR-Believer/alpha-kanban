@@ -130,16 +130,20 @@ test("explicit owned and ordinary targets do not require identity or default pol
   const own = ok(await f.resolve({ target: "docs/@홍길동/research" }));
   assert.equal(own.document.ownerHeader, "Owner: @홍길동"); assert.equal(own.numbering.next, "01"); assert.equal(own.user.status, "not-needed");
   const basic = ok(await f.resolve({ target: "notes" })); assert.equal(basic.document.ownerHeader, null);
-  const deep = ok(await f.resolve({ target: "docs/research/@alice" })); assert.equal(deep.document.pathOwner.status, "unassigned");
-  const nested = ok(await f.resolve({ target: "docs/@alice/archive/@bob" })); assert.equal(nested.document.pathOwner.value, "@alice");
+  const deep = ok(await f.resolve({ target: "docs/research/@alice" })); assert.equal(deep.document.pathOwner.value, "@alice");
+  const nested = ok(await f.resolve({ target: "docs/@alice/archive/@bob/research" }));
+  assert.equal(nested.document.pathOwner.value, "@bob"); assert.equal(nested.document.ownerHeader, "Owner: @bob");
+  assert.equal(nested.document.relativePath, "docs/@alice/archive/@bob/research");
   error(await f.resolve({ target: "docs/@" }), "INVALID_OWNER");
 });
 
-test("owner numbering includes descendants and moved numbers but not other owners or gaps", async t => {
+test("owner numbering includes ordinary descendants but each nested @ directory has its own sequence", async t => {
   const f = await fixture(t);
-  for (const name of ["docs/90_legacy.md", "docs/@bob/99_other.md", "docs/@alice/01_a.md", "docs/@alice/04_a_plan.md", "docs/@alice/04_b_tickets.md", "docs/@alice/research/24_old_plan.md", "docs/@alice/research/25_old_tickets.md"]) await put(path.join(f.project, name), "# Notes\n");
+  for (const name of ["docs/90_legacy.md", "docs/@bob/99_other.md", "docs/@alice/01_a.md", "docs/@alice/04_a_plan.md", "docs/@alice/04_b_tickets.md", "docs/@alice/research/24_old_plan.md", "docs/@alice/research/25_old_tickets.md", "docs/@alice/archive/@bob/100_inner.md", "docs/@alice/archive/@alice/200_inner.md"]) await put(path.join(f.project, name), "# Notes\n");
   const result = ok(await f.resolve({ target: "docs/@alice/research" }));
   assert.equal(result.numbering.maximum, 25); assert.equal(result.numbering.next, "26");
+  assert.equal(ok(await f.resolve({ target: "docs/@alice/archive/@bob" })).numbering.next, "101");
+  assert.equal(ok(await f.resolve({ target: "docs/@alice/archive/@alice" })).numbering.next, "201");
   await put(path.join(f.project, "docs/@alice/9007199254740992_too_large.md"), "# Notes\n");
   error(await f.resolve({ target: "docs/@alice" }), "NUMBER_OVERFLOW");
 });
@@ -163,6 +167,21 @@ test("new-document check validates the header against its path and writes nothin
   await put(file, "# Notes\n\nOwner: @bob\n"); error(await f.resolve({ operation: "check-new", target: file }), "OWNER_MISMATCH");
   await put(path.join(f.project, "docs/01_basic.md"), "# Basic\n\nOwner: @alice\n");
   error(await f.resolve({ operation: "check-new", target: "docs/01_basic.md" }), "OWNER_MISMATCH");
+});
+
+test("new and edit inspection agree on the nearest owner without consulting identity or rewriting history", async t => {
+  const f = await fixture(t), target = "docs/@bob/archive/@alice/01_notes.md";
+  const file = path.join(f.project, target), content = "# Notes\n\nOwner: @alice\n\n## Body\nOwner: @bob\n";
+  await put(file, content);
+  await put(path.join(f.project, ".ak.user"), "invalid unused identity\n");
+  const before = await snapshot(f.root);
+  ok(await f.resolve({ operation: "check-new", target }));
+  const edit = ok(await f.resolve({ operation: "edit", target }));
+  assert.equal(edit.document.pathOwner.value, "@alice"); assert.equal(edit.document.ownerAction, "preserve");
+  assert.deepEqual(await snapshot(f.root), before);
+  await put(file, content.replace("Owner: @alice", "Owner: @bob"));
+  error(await f.resolve({ operation: "check-new", target }), "OWNER_MISMATCH");
+  error(await f.resolve({ target: "docs/@bob/@" }), "INVALID_OWNER");
 });
 
 test("native detached external worktree uses current shared policy and original private user", async t => {
@@ -221,7 +240,9 @@ test("workspace bindings are local, unique, explicit, and never follow includes 
   assert.equal(ok(await f.resolve()).policy.value, false);
   git(f.project, "config", "alphaKanban.workspaceRoot", path.join(f.root, "missing"));
   error(await f.resolve(), "WORKSPACE_UNRESOLVED");
-  await put(path.join(f.project, ".ak.config"), policy(false)); assert.equal(ok(await f.resolve()).policy.value, false);
+  // Each missing shared key needs its own fallback; specifying both avoids it.
+  await put(path.join(f.project, ".ak.config"), policy(false)); error(await f.resolve(), "WORKSPACE_UNRESOLVED");
+  await put(path.join(f.project, ".ak.config"), policy(false) + "root = docs\n"); assert.equal(ok(await f.resolve()).policy.value, false);
 });
 
 test("an independent clone with the same remote does not inherit local settings", async t => {
@@ -262,8 +283,49 @@ test("read failures and unsafe targets do not become missing/default values", as
 
 test("settings permission failure is reported only when the file is needed", { skip: process.platform === "win32" || process.getuid?.() === 0 }, async t => {
   const f = await fixture(t); const file = path.join(f.project, ".ak.config"); await put(file, policy(true)); await chmod(file, 0);
-  try { error(await f.resolve(), "SETTINGS_READ_FAILED"); ok(await f.resolve({ target: "docs/manual" })); }
+  try {
+    error(await f.resolve(), "SETTINGS_READ_FAILED");
+    // A new target needs a trustworthy owner boundary; existing edits do not.
+    error(await f.resolve({ target: "docs/manual" }), "SETTINGS_READ_FAILED");
+    await put(path.join(f.project, "docs/01_existing.md"), "# Existing\n");
+    assert.equal(ok(await f.resolve({ operation: "edit", target: "docs/01_existing.md" })).document.pathOwner.status, "invalid");
+  }
   finally { await chmod(file, 0o600); }
+});
+
+test("document root defaults to docs and inherits each shared key independently", async t => {
+  const f = await fixture(t);
+  assert.equal(ok(await f.resolve()).document.relativePath, "docs");
+  await put(path.join(f.project, ".ak.config"), "[documents]\nroot = notes/planning\n");
+  let result = ok(await f.resolve());
+  assert.equal(result.document.relativePath, "notes/planning"); assert.equal(result.policy.value, false); assert.equal(result.user.status, "not-needed");
+  git(f.project, "config", "alphaKanban.workspaceRoot", f.workspace);
+  await put(path.join(f.workspace, ".ak.config"), "[documents]\nroot = shared-notes\nownerFolders = true\n");
+  await put(path.join(f.project, ".ak.user"), user("@alice"));
+  result = ok(await f.resolve());
+  assert.equal(result.document.relativePath, "notes/planning/@alice"); assert.equal(result.policy.source.scope, "workspace");
+  await put(path.join(f.project, ".ak.config"), policy(false));
+  result = ok(await f.resolve());
+  assert.equal(result.document.relativePath, "shared-notes"); assert.equal(result.document.path, path.join(f.project, "shared-notes"));
+  assert.equal(result.documentRoot.source.scope, "workspace"); assert.equal(result.policy.source.scope, "repo");
+  await put(path.join(f.project, "shared-notes/@bob/08_notes.md"), "# Notes\nOwner: @bob\n");
+  await put(path.join(f.project, "shared-notes/@bob/@alice/99_notes.md"), "# Notes\nOwner: @alice\n");
+  result = ok(await f.resolve({ target: "shared-notes/@bob" }));
+  assert.equal(result.numbering.next, "09"); assert.equal(result.document.ownerHeader, "Owner: @bob");
+  ok(await f.resolve({ operation: "check-new", target: "shared-notes/@bob/08_notes.md" }));
+  assert.equal(ok(await f.resolve({ baseDir: "manual" })).document.relativePath, "manual");
+});
+
+test("external linked worktree uses its own document root and inherits only the original user", async t => {
+  const f = await fixture(t);
+  await put(path.join(f.project, ".ak.config"), policy(true) + "root = notes\n");
+  await put(path.join(f.project, ".ak.user"), user("@original"));
+  git(f.project, "add", ".ak.config"); git(f.project, "commit", "-qm", "fixture");
+  const linked = path.join(f.root, "linked"); git(f.project, "worktree", "add", "--quiet", "--detach", linked);
+  await put(path.join(linked, ".ak.config"), policy(true) + "root = planning\n");
+  const result = ok(await f.resolve({ cwd: linked }));
+  assert.equal(result.document.path, path.join(linked, "planning/@original"));
+  assert.equal(result.documentRoot.source.path, path.join(linked, ".ak.config"));
 });
 
 test("an inaccessible original worktree cannot substitute the home actor", { skip: process.platform === "win32" || process.getuid?.() === 0 }, async t => {
@@ -311,6 +373,15 @@ test("standalone copied skill works without project node_modules and emits machi
   child = run(["edit"]); assert.equal(child.status, 2); assert.equal(JSON.parse(child.stdout).diagnostics[0].code, "INVALID_REQUEST");
   child = run(["new", "--unknown"]); assert.equal(child.status, 2); assert.equal(JSON.parse(child.stdout).ok, false);
   child = run(["new", "--target", "docs/manual"]); assert.equal(child.status, 0);
+  const nested = "docs/@bob/archive/@alice";
+  await put(path.join(f.project, nested, "24_notes.md"), "# Notes\nOwner: @alice\n");
+  child = run(["new", "--target", nested]); assert.equal(child.status, 0, child.stdout);
+  const context = JSON.parse(child.stdout);
+  assert.equal(context.document.relativePath, nested); assert.equal(context.document.ownerHeader, "Owner: @alice");
+  assert.equal(context.numbering.next, "25");
+  child = run(["check-new", "--target", `${nested}/24_notes.md`]); assert.equal(child.status, 0, child.stdout);
+  child = run(["edit", "--target", `${nested}/24_notes.md`]); assert.equal(child.status, 0, child.stdout);
+  assert.equal(JSON.parse(child.stdout).document.pathOwner.value, "@alice");
   assert.equal((await lstat(entry)).isFile(), true);
 });
 

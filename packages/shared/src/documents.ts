@@ -1,25 +1,20 @@
 import type { DocumentPathOwner, DocumentSetSummary, DocumentSetTicketProgress, MarkdownFileSummary, MarkdownFileType, MarkdownHeading } from "./index.js";
+import { normalizeOwner, ownerFromPath } from "../../../skills/implementation-ledger/scripts/lib/document-owner.mjs";
 
 /** Same identifier contract as the standalone ledger tool; never an OS/Git identity. */
 export function normalizeDocumentOwner(value: string): string | null {
-  if (!/^@[\p{L}\p{N}][\p{L}\p{N}\p{M}._-]*$/u.test(value) || value.endsWith(".") ||
-      new TextEncoder().encode(value).length > 240) return null;
-  return value.normalize("NFC");
+  try { return normalizeOwner(value); } catch { return null; }
 }
 
 /** Only the path visible below the connected project counts; do not infer hidden parents. */
-export function inferDocumentPathOwner(relativePath: string): DocumentPathOwner {
-  const parts = relativePath.split("/");
-  const [root, folder] = parts;
-  if (parts.length < 3 || root !== "docs" || !folder?.startsWith("@") || parts.some((part) => part === "." || part === "..")) {
-    return { status: "unassigned", value: null };
-  }
-  const value = normalizeDocumentOwner(folder);
-  return value ? { status: "owned", value } : { status: "invalid", value: null };
+export function inferDocumentPathOwner(relativePath: string, documentRoot?: string | null): DocumentPathOwner {
+  const owner = ownerFromPath(relativePath, { documentRoot });
+  return owner.status === "owned" ? { status: "owned", value: owner.value }
+    : owner.status === "invalid" ? { status: "invalid", value: null } : { status: "unassigned", value: null };
 }
 
-export function documentPathOwner(file: Pick<MarkdownFileSummary, "relativePath">): DocumentPathOwner {
-  return inferDocumentPathOwner(file.relativePath);
+export function documentPathOwner(file: Pick<MarkdownFileSummary, "relativePath" | "documentRoot">): DocumentPathOwner {
+  return inferDocumentPathOwner(file.relativePath, file.documentRoot);
 }
 
 export function sumDocumentSetTicketProgress(

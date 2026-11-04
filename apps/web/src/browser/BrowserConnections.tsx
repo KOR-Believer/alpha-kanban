@@ -15,6 +15,7 @@ import { browserRepository, browserSupported, type Connection, type RecoveryReco
 import { appActivity } from "../pwa/activity";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { TourHelp, useScreenTour } from "../onboarding/ScreenTour";
+import { LinkConnectionManager } from "./LocalLinkDialog";
 
 const connectionKey = ["browser-connections"];
 const recoveryKey = ["browser-recoveries"];
@@ -31,6 +32,7 @@ function useBrowserActions() {
     await queryClient.invalidateQueries({ queryKey: recoveryKey });
     await queryClient.invalidateQueries({ queryKey: ["browser-folder-permission"] });
     await queryClient.invalidateQueries({ queryKey: ["document-sets"] });
+    await queryClient.invalidateQueries({ queryKey: ["document-count"] });
     await queryClient.invalidateQueries({ queryKey: ["all-tickets"] });
   };
   const run = async (action: () => Promise<unknown>) => {
@@ -147,7 +149,7 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
   const recoveries = useQuery({ queryKey: recoveryKey, queryFn: () => browserRepository.recoveries(), retry: false });
   const [removing, setRemoving] = useState<Connection>();
   return <>
-    <Button data-tour="local-folders" variant="outline" size="sm" onClick={() => setOpen(true)}><Link2 />{t(triggerLabel)}{recoveries.data?.length ? <span role="status">({t("Recovery pending")}: {recoveries.data.length})</span> : null}</Button>
+    <Button data-tour="local-folders" variant="outline" size="sm" title={t(triggerLabel)} onClick={() => setOpen(true)}><Link2 /><span className="ak-toolbar-label">{t(triggerLabel)}</span>{recoveries.data?.length ? <span role="status">({t("Recovery pending")}: {recoveries.data.length})</span> : null}</Button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent>
         <DialogHeader><DialogTitle>{t("Local folders")}</DialogTitle><DialogDescription>{t("Connections and board order are saved only in this browser and site address.")}</DialogDescription></DialogHeader>
@@ -164,6 +166,7 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
             })} />
             <Button variant="ghost" size="icon" aria-label={t("Disconnect folder")} title={t("Disconnect folder")} onClick={() => setRemoving(connection)}><Trash2 /></Button>
           </div>)}
+          <LinkConnectionManager />
           <h3 className="text-sm font-semibold">{t("Recovery records")}</h3>
           {!recoveries.data?.length ? <p className="text-sm text-muted-foreground">{t("No pending recovery records.")}</p> : recoveries.data.map((record) => <Recovery key={record.id} record={record} />)}
         </div></DialogBody>

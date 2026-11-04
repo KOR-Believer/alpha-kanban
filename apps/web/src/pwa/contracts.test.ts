@@ -23,7 +23,7 @@ describe("PWA asset and data contracts", () => {
     const repair = readFileSync(new URL("../../public-browser/repair.js", import.meta.url), "utf8");
     expect(rescue).not.toMatch(/clients\.claim|importScripts/);
     const events: string[] = [];
-    runInNewContext(rescue.replace('"__RESCUE_MODE__"', '"recovery"'), { self: { addEventListener: (type: string) => events.push(type) } });
+    runInNewContext(rescue.replace('"__RESCUE_MODE__"', '"recovery"').replace('"__RELEASE_CHANNEL__"', '"stable"'), { self: { addEventListener: (type: string) => events.push(type) } });
     expect(events).not.toContain("fetch");
     for (const source of [rescue, repair]) {
       expect(source).not.toMatch(/localStorage\.clear|deleteDatabase|Clear-Site-Data/);
@@ -45,7 +45,7 @@ describe("PWA asset and data contracts", () => {
     const source = readFileSync(new URL("../../pwa-rescue.js", import.meta.url), "utf8");
     const events = new Map<string, (event: { waitUntil: (work: Promise<void>) => void }) => void>();
     const remove = vi.fn(); const unregister = vi.fn();
-    runInNewContext(source.replace('"__RESCUE_MODE__"', '"retired"'), {
+    runInNewContext(source.replace('"__RESCUE_MODE__"', '"retired"').replace('"__RELEASE_CHANNEL__"', '"stable"'), {
       self: {
         addEventListener: (type: string, handler: (event: { waitUntil: (work: Promise<void>) => void }) => void) => events.set(type, handler),
         registration: { unregister },

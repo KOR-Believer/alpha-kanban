@@ -6,17 +6,18 @@ import { normalizeOwner, ownerFromPath } from "../../../skills/implementation-le
 describe("visible project-relative document ownership", () => {
   it.each([
     ["docs/@alice/01_search_tickets.md", "owned", "@alice"],
-    ["docs/@alice/archive/@bob/01_search_plan.md", "owned", "@alice"],
+    ["docs/@alice/archive/@bob/01_search_plan.md", "owned", "@bob"],
     ["docs/@홍길동/01_search_plan.md".normalize("NFD"), "owned", "@홍길동"],
     ["docs/@Alice/01_search_plan.md", "owned", "@Alice"],
     ["docs/01_search_plan.md", "unassigned", null],
-    ["docs/research/@alice/01_search_plan.md", "unassigned", null],
+    ["docs/research/@alice/01_search_plan.md", "owned", "@alice"],
     ["@alice/01_search_plan.md", "unassigned", null],
     ["01_search_plan.md", "unassigned", null],
     ["other/docs/@alice/01_search_plan.md", "unassigned", null],
     ["docs/@/01_search_plan.md", "invalid", null],
     ["docs/@@team/01_search_plan.md", "invalid", null],
     ["docs/@alice./01_search_plan.md", "invalid", null],
+    ["docs/@alice/archive/@/01_search_plan.md", "invalid", null],
   ] as const)("classifies %s without hidden parents or metadata", (path, status, value) => {
     expect(inferDocumentPathOwner(path)).toEqual({ status, value });
     expect(ownerFromPath(path)).toMatchObject({ status, value });

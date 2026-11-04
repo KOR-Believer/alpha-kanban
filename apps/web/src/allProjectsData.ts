@@ -1,6 +1,7 @@
 import type { MarkdownFileSummary, TicketDocumentResponse, TicketItem, WorkspaceSummary } from "@alpha-kanban/shared";
 import { buildAppRoute, documentIdentity, documentRouteId } from "./appRoute";
 import { matchesBoardOwnerSelection, type BoardOwnerSelection } from "./allBoardOwnerFilters";
+import { matchesTicketSearch, normalizeTicketQuery } from "./ticketSearch";
 
 export type BoardDocument = { response: TicketDocumentResponse; workspace: WorkspaceSummary };
 export type BoardData = { documents: BoardDocument[]; issues: string[] };
@@ -52,7 +53,7 @@ function limitConcurrency(limit: number) {
 export async function loadBoard(api: {
   workspaces: () => Promise<{ workspaces: WorkspaceSummary[] }>;
   files: (workspaceId: string) => Promise<{ files: MarkdownFileSummary[] }>;
-  document: (workspaceId: string, fileId: string) => Promise<TicketDocumentResponse>;
+  document: (workspaceId: string, fileId: string, file: MarkdownFileSummary) => Promise<TicketDocumentResponse>;
 }, options: BoardLoadOptions = {}): Promise<BoardData> {
   const available = (await api.workspaces()).workspaces.filter((workspace) => workspace.isAvailable)
     .sort((a, b) => b.root.length - a.root.length || a.root.localeCompare(b.root));
@@ -68,10 +69,21 @@ export async function loadBoard(api: {
       a.response.file.relativePath.localeCompare(b.response.file.relativePath)),
     issues: [...issues],
   });
-  const publish = () => {
+  let lastPublished = -Infinity;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const publish = (immediate = false) => {
+    if (!options.onProgress || options.signal?.aborted) return;
+    if (!immediate && performance.now() - lastPublished < 100) {
+      timer ??= setTimeout(() => { timer = undefined; publish(true); }, 100);
+      return;
+    }
+    if (timer) { clearTimeout(timer); timer = undefined; }
+    lastPublished = performance.now();
     if (!options.signal?.aborted) options.onProgress?.({ data: snapshot(), completedProjects, totalProjects: available.length });
   };
   publish();
+  // The first readable document is useful immediately; later arrivals are batched.
+  lastPublished = -Infinity;
   await collect(available, async (workspace) => {
     try {
       options.signal?.throwIfAborted();
@@ -87,7 +99,7 @@ export async function loadBoard(api: {
         try {
           const response = await readDocument(async () => {
             options.signal?.throwIfAborted();
-            return api.document(workspace.id, file.id);
+            return api.document(workspace.id, file.id, file);
           });
           if (owners.get(key) === priority) documents.set(key, { response, workspace });
         } catch (error) {
@@ -99,14 +111,21 @@ export async function loadBoard(api: {
       if (!options.signal?.aborted) issues.push(`${workspace.root}: ${errorMessage(error)}`);
     }
     completedProjects++;
-    publish();
+    publish(completedProjects === 1);
   });
+  if (timer) clearTimeout(timer);
   options.signal?.throwIfAborted();
+  publish(true);
   return snapshot();
 }
 
+const boardDocumentTickets = new WeakMap<BoardDocument, BoardTicket[]>();
 export function boardTickets(data?: BoardData): BoardTicket[] {
-  return (data?.documents ?? []).flatMap(({ response, workspace }) => (response.document.compatibility?.readable === false ? [] : response.document.tickets).map((ticket) => ({
+  return (data?.documents ?? []).flatMap((entry) => {
+    let cached = boardDocumentTickets.get(entry);
+    if (cached) return cached;
+    const { response, workspace } = entry;
+    cached = response.document.tickets.map((ticket) => ({
     ...ticket,
     file: response.file,
     projectId: workspace.project?.id ?? workspace.id,
@@ -115,16 +134,19 @@ export function boardTickets(data?: BoardData): BoardTicket[] {
     workspaceId: workspace.id,
     key: `${documentIdentity(response.file)}#${ticket.id}`,
     href: buildAppRoute({ workspaceId: workspace.id, filePath: documentRouteId(response.file), ticketId: ticket.id }),
-  })));
+    }));
+    boardDocumentTickets.set(entry, cached);
+    return cached;
+  });
 }
 
 export function filterBoardTickets(tickets: BoardTicket[], filters: BoardFilters, owners: BoardOwnerSelection[] = []) {
-  const search = filters.search.trim().toLocaleLowerCase();
+  const search = normalizeTicketQuery(filters.search);
   return tickets.filter((ticket) =>
     matchesBoardOwnerSelection(ticket.file, owners) &&
     (!filters.hideDone || ticket.status !== "DONE") &&
     (!filters.projectIds.length || filters.projectIds.includes(ticket.projectId)) &&
-    (!search || `${ticket.id} ${ticket.title} ${ticket.projectLabel} ${ticket.file.relativePath}`.toLocaleLowerCase().includes(search)),
+    (!search || matchesTicketSearch(ticket, search) || `${ticket.projectLabel} ${ticket.file.relativePath}`.toLowerCase().includes(search)),
   );
 }
 

@@ -46,11 +46,28 @@ describe("owner display filters", () => {
 
   it("treats invalid owner folders and direct docs connections as unassigned without adopting header data", () => {
     const file = data.documents[0]!.response.file;
-    for (const relativePath of ["@alice/01_test_tickets.md", "01_test_tickets.md", "docs/@@bad/01_test_tickets.md", "docs/research/@alice/test.md"]) {
+    for (const relativePath of ["@alice/01_test_tickets.md", "01_test_tickets.md", "docs/@@bad/01_test_tickets.md", "docs/@alice/archive/@/test.md"]) {
       const changed = { ...file, relativePath, pathOwner: { status: "owned" as const, value: "@alice" } };
       expect(matchesOwnerFilter(changed, "unassigned")).toBe(true);
       expect(matchesOwnerFilter(changed, "@alice")).toBe(false);
     }
+  });
+
+  it("uses the nearest owner in both the sidebar and all-project board, excluding nested colleagues from the outer owner", () => {
+    const nested = structuredClone(data);
+    const file = nested.documents[0]!.response.file;
+    file.directory = "docs/@bob/research/@alice";
+    file.relativePath = `${file.directory}/${file.filename}`;
+    file.workspaceRelativePath = file.relativePath;
+    // Even stale cached ownership cannot turn an inner owner's work into Bob's.
+    file.pathOwner = { status: "owned", value: "@bob" };
+    const files = nested.documents.filter(({ workspace }) => workspace.id === first.id).map(({ response }) => response.file);
+    const sets = buildDocumentSets(files);
+    expect(filterDocumentSets(sets, "", DEFAULT_DOCUMENT_FILTERS, "@bob").flatMap((set) => set.documents.map(({ id }) => id))).toEqual(["d_bob"]);
+    expect(filterDocumentSets(sets, "", DEFAULT_DOCUMENT_FILTERS, "@alice").flatMap((set) => set.documents.map(({ id }) => id))).toEqual(["d_alice"]);
+    const tickets = boardTickets(nested), filters = { projectIds: [], hideDone: false, search: "" };
+    expect(filterBoardTickets(tickets, filters, ["@bob"]).map(({ file }) => file.id)).toEqual(["d_bob"]);
+    expect(filterBoardTickets(tickets, filters, ["@alice"]).map(({ file }) => file.id)).toEqual(["d_alice", "d_other"]);
   });
 
   it("restores only valid per-project preferences without guessing a current user", () => {

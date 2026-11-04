@@ -5,6 +5,7 @@ import { FolderKanban, LayoutGrid, Search } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { LanguageSelector } from "./LanguageSelector";
 import { ThemeToggle } from "./ThemeToggle";
+import { AppBrand } from "./AppBrand";
 import { PwaMenu } from "../pwa/PwaMenu";
 import { SkillUpdatesButton } from "../skills/SkillUpdates";
 import { WorkspaceButton } from "./WorkspaceNavigation";
@@ -16,14 +17,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 export function StartPageNavigation({ help }: { help?: ReactNode }) {
   const { t } = useTranslation();
   return <div className="ak-start-navigation">
-    <Link to="/" className="ak-public-brand ak-focus-ring"><FolderKanban aria-hidden="true" />{t("Alpha Kanban")}</Link>
+    <Link to="/" className="ak-public-brand ak-focus-ring"><AppBrand /></Link>
     <nav aria-label={t("Start navigation")}>
       <LanguageSelector />
       <ThemeToggle />
+      <span aria-hidden="true" className="ak-toolbar-divider" />
       <PwaMenu />
       <SkillUpdatesButton placement="toolbar" />
       {help}
-      <Link to="/all" className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" />{t("All tickets")}</Link>
+      <Link to="/all" title={t("All tickets")} className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" /><span className="ak-toolbar-label">{t("All tickets")}</span></Link>
     </nav>
   </div>;
 }

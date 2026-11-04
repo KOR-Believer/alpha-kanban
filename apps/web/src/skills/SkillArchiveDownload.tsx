@@ -2,14 +2,16 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Download, LoaderCircle } from "lucide-react";
 import { buttonVariants } from "../components/ui/button";
 import { useTranslation } from "../i18n";
+import type { ReleaseInfo } from "../pwa/releases";
 
-export function SkillArchiveDownload() {
+const RUNNING_RELEASE = __APP_RELEASE__;
+export function SkillArchiveDownload({ release = RUNNING_RELEASE }: { release?: ReleaseInfo } = {}) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const pending = useRef<AbortController | null>(null);
   const urls = useRef(new Map<string, number>());
-  const filename = `implementation-ledger-${__APP_RELEASE__.skillBundle}.zip`;
+  const filename = `implementation-ledger-${release.skillBundle}.zip`;
   const href = `/downloads/${filename}`;
 
   useEffect(() => () => {
@@ -30,6 +32,8 @@ export function SkillArchiveDownload() {
       const blob = await response.blob();
       const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
       if (blob.size < 22 || signature[0] !== 0x50 || signature[1] !== 0x4b || signature[2] !== 3 || signature[3] !== 4) throw new Error("Invalid skill archive");
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      if (!/^[a-f0-9]{64}$/.test(release.skillArchive ?? "") || digest !== release.skillArchive) throw new Error("Invalid skill archive");
       if (request.signal.aborted) return;
       const url = URL.createObjectURL(blob);
       urls.current.set(url, window.setTimeout(() => { URL.revokeObjectURL(url); urls.current.delete(url); }, 30_000));

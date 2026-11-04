@@ -7,6 +7,7 @@ export const BROWSER_SCHEMA_VERSION = 1;
 export interface BrowserStorage {
   get<T>(key: string): Promise<T | undefined>;
   set<T>(key: string, value: T): Promise<void>;
+  setMany?(entries: Array<{ key: string; value: unknown }>): Promise<void>;
   delete(key: string): Promise<void>;
   entries<T>(prefix: string): Promise<Array<{ key: string; value: T }>>;
 }
@@ -58,6 +59,20 @@ export class IndexedDbStorage implements BrowserStorage {
   }
   async set<T>(key: string, value: T): Promise<void> {
     await appActivity.run(() => this.transaction("readwrite", (store) => store.put(value, key)));
+  }
+  async setMany(entries: Array<{ key: string; value: unknown }>): Promise<void> {
+    if (!entries.length) return;
+    const db = await this.open();
+    await appActivity.run(() => new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction("records", "readwrite", { durability: this.durability });
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("Browser storage transaction aborted."));
+      try {
+        const store = transaction.objectStore("records");
+        for (const entry of entries) store.put(entry.value, entry.key);
+      } catch (error) { transaction.abort(); reject(error); }
+    }));
   }
   async delete(key: string): Promise<void> {
     await appActivity.run(() => this.transaction("readwrite", (store) => store.delete(key)));

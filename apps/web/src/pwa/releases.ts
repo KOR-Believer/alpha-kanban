@@ -1,3 +1,5 @@
+import type { ReleaseChannel } from "../../release-channel.mjs";
+
 export type ReleaseRecord = {
   id: string; sequence: number; date: string; notify: boolean;
   notes: { ko: string[]; en: string[] };
@@ -5,8 +7,10 @@ export type ReleaseRecord = {
 };
 export type ReleaseInfo = {
   app: string; mode: "app" | "recovery" | "retired"; protocol: number; buildId: string; storageSchema: number;
+  channel?: ReleaseChannel; canonicalOrigin?: string;
   skillBundle: string; skillVersion: string | null; documentFormat: number | null;
   skillPayload?: string;
+  skillArchive?: string;
   notes: { ko: string[]; en: string[] };
   releaseId?: string; history?: ReleaseRecord[];
 };

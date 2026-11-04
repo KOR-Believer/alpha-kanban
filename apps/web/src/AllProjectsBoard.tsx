@@ -1,9 +1,14 @@
+import { VirtualTicketList } from "./components/tickets/VirtualTicketList";
+import { TicketSearchInput, TicketSearchExcerpt, SearchHighlight } from "./components/tickets/TicketSearch";
 import { browserRepository } from "./browser/repository";
+import { useLinkedNavigation } from "./browser/linkedNavigation";
+import { LinkedDocumentPage } from "./browser/LinkedDocumentPage";
 import { BrowserFilesMenu } from "./browser/BrowserConnections";
 import { documentIdentity, documentRouteId } from "./appRoute";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ChannelBadge } from "@/components/AppBrand";
 import { PwaMenu } from "./pwa/PwaMenu";
 import { SkillUpdatesButton } from "./skills/SkillUpdates";
 import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
@@ -14,7 +19,7 @@ import type {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Folder, Loader2, RefreshCcw, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   BOARD_STATUSES, TicketDetailDrawer, appendTicketInstruction, fetchTicketDocument,
   fetchWorkspaces, formatClientError, normalizeClientError, patchTicket, priorityVariant, StatusDot,
@@ -45,11 +50,12 @@ type Detail = { document: BoardDocument; ticketId: string };
 const fetchAllTickets = (options: BoardLoadOptions) => loadBoard({
   workspaces: fetchWorkspaces,
   files: async (id) => ({ files: await browserRepository.ticketFiles(id) }),
-  document: (workspaceId, fileId) => browserRepository.tickets(workspaceId, fileId, false),
+  document: (workspaceId, _fileId, file) => browserRepository.listedTickets(workspaceId, file),
 }, options);
 const errorText = (error: unknown) => formatClientError(normalizeClientError(error));
 
 export function AllProjectsBoard() {
+  const linked = useLinkedNavigation();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -57,6 +63,7 @@ export function AllProjectsBoard() {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [overStatus, setOverStatus] = useState<TicketStatus | null>(null);
   const [filters, setFilters] = useState(readBoardFilters);
+  const scroll = useRef<HTMLElement>(null);
   const ownerPreferences = useAllBoardOwnerFilters();
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -86,10 +93,12 @@ export function AllProjectsBoard() {
     return [...counts].sort(([, a], [, b]) => a.label.localeCompare(b.label) || a.root.localeCompare(b.root));
   }, [tickets]);
   const owners = useMemo(() => ownersInFiles((boardData?.documents ?? []).map(({ response }) => response.file)), [boardData]);
-  const visible = filterBoardTickets(tickets, filters, ownerPreferences.selected);
+  const search = useDeferredValue(filters.search);
+  useEffect(() => { scroll.current?.scrollTo({ top: 0 }); }, [search, filters.projectIds, filters.hideDone, ownerPreferences.selected]);
+  const visible = useMemo(() => filterBoardTickets(tickets, { ...filters, search }, ownerPreferences.selected), [tickets, filters.hideDone, filters.projectIds, search, ownerPreferences.selected]);
   const statuses = BOARD_STATUSES.filter((status) => !(filters.hideDone && status === "DONE"));
   const tour = useScreenTour("all", {
-    enabled: ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
+    enabled: !linked.id && ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
     eligible: visible.length > 0,
   });
   const detailTicket = detail?.document.response.document.tickets.find((ticket) => ticket.id === detail.ticketId);
@@ -208,14 +217,15 @@ export function AllProjectsBoard() {
   }
 
   return (
-    <div className="grid h-dvh min-h-0 grid-rows-[auto_auto_auto_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-foreground">
-      <header className="ak-all-board-toolbar">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--ak-canvas-soft)] text-foreground">
+      <header className="ak-all-board-toolbar ak-channel-header">
         <Button onClick={() => navigate({ to: "/" })} size="sm" variant="ghost"><ArrowLeft aria-hidden="true" />{t("Workspaces")}</Button>
-        <h1 className="ak-title text-sm">{t("All tickets")}</h1>
+        <h1 className="ak-title text-sm">{t("All tickets")}</h1><ChannelBadge />
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{t("{{count}} tickets", { count: visible.length })}</span>
           <LanguageSelector />
           <ThemeToggle />
+          <span aria-hidden="true" className="ak-toolbar-divider" />
           <PwaMenu />
           <SkillUpdatesButton placement="toolbar" />
           <TourHelp tour={tour} />
@@ -231,6 +241,7 @@ export function AllProjectsBoard() {
           </Button>
         </div>
       </header>
+      <div className={`${linked.id ? "hidden" : "grid"} min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,1fr)]`}>
       <div className="ak-all-board-toolbar min-w-0">
         <div data-tour="project-filters" className="ak-all-board-project-filters ak-scroll-area flex items-center gap-1 overflow-x-auto" role="group" aria-label={t("Project filters")}>
           <Button aria-pressed={!filters.projectIds.length} onClick={() => setFilters({ ...filters, projectIds: [] })} size="xs" variant={!filters.projectIds.length ? "secondary" : "ghost"}>{t("All projects")}</Button>
@@ -245,27 +256,13 @@ export function AllProjectsBoard() {
           ))}
         </div>
         <BoardOwnerFilter owners={owners} selected={ownerPreferences.selected} onChange={ownerPreferences.update} />
-        <div className="relative w-52 max-w-full shrink-0">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input data-tour="ticket-search" aria-label={t("Search tickets")} className="pl-9" placeholder={t("Search tickets")} value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
-        </div>
+        <TicketSearchInput value={filters.search} onChange={(search) => setFilters({ ...filters, search })} />
+        {search && ticketsQuery.isLoading ? <span role="status" className="text-xs text-muted-foreground">{t("Searching loaded tickets. More results may appear.")}</span> : null}
         <label data-tour="hide-done" className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Checkbox checked={filters.hideDone} onCheckedChange={(checked) => setFilters({ ...filters, hideDone: checked === true })} />{t("Hide DONE")}
         </label>
       </div>
       <div aria-live="polite">
-        {boardData?.documents.some(({ response }) => response.document.compatibility?.readable === false) ? (
-          <details className="ak-all-board-notice block text-sm text-muted-foreground">
-            <summary className="cursor-pointer">{t("Some documents need a supported format or repair. Open their Markdown to review them.")}</summary>
-            <ul className="ak-scroll-area max-h-28 overflow-auto">
-              {boardData.documents.filter(({ response }) => response.document.compatibility?.readable === false).map(({ response, workspace }) => (
-                <li key={response.file.id}><a className="underline" href={buildAppRoute({ workspaceId: workspace.id, filePath: documentRouteId(response.file) })}>
-                  {workspace.label}: {response.file.relativePath}
-                </a></li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
         {moveError || boardOrderQuery.error || ticketsQuery.error ? (
           <div className="ak-all-board-notice text-destructive" role="alert">
             <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
@@ -281,7 +278,7 @@ export function AllProjectsBoard() {
           </details>
         ) : null}
       </div>
-      <main className="ak-all-board-columns ak-scroll-area">
+      <main ref={scroll} data-board-scroll className="ak-all-board-columns ak-scroll-area">
         {ticketsQuery.isLoading && !boardData?.documents.length ? <div className="grid h-full place-items-center"><Loader2 aria-label={t("Loading tickets")} className="size-6 animate-spin" /></div> : (
           <div className="ak-kanban-grid grid gap-3" style={{ gridTemplateColumns: `repeat(${statuses.length}, minmax(240px, 1fr))` }}>
             {statuses.map((status) => {
@@ -306,8 +303,8 @@ export function AllProjectsBoard() {
                   </header>
                   <div className="ak-all-board-cards">
                       {!columnTickets.length ? <p className="py-8 text-center text-xs text-muted-foreground">{t("Empty")}</p> : null}
-                      {columnTickets.map((ticket, index) => (
-                        <BoardCard key={ticket.key} ticket={ticket} disabled={!canDrag} detailMode={presentation.mode}
+                      <VirtualTicketList items={columnTickets} itemKey={(ticket) => ticket.key} pinnedKey={draggingKey ?? undefined}>{(ticket, index) => (
+                        <BoardCard key={ticket.key} ticket={ticket} searchQuery={search} disabled={!canDrag} detailMode={presentation.mode}
                           dropPosition={draggingKey !== ticket.key && dropTarget?.key === ticket.key ? (dropTarget.after ? "after" : "before") : null}
                           onDragEnd={endDrag} onDragStart={() => setDraggingKey(ticket.key)} onDragOverCard={(after) => setDropTarget({ after, key: ticket.key })}
                           onOpen={() => { const document = documentFor(ticket); if (document) setDetail({ document, ticketId: ticket.id }); }}
@@ -318,7 +315,7 @@ export function AllProjectsBoard() {
                             const keys = reorderedKeys(tickets, ticket.key, target.key, delta > 0, boardOrderQuery.data?.keys ?? []);
                             if (keys) void saveOrder(keys);
                           }} />
-                      ))}
+                      )}</VirtualTicketList>
                   </div>
                 </section>
               );
@@ -326,8 +323,10 @@ export function AllProjectsBoard() {
           </div>
         )}
       </main>
-      {detail && detailTicket && detail.document.response.document.compatibility?.writable !== false ? (
-        <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`} ticket={detailTicket}
+      </div>
+      {linked.id ? <div className="min-h-0 flex-1"><LinkedDocumentPage key={linked.id} /></div> : null}
+      {detail && detailTicket ? (
+        <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`} ticket={detailTicket} searchQuery={search}
           file={currentDetail?.response.file ?? detail.document.response.file}
           presentation={presentation}
           onOpenInWorkspace={() => { void navigate({ href: buildAppRoute({
@@ -348,8 +347,8 @@ export function AllProjectsBoard() {
   );
 }
 
-function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, onDragEnd, onDragOverCard, onOpen, onReorder, canMoveUp, canMoveDown }: {
-  ticket: BoardTicket; disabled: boolean; detailMode: TicketDetailMode; dropPosition: "after" | "before" | null;
+function BoardCard({ ticket, searchQuery, disabled, detailMode, dropPosition, onDragStart, onDragEnd, onDragOverCard, onOpen, onReorder, canMoveUp, canMoveDown }: {
+  ticket: BoardTicket; searchQuery: string; disabled: boolean; detailMode: TicketDetailMode; dropPosition: "after" | "before" | null;
   onDragStart: () => void; onDragEnd: () => void; onDragOverCard: (after: boolean) => void;
   onOpen: () => void; onReorder: (delta: number) => void; canMoveUp: boolean; canMoveDown: boolean;
 }) {
@@ -381,12 +380,13 @@ function BoardCard({ ticket, disabled, detailMode, dropPosition, onDragStart, on
         </a>
         {ticket.priority ? <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge> : null}
       </div>
-      <a href={projectHref} draggable={false} className="ak-focus-ring mt-2 block rounded-sm"
+      <a data-ticket-open href={projectHref} draggable={false} className="ak-focus-ring mt-2 block rounded-sm"
         onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(); } }}>
         <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>{ticket.id}</span><DocumentOwnerBadge file={ticket.file} />
         </span>
-        <h3 className="mt-1 line-clamp-3 break-words text-sm font-medium leading-5">{ticket.title}</h3>
+        <h3 className="mt-1 line-clamp-3 break-words text-sm font-medium leading-5"><SearchHighlight text={ticket.title} query={searchQuery} /></h3>
+        <TicketSearchExcerpt ticket={ticket} query={searchQuery} />
       </a>
       <div className="mt-3 flex items-center gap-2">
         <TicketProgressBar progress={ticket.progress} />
