@@ -34,7 +34,7 @@ Payload SHA-256: ${payloadSha256}
    CODEX_HOME을 따로 설정했다면 해당 폴더의 skills/를 사용합니다.
 3. 같은 이름의 스킬이 이미 있다면 먼저 별도로 백업하고 변경 내용을 비교하세요.
    설치 폴더를 웹에 등록하면 변경 내용을 비교하고, 확인 후 백업·업데이트할 수 있습니다.
-   등록 주소: ${channel.origin}/intro#updates
+   등록 주소: ${channel.origin}/about#updates
    PWA 업데이트 모달에서 변경 파일을 확인하고 함께 업데이트하도록 승인하면,
    새 앱을 불러온 뒤 등록된 스킬을 백업하고 교체합니다. Codex 작업이 끝난 뒤 누르세요.
    개인 수정이 있거나 권한이 없으면 스킬은 교체하지 않고 앱만 업데이트할 수 있습니다.
@@ -64,7 +64,7 @@ Verify the JSON SHA-256 and every extracted skill file against its file list.
 If this bundle is unavailable or hashes differ, stop; never substitute another channel or a latest branch.
 Extract the complete implementation-ledger folder into ~/.codex/skills/
 (or $CODEX_HOME/skills/). Back up and compare an existing installation first.
-Optionally register the installed folder at ${channel.origin}/intro#updates
+Optionally register the installed folder at ${channel.origin}/about#updates
 to compare changes and confirm a backed-up update. In the PWA update dialog,
 review the changed files and confirm updating both. After the new app loads,
 it backs up and replaces the registered skill. Finish Codex tasks first.

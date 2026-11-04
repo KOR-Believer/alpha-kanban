@@ -1,7 +1,11 @@
-import { useMemo, type RefObject } from "react";
+import { NavigationLink } from "./NavigationLink";
+import { buildAppRoute } from "../appRoute";
+import { memo, useEffect, useMemo, useRef, type RefObject } from "react";
+import { SearchHighlight } from "./tickets/TicketSearch";
+import { normalizeTicketQuery } from "../ticketSearch";
+import { sourceOffset } from "../documentSearch";
 import { documentPresentation } from "@alpha-kanban/shared/documentPresentation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownContent } from "./MarkdownContent";
 import { Archive, BookOpen, Check, FileText, ListChecks } from "lucide-react";
 import type { DocumentSetSummary, MarkdownDocumentResponse, MarkdownFileSummary, MarkdownFileType } from "@alpha-kanban/shared";
 import { t, useTranslation } from "../i18n";
@@ -12,19 +16,36 @@ import type { LinkContext } from "../browser/linkMappings";
 const MARKDOWN_HEADING_HIGHLIGHT_CLASS = "ak-markdown-heading-highlight";
 export type ReaderFile = Pick<MarkdownFileSummary, "id" | "workspaceId" | "type" | "filename" | "slug" | "sequenceNumber" | "workspaceRelativePath" | "relativePath">;
 
-export function MarkdownDocumentReader({ document, documentSet, file, onFileSelect, linkContext, bodyRef, titleRef, headingPrefix }: {
+export function MarkdownDocumentReader({ document, documentSet, file, onFileSelect, fileHref, linkContext, bodyRef, titleRef, headingPrefix, searchQuery = "" }: {
   document: Pick<MarkdownDocumentResponse, "markdown" | "outline">;
   documentSet?: DocumentSetSummary;
   file: ReaderFile;
   onFileSelect?: (id: string) => void;
+  fileHref?: (id: string) => string;
   linkContext?: LinkContext;
   bodyRef?: RefObject<HTMLDivElement | null>;
   titleRef?: RefObject<HTMLHeadingElement | null>;
   headingPrefix?: string;
+  searchQuery?: string;
 }) {
   const { t } = useTranslation();
-  const headingIdsByLine = createHeadingIdsByLine(document.outline, headingPrefix);
+  const headingIdsByLine = useMemo(() => createHeadingIdsByLine(document.outline, headingPrefix), [document.outline, headingPrefix]);
   const presentation = useMemo(() => documentPresentation(document.markdown), [document.markdown]);
+  const ownBodyRef = useRef<HTMLDivElement>(null);
+  const readerRef = bodyRef ?? ownBodyRef;
+  const match = useMemo(() => {
+    const query = normalizeTicketQuery(searchQuery);
+    const folded = document.markdown.toLowerCase();
+    const offset = query ? sourceOffset(document.markdown, folded.indexOf(query), folded.length) : -1;
+    if (offset < 0) return undefined;
+    const start = document.markdown.lastIndexOf("\n", offset) + 1;
+    const end = document.markdown.indexOf("\n", offset + query.length);
+    return { line: document.markdown.slice(0, offset).split("\n").length,
+      excerpt: document.markdown.slice(Math.max(start, offset - 40), Math.min(end < 0 ? document.markdown.length : end, offset + query.length + 100)) };
+  }, [document.markdown, searchQuery]);
+  useEffect(() => {
+    readerRef.current?.querySelector<HTMLElement>("[data-search-hit]")?.scrollIntoView({ block: "center" });
+  }, [file.id, document.markdown, searchQuery, readerRef]);
 
   return (
     <div className="grid h-full min-h-0 min-w-[840px] grid-cols-[260px_minmax(0,1fr)] items-stretch gap-4 max-[960px]:h-auto max-[960px]:min-w-0 max-[960px]:grid-cols-1">
@@ -47,16 +68,15 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
             <h4 className="ak-muted-label">{t("Linked docs")}</h4>
             <div className="grid gap-1">
               {(documentSet?.documents ?? [file]).map((linkedFile) => (
-                <button
+                <NavigationLink href={fileHref?.(linkedFile.id) ?? buildAppRoute({ workspaceId: file.workspaceId, filePath: linkedFile.id })}
                   className={[
                     "ak-row flex min-w-0 items-center justify-between gap-2 px-2 py-1.5 text-left text-xs transition-colors",
                     linkedFile.id === file.id ? "ak-row-active" : "",
                   ].join(" ")}
                   key={linkedFile.id}
                   disabled={!onFileSelect}
-                  onClick={() => onFileSelect?.(linkedFile.id)}
+                  onNavigate={() => onFileSelect?.(linkedFile.id)}
                   title={linkedFile.relativePath}
-                  type="button"
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
                     {(() => {
@@ -66,7 +86,7 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
                     <span className="truncate">{documentTypeLabel(linkedFile.type)}</span>
                   </span>
                   {linkedFile.id === file.id ? <Check className="size-3" aria-hidden="true" /> : null}
-                </button>
+                </NavigationLink>
               ))}
             </div>
           </section>
@@ -125,35 +145,51 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
             </div>)}
           </dl> : null}
         </div>
-        <div ref={bodyRef} className="ak-scroll-area min-h-0 flex-1 overflow-auto px-5 py-4">
-          <MarkdownMessage content={presentation.markdown} headingIdsByLine={headingIdsByLine} file={linkContext ? undefined : file} context={linkContext} />
+        {match ? <div className="shrink-0 border-b border-border px-5 py-2 text-xs text-muted-foreground" role="status">
+          <span className="font-medium">{t("Line {{line}}", { line: match.line })} · </span><SearchHighlight text={match.excerpt} query={searchQuery} />
+        </div> : null}
+        <div ref={readerRef} className="ak-scroll-area min-h-0 flex-1 overflow-auto px-5 py-4">
+          <MarkdownMessage content={presentation.markdown} headingIdsByLine={headingIdsByLine} file={linkContext ? undefined : file} context={linkContext} searchLine={match?.line} />
         </div>
       </article>
     </div>
   );
 }
 
-function MarkdownMessage({
+const MarkdownMessage = memo(function MarkdownMessage({
   content,
   headingIdsByLine,
   file,
   context,
+  searchLine,
 }: {
   content: string;
   headingIdsByLine?: Record<number, string>;
   file?: Pick<MarkdownFileSummary, "id" | "workspaceId">;
   context?: LinkContext;
+  searchLine?: number;
 }) {
   const resources = useBrowserMarkdownComponents(file, context);
-  const remarkPlugins = headingIdsByLine
-    ? [remarkGfm, remarkHeadingIds(headingIdsByLine)]
-    : [remarkGfm];
+  const remarkPlugins = [...(headingIdsByLine ? [remarkHeadingIds(headingIdsByLine)] : []), ...(searchLine ? [remarkSearchLine(searchLine)] : [])];
 
   return (
-    <div className="ak-markdown">
-      <ReactMarkdown remarkPlugins={remarkPlugins} urlTransform={localLinkUrlTransform} components={resources}>{content}</ReactMarkdown>
-    </div>
+    <MarkdownContent remarkPlugins={remarkPlugins} urlTransform={localLinkUrlTransform} components={resources}>{content}</MarkdownContent>
   );
+});
+
+/** Mark the source block without rewriting Markdown or changing its GFM grammar. */
+function remarkSearchLine(line: number) {
+  return function searchLinePlugin() {
+    return function transform(tree: unknown) {
+      visitMarkdownAst(tree, (node) => {
+        if (!["paragraph", "heading", "code", "tableRow"].includes(String(node.type))) return;
+        if ((node.position?.start?.line ?? Infinity) > line || (node.position?.end?.line ?? -1) < line) return;
+        const properties = ensureRecordProperty(ensureRecordProperty(node, "data"), "hProperties");
+        properties["data-search-hit"] = "true";
+        properties.className = "rounded-sm bg-primary/10 ring-2 ring-primary/30";
+      });
+    };
+  };
 }
 
 export function createHeadingIdsByLine(
@@ -263,6 +299,7 @@ type MarkdownAstNode = Record<string, unknown> & {
     start?: {
       line?: number;
     };
+    end?: { line?: number };
   };
   type?: unknown;
 };

@@ -10,6 +10,8 @@ export type AppRouteState = {
   ticketId?: string;
   ticketViewMode?: TicketDocumentViewMode;
   workspaceId?: string;
+  documentSearch?: string;
+  appliedSearch?: string;
 };
 
 export type AppRouteLocation = {
@@ -33,6 +35,10 @@ export function parseAppRouteState(location: AppRouteLocation): AppRouteState {
   }
 
   const searchParams = new URLSearchParams(location.searchStr ?? "");
+  if (route.workspaceId) {
+    route.documentSearch = searchParams.get("q") || undefined;
+    route.appliedSearch = searchParams.get("match") || undefined;
+  }
   if (route.workspaceId && searchParams.get("view") === "guide") {
     route.showGuide = true;
     return route;
@@ -73,6 +79,8 @@ export function buildAppRoute(state: AppRouteState): string {
   if (state.ticketViewMode === "markdown") {
     searchParams.set("view", state.ticketViewMode);
   }
+  if (state.workspaceId && state.documentSearch) searchParams.set("q", state.documentSearch);
+  if (state.workspaceId && state.filePath && state.appliedSearch) searchParams.set("match", state.appliedSearch);
 
   const hashParams = new URLSearchParams();
   if (state.ticketId) {

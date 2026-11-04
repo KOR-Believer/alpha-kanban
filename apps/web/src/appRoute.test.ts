@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest";
 import { buildAppRoute, parseAppRouteState } from "./appRoute";
 
 describe("app route helpers", () => {
+  it("round-trips independent sidebar and applied search without including file paths", () => {
+    const state = { workspaceId: "bw_test", filePath: "d_test", documentSearch: "새 검색", appliedSearch: "청록색 등대", ticketId: "T-01", detailMode: "side" as const };
+    const url = new URL(buildAppRoute(state), "http://localhost");
+    expect(parseAppRouteState({ pathname: url.pathname, searchStr: url.search, hash: url.hash })).toEqual(state);
+    expect(url.searchParams.get("doc")).toBe("d_test");
+    expect(buildAppRoute({ workspaceId: "bw_test", documentSearch: "left only" })).not.toContain("match=");
+  });
   it("parses the start route", () => {
     expect(parseAppRouteState({ pathname: "/" })).toEqual({});
   });

@@ -13,6 +13,8 @@ import { documentRootBranch, resolveBrowserDocumentRoot, type DocumentRootSettin
 import { createMigrationAnalysis } from "./migrationAnalysis";
 import { forEachMigrationFile, readMigrationFile } from "./migrationFiles";
 import { attachTicketSearch } from "../ticketSearch";
+import { createDocumentSearchEntry } from "../documentSearch";
+import { DocumentSearchCache } from "./documentSearchCache";
 
 export class BrowserFileError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = "BrowserFileError"; }
@@ -84,9 +86,12 @@ export class BrowserRepository {
   private changeListeners = new Set<() => void>();
   private channel?: BroadcastChannel;
 
-  constructor(readonly storage: BrowserStorage = new IndexedDbStorage(), private readonly lock: Lock = browserLock, private readonly cacheBytes = 64 * 1024 * 1024) {}
+  readonly documentSearch: DocumentSearchCache;
+  constructor(readonly storage: BrowserStorage = new IndexedDbStorage(), private readonly lock: Lock = browserLock, private readonly cacheBytes = 64 * 1024 * 1024) {
+    this.documentSearch = new DocumentSearchCache(storage);
+  }
 
-  private clearSnapshots() { this.snapshots.clear(); this.index.clear(); this.snapshotBytes = 0; this.invalidateListings(); }
+  private clearSnapshots() { this.snapshots.clear(); this.index.clear(); this.snapshotBytes = 0; this.documentSearch.clearMemory(); this.invalidateListings(); }
 
   invalidateListings() { this.listings.clear(); this.documentCounts.clear(); this.listingRevision++; }
 
@@ -100,6 +105,7 @@ export class BrowserRepository {
     this.forgetSnapshot(snapshot.file.id);
     // Include a conservative allowance for parsed fields and the search source.
     snapshot.document ??= snapshot.file.type === "tickets" ? attachTicketSearch(parseTicketDocument(snapshot.markdown), snapshot.markdown) : undefined;
+    this.documentSearch.remember(createDocumentSearchEntry(snapshot.file, snapshot.markdown, snapshot.document));
     const bytes = snapshot.markdown.length * (snapshot.document ? 6 : 2);
     if (bytes <= this.cacheBytes) {
       while (this.snapshotBytes + bytes > this.cacheBytes && this.snapshots.size) this.forgetSnapshot(this.snapshots.keys().next().value!);
@@ -544,6 +550,17 @@ export class BrowserRepository {
         ? Boolean(combined.totalTickets && combined.doneTickets === combined.totalTickets)
         : undefined };
     }) };
+  }
+
+  /** Only preparation may reload a missing cache entry; typing never reads files. */
+  async prepareDocumentSearch(file: MarkdownFileSummary): Promise<void> {
+    if (await this.documentSearch.get(file)) return;
+    const cached = this.snapshots.get(file.id);
+    if (cached?.file.workspaceId === file.workspaceId && cached.file.hash === file.hash && cached.file.workspaceRelativePath === file.workspaceRelativePath) {
+      this.documentSearch.remember(createDocumentSearchEntry(file, cached.markdown, cached.document));
+      return;
+    }
+    await this.snapshot(await this.document(file.workspaceId, file.id));
   }
 
   async previewMigration(workspaceId: string, fileId: string, selection: Omit<MigrationTarget, "path">, generatedIds?: Record<string, string>, signal?: AbortSignal): Promise<BrowserMigration> {

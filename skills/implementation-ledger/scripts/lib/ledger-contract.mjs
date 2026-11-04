@@ -5,5 +5,5 @@ export const LEDGER_CONTRACT = Object.freeze({
   writeFormats: ["unversioned", "1"],
   newDocumentFormat: "unversioned",
   formatField: "Ledger-Format",
-  updateUrl: "https://kanban.giveit2.me/intro#updates",
+  updateUrl: "https://kanban.giveit2.me/about#updates",
 });

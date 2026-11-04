@@ -49,7 +49,7 @@ export function SkillArchiveDownload({ release = RUNNING_RELEASE }: { release?: 
 
   return <>
     <a className={buttonVariants({ variant: "ghost", size: "sm", className: "mt-3" })} href={href} download={filename} aria-disabled={busy} aria-busy={busy} onClick={download}>
-      {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}{t("Download Codex skill")}
+      {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}{t("Download skill ZIP")}
     </a>
     {failed ? <p role="alert" className="mt-2 text-sm text-destructive">{t("Could not download the skill ZIP. Reconnect to the internet and try again.")}</p> : null}
   </>;

@@ -52,7 +52,7 @@ describe("release reading timing", () => {
   it("does not show retrospective notes on a first visit", async () => {
     await render(); await tick(); expect(dialog()).toBeNull();
   });
-  it.each(["/intro", "/all", "/w/project"])("does not automatically interrupt %s", async (path) => {
+  it.each(["/about", "/intro", "/all", "/w/project"])("does not automatically interrupt %s", async (path) => {
     observeRelease(release(1)); mock.path = path; await render(); await tick();
     expect(dialog()).toBeNull(); expect(unreadReleases(release(2))).toHaveLength(1);
   });
@@ -84,7 +84,7 @@ describe("release reading timing", () => {
     } finally { blocker.remove(); }
   });
   it("offers waiting B, not remote C, without marking notice dismissal as read", async () => {
-    observeRelease(release(1)); mock.path = "/intro";
+    observeRelease(release(1)); mock.path = "/about";
     mock.state = { status: "checking", offlineReady: true, next: release(3), prepared: release(2) };
     await render(release(1)); await tick();
     expect(wasNotified(release(2))).toBe(true);
@@ -92,12 +92,34 @@ describe("release reading timing", () => {
     expect(unreadReleases(release(2))).toHaveLength(1);
     await act(async () => openReleaseNotes());
     expect(dialog()?.textContent).toContain("릴리즈 2"); expect(dialog()?.textContent).not.toContain("릴리즈 3");
+    expect(dialog()?.querySelector('a[href="/releases/notes-2"]')).toBeNull();
+    expect(dialog()?.querySelector('a[href="/releases/notes-1"][target="_blank"]')).not.toBeNull();
+    const all = dialog()!.querySelector<HTMLAnchorElement>('a[href="/releases"]')!;
+    expect(all.target).toBe("_blank");
+    all.addEventListener("click", event => event.preventDefault(), { once: true });
+    await act(async () => all.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    expect(dialog()).not.toBeNull(); expect(mock.apply).not.toHaveBeenCalled();
+    expect(skills.approve).not.toHaveBeenCalled(); expect(unreadReleases(release(2))).toHaveLength(1);
     await click("업데이트 적용"); expect(mock.apply).toHaveBeenCalledWith(release(2).buildId);
     expect(unreadReleases(release(2))).toHaveLength(0);
   });
+  it("uses the same title and summary as public detail, without consuming unread records by opening its link", async () => {
+    const value = release(2);
+    value.history![1]!.title = { ko: "앱과 스킬 함께 업데이트", en: "Update app and skill together" };
+    mock.path = "/all"; observeRelease(release(1));
+    await render(value); await act(async () => openReleaseNotes());
+    expect(dialog()?.textContent).toContain("앱과 스킬 함께 업데이트");
+    expect(dialog()?.textContent).toContain("릴리즈 2");
+    const link = dialog()!.querySelector<HTMLAnchorElement>('a[href="/releases/notes-2"]')!;
+    expect(link.target).toBe("_blank");
+    link.addEventListener("click", event => event.preventDefault(), { once: true });
+    await act(async () => link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    expect(dialog()).not.toBeNull(); expect(unreadReleases(value)).toHaveLength(1);
+    expect(mock.apply).not.toHaveBeenCalled(); expect(skills.approve).not.toHaveBeenCalled();
+  });
   it("requires rereading when the prepared worker changes, retaining language and focus", async () => {
     const trigger = document.createElement("button"); document.body.append(trigger);
-    mock.path = "/intro"; mock.state = { status: "ready", offlineReady: true, prepared: release(2) };
+    mock.path = "/about"; mock.state = { status: "ready", offlineReady: true, prepared: release(2) };
     await render(release(1)); await act(async () => openReleaseNotes(trigger));
     await act(async () => { mock.state = { ...mock.state, prepared: release(3) }; mock.listeners.forEach((listener) => listener()); await setLanguage("en"); });
     expect(dialog()?.textContent).toContain("The prepared update changed");
@@ -117,13 +139,13 @@ describe("release reading timing", () => {
   it("returns from skill management to the same notes without stacking dialogs", async () => {
     const value = release(2);
     value.history![1]!.skill = { compatibility: "compatible", notes: { ko: ["스킬 개선"], en: ["Skill improvement"] } };
-    mock.path = "/intro";
+    mock.path = "/about";
     await render(value);
     await act(async () => openReleaseNotes());
     await click("스킬 업데이트");
     await act(async () => { await vi.advanceTimersByTimeAsync(20); });
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
-    expect(dialog()?.textContent).toContain("설치된 스킬 폴더 등록");
+    expect(dialog()?.textContent).toContain("폴더 선택");
     await act(async () => { await setLanguage("en"); });
     await click("Close");
     await act(async () => { await vi.advanceTimersByTimeAsync(20); });
@@ -135,9 +157,9 @@ describe("release reading timing", () => {
 
 describe("one confirmation for app and registered skill", () => {
   async function open() {
-    mock.path = "/intro"; mock.state = { status: "ready", offlineReady: true, prepared: release(2) };
+    mock.path = "/about"; mock.state = { status: "ready", offlineReady: true, prepared: release(2) };
     skills.state = "update";
-    skills.review = { connection: { name: "test-skill" }, files: [{ path: "SKILL.md", content: "Before instructions\n" }], bundle: { version: "1234567890ab", files: [{ path: "SKILL.md", content: "After instructions\n" }] }, changes: [{ path: "SKILL.md", kind: "change" }] } as SkillReview;
+    skills.review = { connection: { name: "test-skill" }, files: [{ path: "SKILL.md", content: "Before instructions\n", sha256: "a".repeat(64) }], bundle: { version: "1234567890ab", files: [{ path: "SKILL.md", content: "After instructions\n", sha256: "b".repeat(64) }], known: [{ source: "c".repeat(40), files: [{ path: "SKILL.md", sha256: "a".repeat(64) }] }] }, changes: [{ path: "SKILL.md", kind: "change" }] } as SkillReview;
     await render(release(1)); await act(async () => openReleaseNotes());
   }
   it("shows files and an advisory, with no stopped-task checkbox or writes on dismissal", async () => {
@@ -145,10 +167,13 @@ describe("one confirmation for app and registered skill", () => {
     expect(dialog()?.textContent).toContain("SKILL.md");
     expect(dialog()?.textContent).toContain("다른 Alpha Kanban 앱의 스킬 변경을 마친 뒤 적용");
     expect(dialog()?.textContent).toContain("정식 제공 스킬");
+    expect(dialog()?.querySelector('[data-skill-comparison="installed"]')?.textContent).toContain("원본 커밋: cccccccccccc");
+    expect(dialog()?.querySelector('[data-skill-comparison="target"]')?.textContent).toContain("번들 ID: 1234567890ab");
     const details = dialog()!.querySelector("details")!;
     await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
     expect(details.querySelector('[data-change="removed"] code')?.textContent).toBe("Before instructions");
     expect(details.querySelector('[data-change="added"] code')?.textContent).toBe("After instructions");
+    expect(details.querySelector(".ak-diff-head")?.textContent).toContain("현재 설치본적용할 스킬");
     expect(document.querySelector('[role="checkbox"]')).toBeNull();
     await click("나중에");
     expect(skills.approve).not.toHaveBeenCalled(); expect(mock.apply).not.toHaveBeenCalled();

@@ -110,7 +110,7 @@ export function ProjectGuide({ onBoardTour }: { onBoardTour?: () => void } = {})
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {onBoardTour ? <Button data-tour-replay="" variant="outline" size="sm" onClick={onBoardTour}><Route aria-hidden="true" />{t("Replay board tour")}</Button> : null}
-        <Link to="/intro" className={buttonVariants({ variant: "ghost", size: "sm" })}><BookOpen aria-hidden="true" />{t("About Alpha Kanban")}</Link>
+        <Link to="/about" className={buttonVariants({ variant: "ghost", size: "sm" })}><BookOpen aria-hidden="true" />{t("About Alpha Kanban")}</Link>
       </div>
     </header>
     <SkillInstallPanel />

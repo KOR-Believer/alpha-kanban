@@ -15,7 +15,7 @@ describe("app-pinned skill requests", () => {
       }, mode, release);
       for (const suffix of [`.json`, `.zip`]) expect(request).toContain(`${config.origin}/downloads/implementation-ledger-${release.skillBundle}${suffix}`);
       expect(request).toContain(release.skillPayload); expect(request).toContain(release.skillArchive);
-      expect(request).toContain(`${config.origin}/intro#updates`);
+      expect(request).toContain(`${config.origin}/about#updates`);
       expect(request).not.toMatch(/\{\{|\/tree\/master|manifest\.json|localhost|127\.0\.0\.1|implementation-ledger-canary/);
       expect(request).toContain(locale === "ko" ? "검증에 실패하면 멈추고" : "verification fails, stop");
       expect(request).toContain(locale === "ko" ? "덮어쓰기 전에" : "before overwriting");

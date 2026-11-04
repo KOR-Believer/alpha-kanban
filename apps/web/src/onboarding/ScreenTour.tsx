@@ -120,14 +120,14 @@ export function TourButton({ tour, labelKey = "Take a quick tour" }: { tour: Ret
   </div>;
 }
 
-export function TourHelp({ tour }: { tour: ReturnType<typeof useScreenTour> }) {
+export function TourHelp({ tour, publicLinks = true, invitation = true }: { tour: ReturnType<typeof useScreenTour>; publicLinks?: boolean; invitation?: boolean }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const action = useRef<(() => void) | null>(null);
   return <>
-    {tour.offered ? <TourButton tour={tour} /> : null}
+    {invitation && tour.offered ? <TourButton tour={tour} /> : null}
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild><Button ref={trigger} data-tour-help="" size="sm" variant="ghost" title={t("Help")}><CircleHelp aria-hidden="true" /><span className="ak-toolbar-label">{t("Help")}</span></Button></PopoverTrigger>
       <PopoverContent align="end" className="grid min-w-52 gap-1" onCloseAutoFocus={(event) => {
@@ -135,7 +135,9 @@ export function TourHelp({ tour }: { tour: ReturnType<typeof useScreenTour> }) {
       }}>
         <Button data-tour-replay="" size="sm" variant="ghost" className="justify-start" disabled={!tour.enabled} onClick={() => { action.current = tour.start; setOpen(false); }}><Route aria-hidden="true" />{t("Take a quick tour")}</Button>
         <Button size="sm" variant="ghost" className="justify-start" onClick={() => { action.current = () => setGuideOpen(true); setOpen(false); }}><BookOpen aria-hidden="true" />{t("Create plans and tickets with AI")}</Button>
-        <Link to="/intro" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`} onClick={() => setOpen(false)}><Info aria-hidden="true" />{t("About Alpha Kanban")}</Link>
+        {publicLinks ? <><a href="/docs" target="_blank" rel="noreferrer" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`} onClick={() => setOpen(false)}><BookOpen aria-hidden="true" />{t("Read documentation (opens in a new tab)")}</a>
+        <Link to="/about" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`} onClick={() => setOpen(false)}><Info aria-hidden="true" />{t("About Alpha Kanban")}</Link>
+        </> : null}
       </PopoverContent>
     </Popover>
     <Dialog open={guideOpen} onOpenChange={setGuideOpen}>

@@ -126,7 +126,7 @@ describe("document-only ticket detail", () => {
     expect(document.querySelector('.ak-ticket-detail-shell')?.getAttribute("data-mode")).toBe("modal");
     expect(input.isConnected).toBe(true);
     await click("Expand ticket detail");
-    expect(document.querySelectorAll(".ak-ticket-resize-handle")).toHaveLength(0);
+    expect(document.querySelectorAll(".ak-panel-resize-handle")).toHaveLength(0);
     await click("Restore ticket peek");
     expect(document.querySelector('.ak-ticket-detail-shell')?.getAttribute("data-mode")).toBe("modal");
     expect(input.isConnected).toBe(true);

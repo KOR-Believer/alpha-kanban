@@ -71,7 +71,7 @@ export function browserPwa(release: ReleaseInfo): Plugin[] {
     injectRegister: false, manifest: { ...appManifest, name: channel.name, short_name: channel.name, background_color: brandColors(channel.channel).surface, theme_color: brandColors(channel.channel).surface }, devOptions: { enabled: false },
     includeManifestIcons: false,
     injectManifest: {
-      globPatterns: ["index.html", "manifest.webmanifest", "assets/**/*.{js,css,woff2}", "icons/*.png", "fonts/OFL.txt", `downloads/implementation-ledger-${release.skillBundle}.zip`, `downloads/implementation-ledger-${release.skillBundle}.json`, "downloads/manifest.json", "downloads/INSTALL.txt"],
+      globPatterns: ["index.html", "manifest.webmanifest", "assets/**/*.{js,css,woff2,png}", "icons/*.png", "fonts/OFL.txt", `downloads/implementation-ledger-${release.skillBundle}.zip`, `downloads/implementation-ledger-${release.skillBundle}.json`, "downloads/manifest.json", "downloads/INSTALL.txt"],
       maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       rollupFormat: "iife",
       manifestTransforms: [async (entries) => {

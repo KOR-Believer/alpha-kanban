@@ -6,33 +6,33 @@
 
 The core is the [implementation-ledger skill](skills/implementation-ledger/SKILL.md). It helps AI record scope, acceptance criteria, progress, and verification in local Markdown so you can review the work and take part in decisions. The skill supports the workflow from planning through implementation on its own. The web app is an optional viewer for those same documents and their progress.
 
-[Introduction and installation](https://kanban.giveit2.me/intro) · [Open web viewer](https://kanban.giveit2.me/)
+[Introduction and installation](https://kanban.giveit2.me/about) · [Usage documentation](https://kanban.giveit2.me/docs) · [Open web viewer](https://kanban.giveit2.me/)
 
 ## 1. Install the skill
 
-Send this request to a **Codex chat** that can work with your local project files. You do not need to download this repository or run the web app locally. Installation requires access to GitHub.
+Send this request to **your AI coding tool's chat** with access to your local project files. You do not need to download this repository or run the web app locally. Installation requires access to GitHub.
 
 ```text
-Use $skill-installer to install implementation-ledger from this GitHub path:
+Check this AI tool's skill installation procedure and install implementation-ledger from this GitHub path:
 
 https://github.com/KOR-Believer/alpha-kanban/tree/master/skills/implementation-ledger
 
 Resolve the source to a full commit before downloading.
 Install the entire folder from that commit, including references, assets, scripts, agents, and licenses, not only SKILL.md.
 Verify installed file hashes and report the chosen commit.
-Find and use the personal skill location recognized by my Codex environment.
+Find and use the personal skill location recognized by this AI tool.
 If a skill with the same name is already installed, compare it and explain the changes first.
 Back up the existing installation and preserve my customizations. Ask before overwriting it.
-Report the installation location and whether Codex recognizes it. Do not change project documents or code.
+Report the installation location and whether this AI tool recognizes it. Do not change project documents or code.
 Only after success, print the actual installed directory as copyable text in the final response.
 Explain that registering this folder for confirmed web updates is optional:
-https://kanban.giveit2.me/intro#updates
+https://kanban.giveit2.me/about#updates
 Do not include my personal path in the URL.
 ```
 
-After installation, check that you can select `$implementation-ledger`. If it does not appear, reopen Codex and ask it to check that `SKILL.md`, references, and templates were installed together.
+After installation, check that your AI tool recognizes `implementation-ledger`. If it does not appear, ask it to check its skill-loading procedure and that `SKILL.md`, references, and templates were installed together.
 
-The [skill guide on the website](https://kanban.giveit2.me/intro#skill) also provides the installation request. The website provides guidance; Codex performs the installation.
+The [skill guide on the website](https://kanban.giveit2.me/about#skill) also provides the installation request. The website provides guidance; ask your AI tool to perform the installation.
 
 ## 2. Work with AI
 
@@ -41,7 +41,7 @@ Start without configuration or user registration. Documents follow the project's
 Start by discussing what you want to build.
 
 ```text
-Use $implementation-ledger.
+Use the implementation-ledger skill.
 I want to build a reading journal app. Let's discuss the features and scope first.
 Do not write documents or code yet.
 ```
@@ -49,7 +49,7 @@ Do not write documents or code yet.
 Once you have a direction, ask for a work record.
 
 ```text
-Use $implementation-ledger to draft tickets from what we have agreed.
+Use the implementation-ledger skill to draft tickets from what we have agreed.
 Add a plan if multiple tickets need shared design decisions.
 Separate scope and acceptance criteria from questions I need to answer or decide.
 Do not implement yet.
@@ -112,13 +112,13 @@ Connect a project root containing `.ak.config` and the document folder (default 
 
 ## 3. Update the skill
 
-Review the request in the [skill update guide](https://kanban.giveit2.me/intro#updates) and send it to Codex. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.
+Review the request in the [skill update guide](https://kanban.giveit2.me/about#updates) and send it to your AI tool. Compare the entire installed folder with the official source, review changes and conflicts, then update with a full backup and your customizations preserved. Confirm before anything is overwritten.
 
-**A registered skill can be updated with the app.** Review the skill's changed files in the PWA update dialog and choose **Back up skill and update both**. After the new app loads, it backs up and replaces the skill. Finish any Codex task using the skill first. Without a registered folder, or when the installed skill already matches, only the app is updated. Personal or unrecognized changes are never overwritten: choose **Update app only** and ask Codex to compare them. Backups remain available under **Skill updates** for explicit restoration.
+**A registered skill can be updated with the app.** Review the skill's changed files in the PWA update dialog and choose **Back up skill and update both**. After the new app loads, it backs up and replaces the skill. Finish AI tasks using the skill first. Without a registered folder, or when the installed skill already matches, only the app is updated. Personal or unrecognized changes are not replaced by regular updates: choose **Update app only** and ask your AI tool to compare them. Backups remain available under **Skill updates** for explicit restoration.
 
-Optionally choose **Register or manage an installed skill** in the update guide and select the folder reported by Codex. Registration requests read and write access but does not change files. For recognized official installations, the app lists changes and waits for your confirmation before making a full backup, writing files, and verifying them. Personal or unrecognized files are not overwritten; use the Codex comparison request instead. Registration is not required to use agent requests or Kanban.
+Optionally open **Skill updates** and drop the `implementation-ledger` folder reported by your AI tool, or use **Choose folder**. Connecting requests read and write access but does not change files. The app compares the installation with its supplied bundle. Compatible official installations can be updated after confirmation, with a full backup and save verification. Personal or unrecognized files are not replaced by regular updates; ask your AI tool to compare them or use the separate reinstall review and confirmation. Connecting is not required to use agent requests or Kanban.
 
-Stop using the skill in Codex during an update or restore, and keep the app window open. Use **Skill backups** to export or restore the original files. Disconnecting leaves files and backups intact, but clearing browser data can remove backups, so export first. Saved files and recognition by Codex are verified separately.
+Finish AI tasks using the skill before an update or restore, and keep the app window open until verification finishes. Use **Skill backups** to export or restore the original files. Disconnecting leaves files and backups intact, but clearing browser data can remove backups, so export first. Saved files and recognition by your AI tool are verified separately.
 
 ## Optional: view documents and progress on the web
 
@@ -150,7 +150,7 @@ Documents are read from the local folder you choose; confirmed edits are saved t
 - When an update is ready, open its notification or **App installation and updates → Update history** to read the changes before choosing to apply it. Unread notes appear once on the project selector after updating; the same menu lets you revisit them.
 - Before an app update, save or discard drafts in all app windows. If the app will not open, use [app repair](https://kanban.giveit2.me/repair.html) while online.
 
-`/` is the project workspace; `/intro` is the introduction and installation guide. The PWA also starts at `/`.
+`/` is the project workspace; `/about` is the introduction and installation guide. The PWA also starts at `/`.
 
 ## Contributing
 

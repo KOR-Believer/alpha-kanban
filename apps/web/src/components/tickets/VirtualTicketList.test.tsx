@@ -52,7 +52,7 @@ it("searches the whole project document before windowing and opens the result by
   expect(host.querySelectorAll('[data-tour="board-card"]').length).toBeLessThan(30);
   await act(async () => render("마지막 본문"));
   expect(host.querySelectorAll('[data-tour="board-card"]')).toHaveLength(1);
-  await act(async () => host.querySelector<HTMLButtonElement>('[data-tour="board-card"] button')!.click());
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-tour="board-card"] a')!.click());
   expect(select).toHaveBeenCalledWith("ticket-999");
   expect(response.document.tickets).toHaveLength(1000);
 });

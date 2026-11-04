@@ -12,11 +12,11 @@ precache.addToCacheList(self.__WB_MANIFEST);
 const precacheRoute = new PrecacheRoute(precache);
 registerRoute((options) => !options.url.searchParams.has("ak-repair") && precacheRoute.match(options), precacheRoute.handler);
 registerRoute(new NavigationRoute(precache.createHandlerBoundToURL("/index.html"), {
-  allowlist: [/^\/(?:intro|all)?\/?(?:\?.*)?$/, /^\/w\/[^/.?]+\/?(?:\?.*)?$/],
+  allowlist: [/^\/(?:about|intro|all)?\/?(?:\?.*)?$/, /^\/w\/[^/.?]+\/?(?:\?.*)?$/, /^\/(?:docs|releases)(?:\/[^/?]+)*\/?(?:\?.*)?$/],
 }));
 
 const windows = async () => (await self.clients.matchAll({ type: "window", includeUncontrolled: true }))
-  .filter((client) => new URL(client.url).origin === self.location.origin && /^\/(?:index\.html|intro|all|w\/[^/]+)?\/?$/.test(new URL(client.url).pathname));
+  .filter((client) => new URL(client.url).origin === self.location.origin && /^\/(?:index\.html|about|intro|all|w\/[^/]+|(?:docs|releases)(?:\/[^/]+)*)?\/?$/.test(new URL(client.url).pathname));
 let transaction: string | undefined;
 let prepared: WindowClient[] = [];
 let releaseTransition: (() => void) | undefined;

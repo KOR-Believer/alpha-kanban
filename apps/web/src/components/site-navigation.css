@@ -1,0 +1,29 @@
+.ak-site-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; flex-wrap: wrap; gap: var(--ak-space-xs) var(--ak-space-lg); min-height: var(--ak-site-header-height); padding: var(--ak-space-sm) var(--ak-space-xxl); border-bottom: 1px solid var(--border); background: var(--ak-header-background); }
+.ak-site-heading { display: flex; align-items: center; gap: var(--ak-space-lg); min-width: 0; }
+.ak-site-heading .ak-public-brand { flex-shrink: 0; }
+.ak-site-navigation { display: flex; align-items: center; gap: var(--ak-space-xxs); }
+.ak-site-link { display: flex; align-items: center; min-height: 28px; padding: var(--ak-space-xxs) var(--ak-space-sm); border-radius: var(--ak-radius-xs); font-size: 13px; white-space: nowrap; color: var(--muted-foreground); }
+.ak-site-link:hover { background: var(--muted); color: var(--foreground); }
+.ak-site-link[aria-current="page"] { background: var(--muted); color: var(--foreground); font-weight: 600; }
+.ak-site-tools, .ak-site-preferences, .ak-site-actions { display: flex; align-items: center; gap: var(--ak-space-xs); }
+.ak-site-tools { margin-left: auto; max-width: 100%; }
+.ak-site-actions { flex-wrap: wrap; }
+.ak-site-menu-trigger { display: none; }
+.ak-site-menu { min-width: 180px; }
+.ak-site-menu nav { display: grid; gap: var(--ak-space-xxs); }
+.ak-site-menu .ak-site-link { min-height: 36px; }
+.ak-site-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ak-space-md); padding-block: var(--ak-space-lg); border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 12px; }
+.ak-site-footer a { display: inline-flex; align-items: center; gap: var(--ak-space-xs); }
+.ak-site-footer a:hover { color: var(--foreground); }
+.ak-site-footer svg { width: 14px; height: 14px; }
+@media (max-width: 1200px) {
+  .ak-site-navigation { display: none; }
+  .ak-site-menu-trigger { display: inline-flex; }
+}
+@media (max-width: 700px) {
+  .ak-site-header { display: grid; grid-template-columns: minmax(0, 1fr); padding: var(--ak-space-xs) var(--ak-space-md); }
+  .ak-site-heading { justify-content: space-between; min-height: 28px; }
+  .ak-site-tools { width: 100%; min-height: 28px; }
+  .ak-site-actions { margin-left: auto; gap: var(--ak-space-xxs); }
+  .ak-site-tools > .ak-toolbar-divider { margin-inline: var(--ak-space-xxs); }
+}

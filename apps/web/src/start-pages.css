@@ -2,8 +2,6 @@
   .ak-start-page, .ak-intro-page { background: var(--background); color: var(--foreground); letter-spacing: 0; }
   .ak-public-brand { display: inline-flex; align-items: center; gap: var(--ak-space-xs); font-size: 16px; font-weight: 600; text-decoration: none; white-space: nowrap; }
   .ak-public-brand svg { width: 22px; height: 22px; color: var(--muted-foreground); }
-  .ak-start-navigation { min-height: 64px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ak-space-md); padding: var(--ak-space-sm) var(--ak-space-xxl); border-bottom: 1px solid var(--border); background: var(--ak-header-background); }
-  .ak-start-navigation nav, .ak-intro-header nav { display: flex; align-items: center; gap: var(--ak-space-xs); flex-wrap: wrap; }
   .ak-start-content { display: grid; gap: var(--ak-space-md); padding: var(--ak-space-xl) var(--ak-space-xxl); width: 100%; max-width: 1600px; margin-inline: auto; }
   .ak-start-heading { display: grid; gap: var(--ak-space-md); }
   .ak-start-heading-row { display: flex; justify-content: space-between; align-items: center; gap: var(--ak-space-lg); }
@@ -75,9 +73,6 @@
     .ak-guide-step-example { grid-column: 2; }
   }
   .ak-intro-wrap { width: 100%; max-width: 1264px; margin: 0 auto; padding-inline: var(--ak-space-xxl); }
-  .ak-intro-header { border-bottom: 1px solid var(--border); background: var(--ak-header-background); }
-  .ak-intro-header > div { display: flex; align-items: center; justify-content: space-between; gap: var(--ak-space-lg); min-height: 72px; }
-  .ak-intro-section-link { font-size: 13px; text-decoration: none; padding: var(--ak-space-xs); }
   .ak-intro-hero { padding-top: 44px; }
   .ak-intro-eyebrow { font-size: 13px; color: var(--muted-foreground); margin-bottom: var(--ak-space-md); }
   .ak-intro-hero h1 { font-size: 56px; line-height: 1.15; font-weight: 600; margin: 0 0 var(--ak-space-lg); }
@@ -114,7 +109,7 @@
   .ak-intro-demo-empty { padding: var(--ak-space-xl) var(--ak-space-xs); color: var(--muted-foreground); text-align: center; font-size: 12px; }
   .ak-intro-demo figcaption { padding-block: var(--ak-space-sm); }
   .ak-intro-demo figcaption a { text-decoration: underline; text-underline-offset: 4px; }
-  .ak-intro-section { padding-block: 56px; border-bottom: 1px solid var(--border); scroll-margin-top: var(--ak-space-lg); }
+  .ak-intro-section { padding-block: 56px; border-bottom: 1px solid var(--border); scroll-margin-top: calc(var(--ak-site-header-offset, var(--ak-site-header-height)) + var(--ak-space-lg)); }
   .ak-intro-page h2 { font-size: 28px; line-height: 1.4; font-weight: 600; margin-bottom: var(--ak-space-md); word-break: keep-all; overflow-wrap: anywhere; }
   .ak-intro-page h3 { font-size: 16px; line-height: 1.6; font-weight: 600; margin-bottom: var(--ak-space-xs); }
   .ak-intro-section p, .ak-intro-closing p { line-height: 1.8; color: var(--muted-foreground); }
@@ -132,10 +127,7 @@
   .ak-intro-page .ak-skill-install { margin-top: var(--ak-space-lg); }
   .ak-intro-closing { display: flex; justify-content: space-between; align-items: center; gap: var(--ak-space-lg); padding-block: 40px; }
   .ak-intro-closing h2 { font-size: 24px; margin-bottom: var(--ak-space-xs); }
-  .ak-intro-footer { border-top: 1px solid var(--border); padding-block: var(--ak-space-lg); color: var(--muted-foreground); font-size: 12px; }
-  .ak-intro-footer > div { display: flex; justify-content: space-between; gap: var(--ak-space-md); }
-  .ak-intro-footer > div > div { display: flex; flex-wrap: wrap; gap: var(--ak-space-lg); }
-  .ak-intro-skill { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 64px; scroll-margin-top: var(--ak-space-lg); }
+  .ak-intro-skill { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 64px; scroll-margin-top: calc(var(--ak-site-header-offset, var(--ak-site-header-height)) + var(--ak-space-lg)); }
   .ak-intro-skill h2 { overflow-wrap: anywhere; }
   .ak-intro-skill p { margin-block: var(--ak-space-md); }
   .ak-intro-skill code { display: block; font-size: 12px; overflow-wrap: anywhere; }
@@ -149,8 +141,6 @@
   }
   @media (max-width: 700px) {
     .ak-project-guide { padding: var(--ak-space-lg) var(--ak-space-md); }
-    .ak-start-navigation { padding-inline: var(--ak-space-md); gap: var(--ak-space-xs); }
-    .ak-start-navigation nav { gap: var(--ak-space-xxs); }
     .ak-start-content { padding: var(--ak-space-lg) var(--ak-space-md); }
     .ak-start-heading-row { display: block; }
     .ak-start-commands { justify-content: flex-start; margin-top: var(--ak-space-md); }
@@ -169,8 +159,6 @@
     .ak-start-workspace-names { flex-basis: 60%; }
     .ak-document-workflow { grid-template-columns: 1fr; }
     .ak-intro-wrap { padding-inline: var(--ak-space-md); }
-    .ak-intro-header > div { min-height: 64px; gap: var(--ak-space-xs); }
-    .ak-intro-section-link { display: none; }
     .ak-intro-hero { padding-top: var(--ak-space-xxl); }
     .ak-intro-hero h1 { font-size: 38px; }
     .ak-intro-lead { font-size: 16px; }
@@ -187,6 +175,6 @@
     .ak-intro-demo-card { min-height: 140px; }
     .ak-intro-demo-heading { align-items: flex-start; }
     .ak-intro-demo-toolbar { align-items: flex-start; flex-direction: column; }
-    .ak-intro-closing, .ak-intro-footer > div { flex-direction: column; align-items: flex-start; }
+    .ak-intro-closing { flex-direction: column; align-items: flex-start; }
   }
 }

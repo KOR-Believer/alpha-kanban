@@ -1,6 +1,7 @@
 import { BROWSER_DATABASE_NAME, IndexedDbStorage, type BrowserStorage } from "../browser/storage";
 import { appActivity } from "../pwa/activity";
 import { isLedgerSkill, MAX_BYTES, MAX_FILE_BYTES, MAX_FILES, safeSkillPath, skillHash, validateBundle, type SkillBundle, type SkillFile } from "./bundle";
+import { sameSkillFiles as same } from "./installation";
 
 type SnapshotFile = SkillFile & { mtime: number };
 export type SkillConnection = { id: string; name: string; handle: FileSystemDirectoryHandle };
@@ -50,12 +51,15 @@ async function readFile(root: FileSystemDirectoryHandle, path: string): Promise<
     return { path, content, mtime: file.lastModified, sha256: await skillHash(content) };
   } catch (error) { if (error instanceof DOMException && error.name === "NotFoundError") return undefined; throw error; }
 }
-async function snapshot(root: FileSystemDirectoryHandle, requireSkill = true) {
+/** Read the selected folder's own header only; never search its parent or children. */
+export async function verifySkillDirectory(root: FileSystemDirectoryHandle) {
   await permission(root, "read");
-  if (requireSkill) {
-    const skill = await readFile(root, "SKILL.md");
-    if (!skill || !isLedgerSkill(skill.content)) throw new Error("Select the installed implementation-ledger folder containing SKILL.md.");
-  }
+  const skill = await readFile(root, "SKILL.md");
+  if (!skill || !isLedgerSkill(skill.content)) throw new Error("Select the installed implementation-ledger folder containing SKILL.md.");
+}
+async function snapshot(root: FileSystemDirectoryHandle, requireSkill = true) {
+  if (requireSkill) await verifySkillDirectory(root);
+  else await permission(root, "read");
   const files: SnapshotFile[] = []; let size = 0, entries = 0;
   async function walk(directory: FileSystemDirectoryHandle, prefix = "", depth = 0) {
     if (depth > 5) throw new Error("Invalid skill path.");
@@ -103,9 +107,6 @@ async function checkReinstallPaths(root: FileSystemDirectoryHandle, target: Skil
   }
   // Include empty directories and directory casing: neither appears in a file-only snapshot.
   await walk(root);
-}
-function same(a: Array<Pick<SkillFile, "path" | "sha256">>, b: Array<Pick<SkillFile, "path" | "sha256">>) {
-  return a.length === b.length && a.every((file) => b.some((other) => other.path === file.path && other.sha256 === file.sha256));
 }
 function unchanged(a: Fingerprint[], b: Fingerprint[]) { return same(a, b) && a.every((file) => b.find((other) => other.path === file.path)?.mtime === file.mtime); }
 export function skillError(error: unknown) {
@@ -164,7 +165,7 @@ export class SkillRepository {
     if (!unchanged(current.files, review.files)) throw new Error(CHANGED);
     if (operation === "update" && current.state !== "update") throw new Error("Personal or unrecognized files will not be overwritten. Ask your agent to compare them.");
     if (operation === "reinstall") {
-      if (current.state === "review") throw new Error("Ask Codex to review compatibility before changing your skill or documents.");
+      if (current.state === "review") throw new Error("Ask your AI tool to review compatibility before changing your skill or documents.");
       await checkReinstallPaths(connection.handle, review.bundle.files);
     }
     return current;
@@ -182,7 +183,7 @@ export class SkillRepository {
   }
   async approveAppUpdate(review: SkillReview, fromBuild: string, buildId: string) {
     return this.lock(LOCK, () => appActivity.run(async () => {
-      if (this.target.compatible !== true || !this.target.digest || !/^[a-f0-9]{16}$/.test(buildId) || !/^[a-f0-9]{16}$/.test(fromBuild) || buildId === fromBuild) throw new Error("Ask Codex to review compatibility before changing your skill or documents.");
+      if (this.target.compatible !== true || !this.target.digest || !/^[a-f0-9]{16}$/.test(buildId) || !/^[a-f0-9]{16}$/.test(fromBuild) || buildId === fromBuild) throw new Error("Ask your AI tool to review compatibility before changing your skill or documents.");
       const previous = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
       if (previous?.state === "writing") throw new Error("Review the unfinished skill update before changing its connection.");
       const current = await this.checkReview(review);

@@ -83,7 +83,7 @@ async function readGuide(name, owner = page) {
   await owner.getByRole("button", { name: "도움말", exact: true }).click();
   const menu = owner.locator('[role="dialog"]');
   assert.deepEqual(await menu.locator("button, a").allTextContents(), ["화면 둘러보기", "AI와 계획·티켓 만들기", "Alpha Kanban 소개"]);
-  assert.equal(await menu.getByRole("link", { name: "Alpha Kanban 소개", exact: true }).getAttribute("href"), "/intro");
+  assert.equal(await menu.getByRole("link", { name: "Alpha Kanban 소개", exact: true }).getAttribute("href"), "/about");
   await owner.screenshot({ path: resolve(output, name + "-help-menu.png") });
   await menu.getByRole("button", { name: "AI와 계획·티켓 만들기", exact: true }).click();
   const guide = owner.getByRole("dialog", { name: "AI와 계획·티켓 만들기", exact: true });
@@ -182,12 +182,11 @@ try {
   await page.reload(); await page.getByText("아직 최근 프로젝트가 없습니다.", { exact: true }).waitFor();
   assert.equal(await offer().count(), 0);
   assert.equal(await page.getByRole("button", { name: "화면 둘러보기", exact: true }).count(), 0);
-  assert.equal(await page.locator('.ak-start-navigation a[href="/intro"]').count(), 0);
+  assert.equal(await page.locator('.ak-site-navigation a[href="/about"]').count(), 1);
   assert.equal(await page.evaluate(() => localStorage.getItem("alpha-kanban.tours.v1.start")), null);
   await page.screenshot({ path: resolve(output, "start-returning-visitor.png") });
-  await page.getByRole("button", { name: "도움말", exact: true }).click();
-  await page.getByRole("link", { name: "Alpha Kanban 소개", exact: true }).click();
-  await page.waitForURL("**/intro");
+  await page.locator('.ak-site-navigation a[href="/about"]').click();
+  await page.waitForURL("**/about");
   await page.goBack();
   await page.getByRole("button", { name: "도움말", exact: true }).waitFor();
   assert.equal(await offer().count(), 0);

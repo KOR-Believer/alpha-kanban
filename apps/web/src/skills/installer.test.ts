@@ -12,7 +12,7 @@ it("installs only into a fresh isolated home and reports the real path without c
     const output = execFileSync(process.execPath, [script, "--target", target], { encoding: "utf8" });
     expect(output).toContain(target);
     expect(output).toContain("recognition has not been checked");
-    expect(output).toContain("https://kanban.giveit2.me/intro#updates");
+    expect(output).toContain("https://kanban.giveit2.me/about#updates");
     expect(readdirSync(target)).toEqual(expect.arrayContaining(["SKILL.md", "references", "assets", "scripts", "agents"]));
     const source = readFileSync(resolve(target, "SKILL.md"), "utf8");
     writeFileSync(resolve(target, "SKILL.md"), source + "\nPersonal rule\n");

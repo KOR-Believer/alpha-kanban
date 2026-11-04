@@ -1,0 +1,27 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AKC-10 Windows 확인</title>
+<style>body{font:16px/1.65 system-ui;max-width:820px;margin:40px auto;padding:0 20px;color:#222}li{margin:24px 0}select,button,textarea{font:inherit;padding:8px}textarea{display:block;box-sizing:border-box;width:100%}code{background:#eee;padding:3px}button{cursor:pointer}label{margin-right:12px}</style>
+<h1>스킬 폴더 연결 확인</h1><p>이 페이지는 테스트 기록용입니다. 개인 스킬이 아닌 ZIP의 합성 폴더만 사용하세요.</p>
+<p><a href="/" target="_blank" rel="noopener">테스트 앱 열기</a> → 상단 <strong>스킬 업데이트</strong>. 아래 순서대로 확인하고 결과를 선택하세요.</p><p>업데이트·재설치·복원은 적용하지 마세요. 등록과 권한 허용만으로 파일이 바뀌지 않는지 검사합니다.</p>
+<ol id="checks"></ol><label for="notes">오류 문구·보충 설명</label><textarea id="notes" rows="5"></textarea><p><button id="save">결과 JSON 저장</button></p>
+<script>
+const cases=[
+['drop','탐색기의 fixtures/drop/implementation-ledger 폴더 자체를 드롭합니다. 후보 이름이 표시되고, 접근 허용하고 연결을 누르면 필요한 읽기·쓰기 권한을 허용한 뒤 설치본의 변경 비교가 보이는지 확인합니다. 이미 허용한 폴더는 Chrome 권한창이 다시 나오지 않을 수 있습니다.'],
+['multi','fixtures/multiple 안의 두 폴더를 함께 선택해 드롭합니다. 하나만 등록하지 않고 현재 연결을 유지하는지 확인합니다.'],
+['wrong','fixtures/wrong/implementation-ledger, fixtures/parent/skills, fixtures/empty, fixtures/file/SKILL.md를 각각 드롭합니다. 잘못된 대상 안내가 나오고 현재 연결을 유지하는지 확인합니다.'],
+['cancel','폴더 선택 창에서 취소합니다. 기존 연결이 유지되는지 확인합니다.'],
+['deny','fixtures/picker/implementation-ledger를 드롭한 뒤 권한 요청을 거부합니다. 기존 연결이 유지되고 다시 시도 또는 취소할 수 있는지 확인합니다.'],
+['picker','기존 폴더 선택 버튼으로 fixtures/picker/implementation-ledger를 선택합니다. 권한 허용 후 선택한 폴더의 변경 비교가 보이는지 확인합니다.'],
+['same','방금 선택한 picker 폴더를 드롭으로 다시 연결합니다. 중복 연결이나 자동 파일 교체 없이 같은 설치본으로 이어지는지 확인합니다.'],
+['custom','fixtures/custom/implementation-ledger를 연결합니다. 변경 목록에 personal-note.md가 보이고 일반 업데이트로 덮어쓰지 않는지 확인합니다. 이 앱의 제공본은 호환성 확인이 필요해 개인 수정본 대신 AI 도구에 호환성을 확인하라는 안내가 나올 수 있습니다. 실제 적용은 누르지 않습니다.'],
+['restart','진행 중인 브라우저 작업을 마친 뒤 Chrome을 완전히 종료했다가 다시 실행하고 같은 주소로 접속합니다. 탭만 닫는 것과 구분해 주세요. 스킬 관리자를 열면 기존 연결이 남아 있고, 필요하면 접근 재허용으로 이어지는지 확인합니다. Chrome을 종료할 수 없으면 미확인으로 남기고 메모해 주세요.'],
+['permission','이 테스트 주소의 사이트 정보에서 파일 편집 권한을 철회하고 앱을 새로고침합니다. 기존 연결 이름을 유지하며 접근 다시 허용을 눌러 같은 폴더를 재사용할 수 있는지 확인합니다. 다른 주소의 권한은 변경하지 않습니다.'],
+['layout','한국어/영어, 라이트/다크, 좁은 창에서 폴더 선택·접근 허용·취소·닫기를 사용할 수 있고 가로 잘림이 없는지 확인합니다. Tab 키로 폴더 선택과 위치 안내에 접근해 보세요.']
+];
+const storageKey='skill-connection-smoke.report.v1';
+let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')}catch{}
+function collect(){return {results:Object.fromEntries(cases.map(([id])=>[id,document.getElementById(id).value])),notes:document.querySelector('#notes').value}}
+function remember(){try{localStorage.setItem(storageKey,JSON.stringify(collect()))}catch{}}
+for(const [id,text] of cases){const li=document.createElement('li');const p=document.createElement('p');p.textContent=text;const select=document.createElement('select');select.id=id;select.setAttribute('aria-label',text);for(const [value,label] of [['','미확인'],['pass','통과'],['fail','실패'],['skip','해당 없음 / 메모']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option)}select.value=saved.results?.[id]||'';select.onchange=remember;li.append(p,select);document.querySelector('#checks').append(li)}
+document.querySelector('#notes').value=saved.notes||'';document.querySelector('#notes').oninput=remember;
+document.querySelector('#save').onclick=async()=>{const build=await fetch('/build.json').then(r=>r.json());const report={time:new Date().toISOString(),browser:navigator.userAgent,build,results:Object.fromEntries(cases.map(([id])=>[id,document.getElementById(id).value])),notes:document.querySelector('#notes').value};const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='windows-skill-connection-results.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+</script></html>

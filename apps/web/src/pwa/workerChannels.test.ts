@@ -16,22 +16,22 @@ function workerSource(channel: Channel) {
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: `
         export class PrecacheController { addToCacheList() {} getURLsToCacheKeys() { return new Map(); } createHandlerBoundToURL() { return () => {}; } install() {} activate() {} }
         export class PrecacheRoute { match() {} handler() {} }
-        export class NavigationRoute {}
+        export class NavigationRoute { constructor(handler, options) { self.navigationAllowlist = options.allowlist; } }
         export function registerRoute() {}
       ` }));
     } }],
   }).then((result) => result.outputFiles![0]!.text));
   return compiled.get(channel)!;
 }
-function harness(source: string, remoteChannel?: string, origin = "https://app.test") {
+function harness(source: string, remoteChannel?: string, origin = "https://app.test", clients: { url: string }[] = []) {
   const handlers = new Map<string, (event: any) => void>();
   const skipWaiting = vi.fn(async () => {}), remove = vi.fn(), unregister = vi.fn();
   const cache = { match: vi.fn(async () => undefined) };
   const self = {
-    __WB_MANIFEST: [], location: { origin },
+    __WB_MANIFEST: [], location: { origin }, navigationAllowlist: [] as RegExp[],
     addEventListener: (type: string, handler: (event: any) => void) => handlers.set(type, handler),
     registration: { waiting: {}, installing: null, unregister }, skipWaiting,
-    clients: { matchAll: async () => [] },
+    clients: { matchAll: async () => clients },
     navigator: { locks: { request: async (_name: string, _options: unknown, callback: (lock: object) => unknown) => callback({}) } },
   };
   runInNewContext(source, { self, URL, crypto, setTimeout, clearTimeout, AbortSignal,
@@ -50,6 +50,24 @@ function harness(source: string, remoteChannel?: string, origin = "https://app.t
 
 describe("worker-side channel enforcement", () => {
   for (const channel of ["stable", "canary"] as const) {
+    it(`${channel} caches canonical and legacy introduction routes and counts their open windows`, async () => {
+      const h = harness(await workerSource(channel), undefined, "https://app.test", [
+        { url: "https://app.test/about#skill" }, { url: "https://app.test/intro#updates" },
+      ]);
+      for (const path of ["/about", "/about?source=guide", "/intro", "/intro?source=guide"]) {
+        expect(h.self.navigationAllowlist.some(rule => rule.test(path)), path).toBe(true);
+      }
+      expect(h.self.navigationAllowlist.some(rule => rule.test("/about.js"))).toBe(false);
+      expect(await h.dispatch("message", { type: "AK_CLIENTS", protocol: 1 })).toEqual({ count: 2 });
+    });
+    it(`${channel} counts public documentation and release windows in update coordination`, async () => {
+      const h = harness(await workerSource(channel), undefined, "https://app.test", [
+        { url: "https://app.test/docs" }, { url: "https://app.test/docs/config#example" },
+        { url: "https://app.test/releases" }, { url: "https://app.test/releases/release-one#changes" },
+        { url: "https://other.test/docs" }, { url: "https://app.test/downloads/INSTALL.txt" },
+      ]);
+      expect(await h.dispatch("message", { type: "AK_CLIENTS", protocol: 1 })).toEqual({ count: 4 });
+    });
     it(`${channel} worker reports its compiled channel and refuses cross-channel activation`, async () => {
       const h = harness(await workerSource(channel));
       expect(await h.dispatch("message", { type: "AK_INFO", protocol: 1 })).toMatchObject({ channel, release: release(channel) });
@@ -82,6 +100,12 @@ describe("standalone rescue channel enforcement", () => {
       .replace('"__RESCUE_BUILD_ID__"', JSON.stringify("a".repeat(16)));
   }
   for (const channel of ["stable", "canary"] as const) {
+    it.each(["/docs/updates", "/releases/release-one", "/about#skill", "/intro#updates"])(`${channel} recovery waits for open public windows: %s`, async path => {
+      const h = harness(source("recovery", channel), undefined, "https://app.test", [{ url: "https://app.test" + path }]);
+      expect(await h.dispatch("message", { type: "AK_CLIENTS", protocol: 1 })).toEqual({ count: 1 });
+      expect(await h.dispatch("message", { type: "AK_APPLY", protocol: 1, channel })).toEqual({ ok: false, reason: "busy" });
+      expect(h.skipWaiting).not.toHaveBeenCalled();
+    });
     it(`${channel} recovery reports channel/build and checks activation messages`, async () => {
       const h = harness(source("recovery", channel));
       expect(await h.dispatch("message", { type: "AK_INFO", protocol: 1 })).toMatchObject({ channel, mode: "recovery", buildId: "a".repeat(16) });

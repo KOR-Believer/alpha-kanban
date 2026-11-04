@@ -100,7 +100,7 @@ Replace the example path and ID with the actual document and ticket. Use the [le
 
 - Read [AGENTS.md](AGENTS.md) for repository conventions and data-preservation requirements.
 - Keep changes to the bundled skill under `skills/implementation-ledger/`. Updating the repository must not overwrite a contributor's personal skill installation.
-- Keep `/` as the PWA workspace and `/intro` as the introduction and installation guide. Web builds and installed personal skills have separate update paths.
+- Keep `/` as the PWA workspace and `/about` as the introduction and installation guide. Web builds and installed personal skills have separate update paths.
 - Write public guidance for users: skill installation and usage first, optional hosted viewer second. Use `https://kanban.giveit2.me` for public app links.
 - Keep development commands here and deployment procedures in the operator guide. Use repository-relative paths or generic examples. Do not commit personal machine paths, private project names, design-session identifiers, or temporary preview/capture links.
 - Keep useful decisions and verification results in project records. Omit tool diaries and temporary process state. Report the checks actually run and their limits; documentation-only changes generally need link and format checks, not the full application suite.

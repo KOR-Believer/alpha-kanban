@@ -5,15 +5,27 @@
     "date": "2026-11-03",
     "notify": false,
     "notes": {
-      "ko": ["소유자별 문서를 모아 보고, 다른 PC 경로로 된 문서 링크를 내 로컬 폴더에 연결할 수 있습니다."],
-      "en": ["Filter documents by owner and connect document links from another PC to your local folders."]
+      "ko": [
+        "소유자별 문서를 모아 보고, 다른 PC 경로로 된 문서 링크를 내 로컬 폴더에 연결할 수 있습니다."
+      ],
+      "en": [
+        "Filter documents by owner and connect document links from another PC to your local folders."
+      ]
     },
     "skill": {
       "compatibility": "unknown",
       "notes": {
-        "ko": ["기존 스킬을 교체하려면 변경 내용을 비교하고 백업한 뒤 확인하세요."],
-        "en": ["Compare changes and back up an existing skill before confirming replacement."]
+        "ko": [
+          "기존 스킬을 교체하려면 변경 내용을 비교하고 백업한 뒤 확인하세요."
+        ],
+        "en": [
+          "Compare changes and back up an existing skill before confirming replacement."
+        ]
       }
+    },
+    "title": {
+      "ko": "소유자별 문서와 로컬 링크 연결",
+      "en": "Document owners and local link connections"
     }
   }
 ]

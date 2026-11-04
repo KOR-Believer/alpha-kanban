@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseRelease } from "./client";
-import { markNotified, markReleasesRead, observeRelease, parseHistory, unreadReleases, wasNotified, type ReleaseInfo, type ReleaseRecord } from "./releases";
+import { availableReleaseHref, markNotified, markReleasesRead, observeRelease, parseHistory, releaseTitle, unreadReleases, wasNotified, type ReleaseInfo, type ReleaseRecord } from "./releases";
 
 export function release(sequence: number, id = "release-" + sequence): ReleaseInfo {
   const history: ReleaseRecord[] = Array.from({ length: sequence }, (_, index) => ({ id: "release-" + (index + 1), sequence: index + 1, date: "2026-10-26", notify: true, notes: { ko: ["변경 " + (index + 1)], en: ["Change " + (index + 1)] } }));
@@ -10,6 +10,27 @@ export function release(sequence: number, id = "release-" + sequence): ReleaseIn
 }
 beforeEach(() => { localStorage.clear(); });
 describe("release history contracts", () => {
+  it("accepts optional bilingual titles without changing legacy summaries or release identity", () => {
+    const old = release(1), titled = release(1);
+    titled.history![0]!.title = { ko: "변경 제목", en: "Change title" };
+    expect(parseRelease(titled)).toBe(titled);
+    expect(parseHistory(old.history)).toEqual(old.history);
+    expect(releaseTitle(old.history![0]!, "en")).toBe("release-1");
+    expect(releaseTitle(titled.history![0]!, "ko")).toBe("변경 제목");
+    expect(titled.notes).toEqual(old.notes);
+    for (const title of [null, "title", { ko: "제목" }, { ko: "", en: "Title" }, { ko: "제목", en: "a".repeat(161) }]) {
+      expect(() => parseHistory([{ ...old.history![0], title }])).toThrow();
+    }
+  });
+  it("only links identical records already in this channel's running build", () => {
+    const current = release(2), waiting = release(3);
+    expect(availableReleaseHref(current, waiting, waiting.history![2]!)).toBeUndefined();
+    expect(availableReleaseHref(current, waiting, waiting.history![0]!)).toBe("/releases/release-1");
+    expect(availableReleaseHref(current, { ...waiting, channel: "canary" }, waiting.history![0]!)).toBeUndefined();
+    expect(availableReleaseHref(current, waiting, { ...waiting.history![0]!, notes: { ko: ["다름"], en: ["Different"] } })).toBeUndefined();
+    const future = { ...waiting, releaseId: "release-1" };
+    expect(availableReleaseHref(future, waiting, waiting.history![1]!)).toBeUndefined();
+  });
   it("keeps the old-reader fields and validates their association with history", () => {
     const latest = release(3);
     expect(parseRelease(latest)).toBe(latest);

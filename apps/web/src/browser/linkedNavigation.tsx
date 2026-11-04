@@ -15,6 +15,12 @@ export function linkedRoute(href: string, id?: string, fragment = "", sourceDocu
   return url.pathname + url.search + url.hash;
 }
 
+function draftSource(href: string) {
+  const url = new URL(linkedRoute(href), "https://local.invalid");
+  url.searchParams.delete("q"); url.searchParams.delete("match");
+  return url.pathname + url.search + url.hash;
+}
+
 const Navigation = createContext<{ id?: string; fragment: string; href: string; sourceHref: string; rememberSource: (element: HTMLElement) => void; protectDraft: (owner: object, dirty: boolean, busy: boolean) => void }>({ fragment: "", href: "/", sourceHref: "/", rememberSource: () => {}, protectDraft: () => {} });
 export const useLinkedNavigation = () => useContext(Navigation);
 
@@ -35,7 +41,7 @@ export function LinkedNavigationProvider({ children }: { children: ReactNode }) 
     const unblock = router.history.block({
       enableBeforeUnload: false, // The existing PWA draft guard owns full-page exits.
       blockerFn: ({ currentLocation, nextLocation }) => {
-        if (!new URL(currentLocation.href, "https://local.invalid").searchParams.has("linked") || !drafts.current.size || linkedRoute(currentLocation.href) === linkedRoute(nextLocation.href)) return false;
+        if (!new URL(currentLocation.href, "https://local.invalid").searchParams.has("linked") || !drafts.current.size || draftSource(currentLocation.href) === draftSource(nextLocation.href)) return false;
         if (resolveExit.current || [...drafts.current.values()].some((draft) => draft.busy)) return true;
         return new Promise<boolean>((resolve) => { resolveExit.current = resolve; setPendingExit(true); });
       },

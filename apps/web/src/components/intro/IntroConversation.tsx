@@ -64,7 +64,7 @@ export function IntroConversation() {
   }
 
   return <section className="ak-conversation" id="record" aria-label={t("Fictional conversation")}>
-    <header className="ak-conversation-heading"><div><h3>{t("Building a reading journal")}</h3><p>{t("Codex · Conversation and work records")}</p></div><Badge variant="outline">{t("Fictional conversation")}</Badge></header>
+    <header className="ak-conversation-heading"><div><h3>{t("Building a reading journal")}</h3><p>{t("AI chat · Conversation and work records")}</p></div><Badge variant="outline">{t("Fictional conversation")}</Badge></header>
     <nav className="ak-conversation-chapters" aria-label={t("Conversation chapters")}>
       {INTRO_CHAPTERS.map((chapter, index) => <Button key={chapter.id} variant={index === currentChapter ? "secondary" : "ghost"} className="h-auto min-h-10 whitespace-normal" id={`workflow-${chapter.id}`} aria-current={index === currentChapter ? "step" : undefined} onClick={() => seek(chapter.at)}>
         <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>{t(chapter.label)}
@@ -110,7 +110,7 @@ export function IntroConversation() {
             if (event.key === "ArrowRight") { event.preventDefault(); seek(playback.index + 1); }
             if (event.key === "ArrowLeft") { event.preventDefault(); seek(playback.index - 1); }
           }}>
-          {INTRO_MESSAGES.slice(0, playback.index + 1).map((message: DemoMessage, index) => <article className={`ak-conversation-message ${message.role}`} data-message={index} key={index} aria-label={message.role === "human" ? t("User message") : t("Codex response")}>
+          {INTRO_MESSAGES.slice(0, playback.index + 1).map((message: DemoMessage, index) => <article className={`ak-conversation-message ${message.role}`} data-message={index} key={index} aria-label={message.role === "human" ? t("User message") : t("AI response")}>
             {activities[index] && <div className="ak-conversation-activity">{t(activities[index]!)}</div>}
             <div className="ak-conversation-prose">{t(message.text)}</div>
             {message.kind && <Button variant="ghost" size="iconSm" className="ak-conversation-copy" title={t("View and copy this request")} aria-label={t("View and copy this request")} onClick={(event) => {
@@ -124,7 +124,7 @@ export function IntroConversation() {
           {finished && <div className="ak-conversation-ending"><p>{t("Review results → discuss → update documents → implement & verify")}</p><Button variant="outline" size="sm" onClick={() => seek(0)}><RotateCcw aria-hidden="true" />{t("Replay conversation")}</Button><Button variant="ghost" size="sm" onClick={() => seek(8)}>{t("Revisit questions")}</Button></div>}
         </div>
         <div className="ak-conversation-composer" role="textbox" aria-readonly="true" aria-label={t("Read-only simulated composer")}>
-          <span>{t("Work with Codex")}</span><div aria-hidden="true"><Plus /><span>{"Codex"}</span><Mic /><i><ArrowUp /></i></div>
+          <span>{t("Work with your AI")}</span><div aria-hidden="true"><Plus /><span>{t("AI")}</span><Mic /><i><ArrowUp /></i></div>
         </div>
       </div>
       <section className="ak-conversation-document" aria-label={t("Example documents")}>

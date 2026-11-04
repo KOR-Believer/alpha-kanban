@@ -109,7 +109,7 @@ describe("all-projects document workflow", () => {
   function projectLink(id = first.id) { return card(id).querySelector<HTMLAnchorElement>('a[aria-label]')!; }
   function column(status: string) { return document.querySelector<HTMLElement>(`section[aria-label="${t("{{status}} tickets", { status: t(status) })}"]`)!; }
   function button(label: string) {
-    const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.textContent?.trim() === label || element.getAttribute("aria-label") === label);
+    const found = [...document.querySelectorAll<HTMLElement>("button, a")].find((element) => element.textContent?.trim() === label || element.getAttribute("aria-label") === label);
     expect(found, label).toBeDefined(); return found!;
   }
   function instructionInput() {
@@ -356,7 +356,7 @@ describe("all-projects document workflow", () => {
       expectedHash: "hash-d_first", expectedMtimeMs: 1, status: "TODO", progress: 0, reason: "회귀 버그 발견",
     });
     expect(column("DONE").textContent).toContain("Fixture w_first");
-    expect(button("저장하고 이동").disabled).toBe(true);
+    expect(button("저장하고 이동").hasAttribute("disabled")).toBe(true);
     await act(async () => { finish(next); });
     expect(column("TODO").textContent).toContain("Fixture w_first");
     expect(column("DONE").textContent).toContain("Fixture w_second");
@@ -473,6 +473,15 @@ describe("all-projects document workflow", () => {
     await act(async () => ticketLink().click());
     const text = instructionInput();
     await enter(text, "보존할 지시");
+    const link = button("프로젝트로 이동");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toContain("#ticket=");
+    const newTab = new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true });
+    await act(async () => link.dispatchEvent(newTab));
+    expect(newTab.defaultPrevented).toBe(false);
+    expect(api.navigate).not.toHaveBeenCalled();
+    expect([...document.querySelectorAll("button")].some((element) => element.textContent === "계속 작성")).toBe(false);
+    expect(text.value).toBe("보존할 지시");
     await act(async () => button("프로젝트로 이동").click());
     expect(api.navigate).not.toHaveBeenCalled();
     await act(async () => button("계속 작성").click());
@@ -500,11 +509,12 @@ describe("all-projects document workflow", () => {
     await act(async () => ticketLink().click());
     await enter(instructionInput(), "저장 중");
     await act(async () => button("문서에 추가").click());
-    expect(button("프로젝트로 이동").disabled).toBe(true);
+    expect(button("프로젝트로 이동").getAttribute("aria-disabled")).toBe("true");
+    expect(button("프로젝트로 이동").hasAttribute("href")).toBe(false);
     await act(async () => button("프로젝트로 이동").click());
     expect(api.navigate).not.toHaveBeenCalled();
     await act(async () => { finish(documents[first.id]!); });
-    expect(button("프로젝트로 이동").disabled).toBe(false);
+    expect(button("프로젝트로 이동").hasAttribute("href")).toBe(true);
   });
   it("blocks a pending move if its document changed during polling", async () => {
     await mount(); await drag("TODO");
@@ -513,7 +523,7 @@ describe("all-projects document workflow", () => {
         item.workspace.id === first.id ? { ...item, response: { ...item.response, file: { ...item.response.file, hash: "external" } } } : item) }));
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    expect(button("저장하고 이동").disabled).toBe(true);
+    expect(button("저장하고 이동").hasAttribute("disabled")).toBe(true);
     expect(document.body.textContent).toContain("문서가 변경되었습니다");
   });
   it("remembers search/hide-DONE filters and counts only visible cards", async () => {

@@ -3,7 +3,7 @@ import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { formatSkillBytes, skillBackupContentBytes } from "./backupSize";
 import type { SkillReview } from "./repository";
-import { skillChannelLabel } from "./distribution";
+import { SkillComparisonSummary } from "./SkillComparisonSummary";
 import { SkillReplacementNotice } from "./SkillReplacementNotice";
 
 import { SkillChanges } from "./SkillChanges";
@@ -15,7 +15,7 @@ export function SkillReinstallReview({ review, busy, confirmed, onConfirmedChang
   return <section className="space-y-3" aria-label={t("Review skill reinstall")}>
     <h3 className="text-sm font-semibold">{t("Reinstall this app's skill")}</h3>
     <p className="text-sm">{t("Review each changed file below. Reinstalling replaces personal changes and removes files absent from this app's bundle. Your current files will be backed up first.")}</p>
-    <p className="text-xs text-muted-foreground">{t(skillChannelLabel(__APP_RELEASE__.channel))}: <code>{review.bundle.version}</code></p>
+    <SkillComparisonSummary review={review} />
     <SkillChanges review={review} />
     <p className="text-xs text-muted-foreground">{t("Backup file contents: {{size}} (before and after).", { size: formatSkillBytes(skillBackupContentBytes({ before: review.files, intended: review.bundle.files }), i18n.language) })}</p>
     <p className="text-xs text-muted-foreground">{t("Backups stay on this site in this browser and are not automatically deleted, even after restoring or disconnecting.")}</p>

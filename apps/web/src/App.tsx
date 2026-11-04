@@ -1,5 +1,7 @@
 import { VirtualTicketList } from "./components/tickets/VirtualTicketList";
-import { TicketSearchInput, TicketSearchExcerpt, SearchHighlight } from "./components/tickets/TicketSearch";
+import { TicketSearchExcerpt, SearchHighlight } from "./components/tickets/TicketSearch";
+import { useProjectSearch } from "./useProjectSearch";
+import type { DocumentSearchMatch } from "./documentSearch";
 import { matchesTicketSearch, normalizeTicketQuery } from "./ticketSearch";
 import { MarkdownDocumentReader as SharedMarkdownDocumentReader, DocumentTypeBadge, documentTypeLabel, documentTypeIcon } from "./components/MarkdownDocumentReader";
 import { useLinkedNavigation } from "./browser/linkedNavigation";
@@ -37,7 +39,8 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { NavigationLink } from "./components/NavigationLink";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -277,7 +280,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const [documentSetSortPreferences, setDocumentSetSortPreferences] = useState(
     readStoredDocumentSetSortPreferences,
   );
-  const [documentSearch, setDocumentSearch] = useState("");
+  const [documentSearch, setDocumentSearchValue] = useState(routeState.documentSearch ?? "");
+  const deferredDocumentSearch = useDeferredValue(documentSearch);
   const [documentFilters, setDocumentFilters] = useState(readStoredDocumentFilters);
   const ownerPreferences = useOwnerFilters();
   const ownerFilter = ownerFilterFor(ownerPreferences.filters, selectedWorkspaceId);
@@ -314,17 +318,22 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     () => sortDocumentSets(documentSets, documentSetSortPreference),
     [documentSetSortPreference, documentSets],
   );
-  const visibleDocumentSets = useMemo(
-    () => filterDocumentSets(sortedDocumentSets, documentSearch, documentFilters, ownerFilter),
-    [sortedDocumentSets, documentSearch, documentFilters, ownerFilter],
-  );
   const allFiles = useMemo(
     () => sortedDocumentSets.flatMap((documentSet) => documentSet.documents),
     [sortedDocumentSets],
   );
-  const [ticketSearch, setTicketSearch] = useState("");
+  const projectSearch = useProjectSearch(allFiles, deferredDocumentSearch, canLoadWorkspace && !documentSetsQuery.isError);
+  const visibleDocumentSets = useMemo(() => {
+    const filtered = filterDocumentSets(sortedDocumentSets, "", documentFilters, ownerFilter);
+    if (!deferredDocumentSearch.trim()) return filtered;
+    const names = new Set(filterDocumentSets(sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter).map((set) => set.documentSet.id));
+    return filtered.flatMap((set) => {
+      const documents = names.has(set.documentSet.id) ? set.documents : set.documents.filter((file) => projectSearch.matches.has(file.id));
+      return documents.length ? [{ ...set, documents }] : [];
+    });
+  }, [sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter, projectSearch.matches]);
   const boardScroll = useRef<HTMLDivElement>(null);
-  const deferredTicketSearch = useDeferredValue(ticketSearch);
+  const deferredTicketSearch = routeState.appliedSearch ?? "";
   useEffect(() => { boardScroll.current?.scrollTo({ top: 0 }); }, [deferredTicketSearch]);
   const firstPlanningFile = allFiles.find((file) => file.type !== "markdown");
   const defaultFile = (defaultDocument?.workspaceId === selectedWorkspaceId
@@ -336,7 +345,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const listedSelectedFile = isProjectGuideOpen ? undefined : preferredFilePath ? preferredFile : defaultFile;
   const savedFileId = defaultDocument?.workspaceId === selectedWorkspaceId ? defaultDocument?.fileId : undefined;
   const resolvedSelectedFileId = isProjectGuideOpen ? undefined : preferredFilePath ?? listedSelectedFile?.id ?? (!documentSetsQuery.isSuccess ? savedFileId : undefined);
-  useEffect(() => { setTicketSearch(""); }, [selectedWorkspaceId, resolvedSelectedFileId]);
   const isProjectGuideVisible = isProjectGuideOpen ||
     (canLoadWorkspace && documentSetsQuery.isSuccess && !resolvedSelectedFileId && !firstPlanningFile);
   const selectedFileQuery = useQuery({
@@ -530,8 +538,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   }, [sidebarWidth]);
 
   useEffect(() => {
-    setDocumentSearch("");
-  }, [selectedWorkspaceId]);
+    setDocumentSearchValue(routeState.documentSearch ?? "");
+  }, [selectedWorkspaceId, routeState.documentSearch]);
 
   useEffect(() => {
     try {
@@ -621,6 +629,15 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     if (href !== routeLocation.href) return navigate({ href, resetScroll: false });
   }
 
+  function setDocumentSearch(value: string) {
+    setDocumentSearchValue(value);
+    // Replace only search state: typing keeps the current document, linked page and draft.
+    const url = new URL(routeLocation.href, window.location.origin);
+    if (value) url.searchParams.set("q", value); else url.searchParams.delete("q");
+    if (!value.trim()) url.searchParams.delete("match");
+    void navigate({ href: url.pathname + url.search + url.hash, replace: true, resetScroll: false });
+  }
+
   function handleGoToStartPage(): void {
     setPendingBoardTour(undefined);
     shouldAutoOpenLastWorkspaceOnLoadRef.current = false;
@@ -633,17 +650,31 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     void navigateTo({ workspaceId: selectedWorkspaceId, showGuide: true });
   }
 
+  function documentRoute(file: MarkdownFileSummary, view = ticketViewMode): AppRouteState {
+    return { workspaceId: selectedWorkspaceId, filePath: documentRouteId(file), ticketViewMode: view, documentSearch };
+  }
   function handleDocumentSelect(file: MarkdownFileSummary, view = ticketViewMode): Promise<void> | undefined {
     setPendingBoardTour(undefined);
-    return navigateTo({ workspaceId: selectedWorkspaceId, filePath: documentRouteId(file), ticketViewMode: view });
+    return navigateTo(documentRoute(file, view));
+  }
+
+  function searchResultRoute(file: MarkdownFileSummary): AppRouteState {
+    const match = projectSearch.matches.get(file.id);
+    const view = match ? file.type === "tickets" && match.ticketIds.length ? "board" : "markdown" : "board";
+    return { workspaceId: selectedWorkspaceId, filePath: file.id, ticketViewMode: view,
+      documentSearch, appliedSearch: match ? deferredDocumentSearch.trim() : undefined };
+  }
+  function handleSearchResultSelect(file: MarkdownFileSummary) {
+    setPendingBoardTour(undefined);
+    return navigateTo(searchResultRoute(file));
   }
 
   function handleTicketSelect(ticketId?: string): void {
-    void navigateTo({ workspaceId: selectedWorkspaceId, filePath: resolvedSelectedFileId, ticketId, detailMode: ticketPresentation.mode });
+    void navigateTo({ ...routeState, filePath: resolvedSelectedFileId, ticketId, detailMode: ticketPresentation.mode });
   }
 
   function handleTicketViewChange(view: TicketDocumentViewMode): void {
-    void navigateTo({ workspaceId: selectedWorkspaceId, filePath: resolvedSelectedFileId, ticketViewMode: view });
+    void navigateTo({ ...routeState, filePath: resolvedSelectedFileId, ticketId: undefined, ticketViewMode: view });
   }
 
   async function handlePatchTicket(
@@ -700,7 +731,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
 
   if (!selectedWorkspaceId) {
     return (
-      <main className="min-h-dvh overflow-auto bg-background text-foreground">
+      <main className="min-h-dvh bg-background text-foreground">
         <BrowserStartPage autoOpen={autoOpenLastWorkspace} onAutoOpen={setAutoOpenLastWorkspace} onSelect={handleWorkspaceSelect} workspaces={workspacesQuery.data?.workspaces ?? []} error={workspacesQuery.error} isLoading={workspacesQuery.isPending} />
       </main>
     );
@@ -712,15 +743,14 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         className="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-secondary)] max-[860px]:h-auto max-[860px]:min-h-dvh max-[860px]:overflow-visible"
       >
         <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--ak-hairline)] bg-[var(--ak-header-surface)] px-4 py-2 max-[720px]:flex-wrap">
-          <button
+          <NavigationLink href="/"
             className="ak-row flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--ak-canvas-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ak-focus)]"
-            onClick={handleGoToStartPage}
-            type="button"
+            onNavigate={handleGoToStartPage}
           >
             <BrandIcon className="size-5 shrink-0 text-[var(--ak-ink-muted)]" />
             <span className="ak-project-brand-name ak-title truncate text-sm">{APP_NAME}</span>
             <ChannelBadge icon={false} />
-          </button>
+          </NavigationLink>
 
           <BrowserProjectSwitcher workspaces={workspacesQuery.data?.workspaces ?? []} selectedWorkspaceId={selectedWorkspaceId} onSelect={handleWorkspaceSelect} />
 
@@ -731,10 +761,10 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
             <SkillUpdatesButton placement="toolbar" />
             <TourHelp tour={boardTour} />
             <PwaMenu />
-            <Button data-tour="all-tickets" title={t("All tickets")} onClick={() => navigate({ to: "/all" })} size="sm" variant="ghost">
+            <NavigationLink href="/all" data-tour="all-tickets" title={t("All tickets")} onNavigate={() => void navigate({ to: "/all" })} className={buttonVariants({ size: "sm", variant: "ghost" })}>
               <LayoutGrid aria-hidden="true" />
               <span className="ak-toolbar-label">{t("All tickets")}</span>
-            </Button>
+            </NavigationLink>
             <BrowserFilesMenu />
           </div>
         </header>
@@ -777,7 +807,12 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {documentSetsQuery.isSuccess && sortedDocumentSets.length === 0 ? (
                   <SidebarState label={t("No documents")} />
                 ) : null}
-                {sortedDocumentSets.length > 0 && visibleDocumentSets.length === 0 ? (
+                {documentSearch.trim() && (projectSearch.busy || documentSearch !== deferredDocumentSearch) ? <SidebarState label={t("Searching document contents · {{checked}} / {{total}}", { checked: projectSearch.checked, total: allFiles.length })} /> : null}
+                {documentSearch.trim() && projectSearch.missing ? <div className="grid gap-1 px-3 py-2 text-xs text-muted-foreground" role="status">
+                  <p>{t("{{count}} documents could not be searched. Results are incomplete.", { count: projectSearch.missing })}</p>
+                  <Button size="sm" variant="link" onClick={projectSearch.retry}>{t("Retry search preparation")}</Button>
+                </div> : null}
+                {sortedDocumentSets.length > 0 && visibleDocumentSets.length === 0 && !projectSearch.busy && !projectSearch.missing && documentSearch === deferredDocumentSearch ? (
                   <div className="grid justify-items-start gap-2 px-3 py-2 text-sm text-muted-foreground" role="status">
                     <p>{t("No matching documents")}</p>
                     <Button size="sm" variant="link" onClick={() => { setDocumentSearch(""); setDocumentFilters(DEFAULT_DOCUMENT_FILTERS); setOwnerFilter("all"); }}>
@@ -787,24 +822,25 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 ) : null}
                 <DocumentSetNavigator
                   documentSets={visibleDocumentSets}
-                  onSelectFile={handleDocumentSelect}
+                  onSelectFile={documentSearch.trim() ? handleSearchResultSelect : handleDocumentSelect}
+                  fileHref={(file) => buildAppRoute(documentSearch.trim() ? searchResultRoute(file) : documentRoute(file))}
                   selectedFileId={resolvedSelectedFileId}
+                  matches={projectSearch.matches}
+                  search={deferredDocumentSearch}
+                  busy={projectSearch.busy || documentSearch !== deferredDocumentSearch}
                 />
               </div>
             </div>
             <div className="shrink-0 border-t border-border p-3">
-                <Button
+                <NavigationLink href={buildAppRoute({ workspaceId: selectedWorkspaceId, showGuide: true })}
                   data-tour-help=""
                   aria-current={isProjectGuideVisible ? "page" : undefined}
-                  className="w-full justify-start"
-                  onClick={handleShowProjectGuide}
-                  size="sm"
-                  type="button"
-                  variant={isProjectGuideVisible ? "secondary" : "ghost"}
+                  className={buttonVariants({ size: "sm", variant: isProjectGuideVisible ? "secondary" : "ghost", className: "w-full justify-start" })}
+                  onNavigate={handleShowProjectGuide}
                 >
                   <BookOpen aria-hidden="true" />
                   {t("Usage guide")}
-                </Button>
+                </NavigationLink>
               </div>
           </aside>
 
@@ -878,9 +914,10 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
             </header>
 
             <div>
-              {isTicketsDocument && ticketViewMode === "board" && !isProjectGuideVisible ? <div className="ak-all-board-toolbar">
-                <TicketSearchInput value={ticketSearch} onChange={setTicketSearch} />
-                {ticketSearch ? <span className="text-xs text-muted-foreground" role="status">{t("{{count}} tickets", { count: ticketQuery.data?.document.tickets.filter((ticket) => matchesTicketSearch(ticket, normalizeTicketQuery(deferredTicketSearch))).length ?? 0 })}</span> : null}
+              {deferredTicketSearch && !isProjectGuideVisible ? <div className="ak-all-board-toolbar" data-tour="applied-document-search">
+                <span className="text-sm" role="status">{t("Results for “{{query}}”", { query: deferredTicketSearch })}</span>
+                {isTicketsDocument && ticketViewMode === "board" ? <Badge variant="muted">{t("{{count}} tickets", { count: ticketQuery.data?.document.tickets.filter((ticket) => matchesTicketSearch(ticket, normalizeTicketQuery(deferredTicketSearch))).length ?? 0 })}</Badge> : null}
+                <Button size="sm" variant="outline" onClick={() => void navigateTo({ ...routeState, appliedSearch: undefined })}>{t("View whole document")}</Button>
               </div> : null}
             </div>
             <div ref={boardScroll} data-board-scroll className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" ? "ak-project-board-scroll" : "p-5"}`}>
@@ -899,6 +936,8 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                   setPendingBoardTour(tourFile.id);
                 } : undefined}
                 onFileSelect={handleDocumentSelect}
+                fileHref={(file) => buildAppRoute(documentRoute(file))}
+                ticketHref={(ticketId) => buildAppRoute({ ...routeState, filePath: resolvedSelectedFileId, ticketId, detailMode: ticketPresentation.mode })}
                 onTicketSelect={handleTicketSelect}
                 onTicketStatusChange={handlePatchTicket}
                 ticketDocument={ticketQuery.data}
@@ -1061,8 +1100,8 @@ function DocumentListHeader({
         <Input
           data-tour="documents"
           role="searchbox"
-          aria-label={t("Search documents")}
-          placeholder={t("Search documents")}
+          aria-label={t("Search documents and tickets")}
+          placeholder={t("Search documents and tickets")}
           disabled={disabled}
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
@@ -1153,22 +1192,33 @@ function DocumentListHeader({
 function DocumentSetNavigator({
   documentSets,
   onSelectFile,
+  fileHref,
   selectedFileId,
+  matches,
+  search,
+  busy,
 }: {
   documentSets: VisibleDocumentSet[];
   onSelectFile: (file: MarkdownFileSummary) => void;
+  fileHref: (file: MarkdownFileSummary) => string;
   selectedFileId?: string;
+  matches: Map<string, DocumentSearchMatch>;
+  search: string;
+  busy: boolean;
 }) {
   const { t } = useTranslation();
   return (
-    <nav className="grid gap-1" aria-label={t("Documents")}>
+    <nav className="grid gap-1" aria-label={t("Documents")} aria-busy={busy} data-project-search={search}>
       {documentSets.map(({ documentSet, documents }) => (
         <DocumentSetRow
           documentSet={documentSet}
           visibleDocuments={documents}
           key={documentSet.id}
           onSelectFile={onSelectFile}
+          fileHref={fileHref}
           selectedFileId={selectedFileId}
+          matches={matches}
+          search={search}
         />
       ))}
     </nav>
@@ -1179,12 +1229,18 @@ function DocumentSetRow({
   documentSet,
   visibleDocuments,
   onSelectFile,
+  fileHref,
   selectedFileId,
+  matches,
+  search,
 }: {
   documentSet: DocumentSetSummary;
   visibleDocuments: MarkdownFileSummary[];
   onSelectFile: (file: MarkdownFileSummary) => void;
+  fileHref: (file: MarkdownFileSummary) => string;
   selectedFileId?: string;
+  matches: Map<string, DocumentSearchMatch>;
+  search: string;
 }) {
   const { t } = useTranslation();
   const isSelected = documentSet.documents.some((file) => file.id === selectedFileId);
@@ -1202,7 +1258,7 @@ function DocumentSetRow({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center justify-between gap-2">
             <span className="truncate text-sm font-medium text-[var(--ak-ink)]">
-              {documentSet.label}
+              <SearchHighlight text={documentSet.label} query={search} />
             </span>
             <span className="flex shrink-0 items-center gap-1">
               {documentSet.documents.length === 1 ? (
@@ -1226,43 +1282,57 @@ function DocumentSetRow({
         {visibleDocuments.map((file) => (
           <DocumentTypeButton
             file={file}
+            href={fileHref(file)}
             isSelected={file.id === selectedFileId}
             key={file.id}
             onSelect={() => onSelectFile(file)}
+            matches={matches.get(file.id)?.ticketIds.length}
           />
         ))}
       </div>
+      {search.trim() ? visibleDocuments.flatMap((file) => {
+        const match = matches.get(file.id);
+        return match ? [<NavigationLink href={fileHref(file)} key={file.id} onNavigate={() => onSelectFile(file)}
+          className="ak-focus-ring ml-6 min-w-0 rounded-sm text-left text-xs text-muted-foreground" title={file.relativePath}>
+          <span className="font-medium">{documentTypeLabel(file.type)} · {t("Line {{line}}", { line: match.line })}</span>
+          <span className="mt-1 line-clamp-2 break-words"><SearchHighlight text={match.excerpt} query={search} /></span>
+        </NavigationLink>] : [];
+      }) : null}
     </section>
   );
 }
 
 function DocumentTypeButton({
   file,
+  href,
   isSelected,
   onSelect,
+  matches,
 }: {
   file: MarkdownFileSummary;
+  href: string;
   isSelected: boolean;
   onSelect: () => void;
+  matches?: number;
 }) {
   useTranslation();
   const Icon = documentTypeIcon(file.type);
 
   return (
-    <button
+    <NavigationLink href={href}
       className={[
         "ak-focus-ring inline-flex h-7 min-w-0 items-center gap-1 rounded-[var(--ak-radius-sm)] border px-1.5 text-[11px] font-medium transition-colors",
         isSelected
           ? "border-[var(--ak-primary)] bg-[var(--ak-primary-soft)] text-foreground"
           : "border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-muted)] hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]",
       ].join(" ")}
-      onClick={onSelect}
+      onNavigate={onSelect}
       title={file.relativePath}
-      type="button"
     >
       <Icon className="size-3 shrink-0" aria-hidden="true" />
       <span className="truncate">{documentTypeLabel(file.type)}</span>
-    </button>
+      {matches ? <span>{t("{{count}} matches", { count: matches })}</span> : null}
+    </NavigationLink>
   );
 }
 
@@ -1384,6 +1454,8 @@ function DocumentContent({
   markdownIsError,
   markdownIsLoading,
   onFileSelect,
+  fileHref,
+  ticketHref,
   onTicketSelect,
   onTicketStatusChange,
   selectedDocumentSet,
@@ -1414,6 +1486,8 @@ function DocumentContent({
   markdownIsError: boolean;
   markdownIsLoading: boolean;
   onFileSelect: (file: MarkdownFileSummary) => void;
+  fileHref: (file: MarkdownFileSummary) => string;
+  ticketHref: (ticketId: string) => string;
   onTicketSelect: (ticketId: string) => void;
   onTicketStatusChange: SaveTicketStatus;
   selectedDocumentSet?: DocumentSetSummary;
@@ -1474,7 +1548,7 @@ function DocumentContent({
       return (
         <BoardState
           title={t("No planning documents yet")}
-          description={t("Create tickets with the implementation-ledger skill in Codex, then review them here.")}
+          description={t("Create tickets with implementation-ledger in your AI tool, then review them here.")}
         />
       );
     }
@@ -1502,6 +1576,8 @@ function DocumentContent({
         isError={markdownIsError}
         isLoading={markdownIsLoading}
         onFileSelect={onFileSelect}
+        fileHref={fileHref}
+        searchQuery={searchQuery}
       />
     );
   }
@@ -1527,6 +1603,7 @@ function DocumentContent({
       key={`${selectedWorkspace?.id}:${selectedFileId}`}
       document={ticketDocument}
       onTicketSelect={onTicketSelect}
+      ticketHref={ticketHref}
       onSaveStatus={onTicketStatusChange}
       ticketsByStatus={ticketsByStatus}
       searchQuery={searchQuery}
@@ -1534,9 +1611,10 @@ function DocumentContent({
   );
 }
 
-export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByStatus, searchQuery = "" }: {
+export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByStatus, ticketHref, searchQuery = "" }: {
   searchQuery?: string;
   document: TicketDocumentResponse;
+  ticketHref?: (ticketId: string) => string;
   onTicketSelect: (ticketId: string) => void;
   onSaveStatus: SaveTicketStatus;
   ticketsByStatus: Map<TicketStatus, TicketItem[]>;
@@ -1567,6 +1645,7 @@ export function TicketBoard({ document, onTicketSelect, onSaveStatus, ticketsByS
           <KanbanColumn
             key={status}
             file={document.file}
+            ticketHref={ticketHref ?? ((ticketId) => buildAppRoute({ workspaceId: document.file.workspaceId, filePath: document.file.id, ticketId }))}
             onTicketSelect={onTicketSelect}
             status={status}
             tickets={filtered.get(status) ?? []}
@@ -1617,6 +1696,8 @@ function MarkdownDocumentReader({
   isError,
   isLoading,
   onFileSelect,
+  fileHref,
+  searchQuery,
 }: {
   document?: MarkdownDocumentResponse;
   documentSet?: DocumentSetSummary;
@@ -1625,6 +1706,8 @@ function MarkdownDocumentReader({
   isError: boolean;
   isLoading: boolean;
   onFileSelect: (file: MarkdownFileSummary) => void;
+  fileHref: (file: MarkdownFileSummary) => string;
+  searchQuery?: string;
 }) {
   const { t } = useTranslation();
   if (isLoading) {
@@ -1641,7 +1724,8 @@ function MarkdownDocumentReader({
     );
   }
 
-  return <SharedMarkdownDocumentReader document={document} documentSet={documentSet} file={file}
+  return <SharedMarkdownDocumentReader document={document} documentSet={documentSet} file={file} searchQuery={searchQuery}
+    fileHref={(id) => fileHref(documentSet?.documents.find((entry) => entry.id === id) ?? file)}
     onFileSelect={(id) => onFileSelect(documentSet?.documents.find((entry) => entry.id === id) ?? file)} />;
 }
 
@@ -1678,6 +1762,7 @@ function BoardState({
 
 function KanbanColumn({
   file,
+  ticketHref,
   searchQuery = "",
   draggedKey,
   onTicketSelect,
@@ -1692,6 +1777,7 @@ function KanbanColumn({
   onDrop,
 }: {
   file: MarkdownFileSummary;
+  ticketHref: (ticketId: string) => string;
   searchQuery?: string;
   draggedKey?: string;
   onTicketSelect: (ticketId: string) => void;
@@ -1731,6 +1817,7 @@ function KanbanColumn({
           <TicketCard
             key={ticket.id}
             file={file}
+            href={ticketHref(ticket.id)}
             onSelect={() => onTicketSelect(ticket.id)}
             ticket={ticket}
             searchQuery={searchQuery}
@@ -1747,6 +1834,7 @@ function KanbanColumn({
 function TicketCard({
   searchQuery = "",
   file,
+  href,
   onSelect,
   ticket,
   draggable,
@@ -1754,6 +1842,7 @@ function TicketCard({
   onDragEnd,
 }: {
   file: MarkdownFileSummary;
+  href: string;
   onSelect: () => void;
   searchQuery?: string;
   ticket: TicketItem;
@@ -1771,12 +1860,11 @@ function TicketCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
-      <button
+      <NavigationLink href={href}
         data-ticket-open
         aria-label={t("Open {{id}}", { id: ticket.id })}
         className="block w-full cursor-grab p-3 text-left active:cursor-grabbing"
-        onClick={onSelect}
-        type="button"
+        onNavigate={onSelect}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap gap-1.5">
@@ -1800,7 +1888,7 @@ function TicketCard({
             value={ticket.dependsOn.length > 0 ? ticket.dependsOn.join(", ") : "-"}
           />
         </div>
-      </button>
+      </NavigationLink>
     </article>
   );
 }
@@ -1898,6 +1986,7 @@ export function TicketDetailDrawer({
   return (
     <TicketDetailFrame ticketId={ticket.id} presentation={presentation} onClose={onClose}
       onOpenInWorkspace={onOpenInWorkspace}
+      workspaceHref={file ? buildAppRoute({ workspaceId: file.workspaceId, filePath: file.id, ticketId: ticket.id, detailMode: presentation.mode }) : undefined}
       isBusy={isSaving || isAppendingInstruction}
       hasDraft={canSaveStatus || Boolean(changeReason.trim() || instructionText.trim())}>
         <header className="ak-drawer-header">

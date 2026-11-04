@@ -84,6 +84,9 @@ describe("explicit skill reinstall UI", () => {
     expect(button("Back up and reinstall")!.disabled).toBe(true);
     expect(appActivity.prepare()).toBe(false);
     const section = document.querySelector('[aria-label="Review skill reinstall"]')!;
+    expect(section.querySelector('[data-skill-comparison="installed"]')?.textContent).toContain("Unrecognized installation");
+    expect(section.querySelector('[data-skill-comparison="installed"] code')).toBeNull();
+    expect(section.querySelector('[data-skill-comparison="target"] code')?.textContent).toBe((await bundles.loadSkillBundle()).version);
     for (const details of section.querySelectorAll("details")) {
       await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
     }
@@ -169,6 +172,215 @@ describe("explicit skill reinstall UI", () => {
   });
 });
 
+describe("installed and target skill identities", () => {
+  it.each(["known", "current", "edited", "extra"] as const)("labels %s files without inferring a version or granting update consent", async (kind) => {
+    if (kind === "current") (folder.children.get("SKILL.md") as FakeFile).content = after;
+    if (kind === "edited") (folder.children.get("SKILL.md") as FakeFile).content += "\nLocal edit";
+    if (kind === "extra") folder.file("personal.md", "Additional rules");
+    await repository.connect(folder.handle());
+    await render();
+    const installed = document.querySelector('[data-skill-comparison="installed"]')!;
+    const target = document.querySelector('[data-skill-comparison="target"]')!;
+    const bundle = await bundles.loadSkillBundle();
+    expect(installed.textContent).toContain("Installed skill");
+    expect(installed.textContent).toContain(folder.name);
+    expect(target.textContent).toContain("Skill to apply");
+    expect(target.querySelector("code")?.textContent).toBe(bundle.version);
+    if (kind === "known") {
+      expect(installed.textContent).toContain("Recognized release");
+      expect(installed.textContent).toContain("Source commit: aaaaaaaaaaaa");
+      expect(installed.textContent).not.toContain(bundle.version);
+      expect(button("Back up and update skill")!.disabled).toBe(true);
+    } else if (kind === "current") {
+      expect(installed.textContent).toContain("Matches the provided bundle");
+      expect(installed.querySelector("code")?.textContent).toBe(bundle.version);
+      expect(document.querySelector("summary code")).toBeNull();
+    } else {
+      expect(installed.textContent).toContain("Unrecognized installation");
+      expect(installed.querySelector("code")).toBeNull();
+    }
+    await act(async () => { await setLanguage("ko"); });
+    expect(installed.isConnected).toBe(true);
+    expect(installed.textContent).toContain("현재 설치본");
+    expect(target.textContent).toContain("적용할 스킬");
+    expect(skillRepository.apply).not.toHaveBeenCalled(); expect(skillRepository.reinstall).not.toHaveBeenCalled();
+    expect((folder.children.get("SKILL.md") as FakeFile).opens).toBe(0);
+    expect(await repository.recoveries()).toHaveLength(0);
+  });
+
+  it("identifies a known installation even when target compatibility blocks applying", async () => {
+    const inspect = repository.inspect.bind(repository);
+    vi.mocked(skillRepository.inspect).mockImplementation(async (...args) => ({ ...await inspect(...args), state: "review" }));
+    await repository.connect(folder.handle());
+    await render();
+    expect(document.querySelector('[data-skill-comparison="installed"]')?.textContent).toContain("Recognized release");
+    expect(button("Back up and update skill")).toBeUndefined();
+    expect(button("Review reinstall")).toBeUndefined();
+  });
+});
+
+describe("skill dialog presentation", () => {
+  const dialog = () => document.querySelector<HTMLElement>(".ak-resizable-dialog")!;
+  const size = () => ["width", "height"].map((axis) => Number.parseFloat(dialog().style.getPropertyValue(`--dialog-${axis}`)));
+  const control = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  async function pressCorner(key: string) {
+    await act(async () => control("Resize dialog bottom-right").dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+  }
+
+  it("resizes and restores without remounting the review, losing consent or changing ticket preferences", async () => {
+    vi.stubGlobal("innerWidth", 1600); vi.stubGlobal("innerHeight", 1000);
+    localStorage.setItem("alpha-kanban.ticketDetailMode", "side");
+    localStorage.setItem("alpha-kanban.ticketDetailModalSize", '{"width":1100,"height":700}');
+    await repository.connect(folder.handle());
+    await render();
+    const details = document.querySelector("summary code")!.closest("details")!;
+    await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
+    const diff = document.querySelector(".ak-code-diff")!;
+    const consent = document.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
+    await act(async () => consent.click());
+    const inspectionCount = vi.mocked(skillRepository.inspect).mock.calls.length;
+    await pressCorner("Home");
+    await pressCorner("ArrowRight");
+    await pressCorner("ArrowDown");
+    expect(size()).toEqual([500, 340]);
+    await act(async () => control("Expand dialog").click());
+    expect(dialog().dataset.mode).toBe("full"); expect(size()).toEqual([1600, 1000]);
+    expect(document.querySelectorAll(".ak-panel-resize-handle")).toHaveLength(0);
+    await act(async () => control("Restore dialog size").click());
+    expect(size()).toEqual([500, 340]);
+    expect(diff.isConnected).toBe(true); expect(details.open).toBe(true);
+    expect(consent.isConnected).toBe(true); expect(consent.getAttribute("aria-checked")).toBe("true");
+    expect(button("Back up and update skill")!.disabled).toBe(false);
+    expect(appActivity.prepare()).toBe(false);
+    await act(async () => { vi.stubGlobal("innerWidth", 390); vi.stubGlobal("innerHeight", 300); window.dispatchEvent(new Event("resize")); });
+    expect(size()).toEqual([375, 285]);
+    expect(JSON.parse(localStorage.getItem("alpha-kanban.skillUpdatesModalSize")!)).toEqual({ width: 500, height: 340 });
+    await act(async () => { vi.stubGlobal("innerWidth", 1600); vi.stubGlobal("innerHeight", 1000); window.dispatchEvent(new Event("resize")); });
+    expect(size()).toEqual([500, 340]);
+    expect(skillRepository.inspect).toHaveBeenCalledTimes(inspectionCount);
+    expect(localStorage.getItem("alpha-kanban.ticketDetailMode")).toBe("side");
+    expect(localStorage.getItem("alpha-kanban.ticketDetailModalSize")).toBe('{"width":1100,"height":700}');
+    expect(skillRepository.apply).not.toHaveBeenCalled(); expect(skillRepository.reinstall).not.toHaveBeenCalled();
+    expect(await repository.recoveries()).toHaveLength(0);
+    expect((folder.children.get("SKILL.md") as FakeFile).opens).toBe(0);
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render(); expect(size()).toEqual([500, 340]);
+    expect(button("Back up and update skill")!.disabled).toBe(true);
+    await act(async () => control("Reset size").click());
+    expect(size()).toEqual([960, 760]);
+  });
+
+  it("ends a drag on Escape and still prevents closing during file operations", async () => {
+    const close = vi.fn();
+    await act(async () => root.render(<SkillUpdates open onOpenChange={close} />));
+    await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeNull());
+    await act(async () => control("Resize dialog bottom-right").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1, clientX: 500, clientY: 400 })));
+    expect(dialog().hasAttribute("data-resizing")).toBe(true);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(dialog().hasAttribute("data-resizing")).toBe(false); expect(close).not.toHaveBeenCalled();
+    expect(document.body.style.userSelect).not.toBe("none");
+    let finish!: (value: FileSystemDirectoryHandle) => void;
+    vi.mocked(window.showDirectoryPicker).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    await act(async () => button("Choose folder")!.click());
+    expect(control("Close").disabled).toBe(true);
+    await act(async () => control("Expand dialog").click());
+    expect(dialog().dataset.mode).toBe("full");
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(close).not.toHaveBeenCalled();
+    await act(async () => finish(folder.handle()));
+    await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeNull());
+    expect(control("Close").disabled).toBe(false);
+    expect(skillRepository.apply).not.toHaveBeenCalled(); expect(skillRepository.reinstall).not.toHaveBeenCalled();
+  });
+});
+
+describe("skill folder drop", () => {
+  beforeEach(() => {
+    vi.stubGlobal("DataTransferItem", class { getAsFileSystemHandle() {} });
+  });
+  async function drop(items: Array<{ kind: string; getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> }>) {
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { types: ["Files"], items } });
+    await act(async () => document.querySelector('[data-skill-folder-drop]')!.dispatchEvent(event));
+    await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeNull());
+  }
+  it("stages a dropped folder without registering or prompting, then uses the existing comparison/consent path", async () => {
+    const request = vi.spyOn(folder, "requestPermission");
+    await render();
+    await drop([{ kind: "file", getAsFileSystemHandle: async () => folder.handle() }]);
+    expect(await repository.connection()).toBeUndefined();
+    expect(request).not.toHaveBeenCalled();
+    expect(button("Allow access and connect")).toBeDefined();
+    expect(appActivity.prepare()).toBe(false);
+    await act(async () => { await setLanguage("ko"); });
+    expect(button("접근 허용하고 연결")).toBeDefined();
+    await act(async () => { await setLanguage("en"); });
+    await click("Allow access and connect");
+    expect(request).toHaveBeenCalledExactlyOnceWith({ mode: "readwrite" });
+    expect((await repository.connection())?.name).toBe(folder.name);
+    expect(button("Back up and update skill")!.disabled).toBe(true);
+    expect((folder.children.get("SKILL.md") as FakeFile).content).toBe(before);
+    expect(await repository.recoveries()).toHaveLength(0);
+    expect(skillRepository.apply).not.toHaveBeenCalled();
+    const saved = await repository.connection();
+    await drop([{ kind: "file", getAsFileSystemHandle: async () => folder.handle() }]);
+    await click("Allow access and connect");
+    expect(await repository.connection()).toBe(saved);
+  });
+  it("keeps the current connection and backups when access to a dropped replacement is denied or cancelled", async () => {
+    const saved = await repository.connect(folder.handle());
+    await repository.apply(await repository.inspect(saved, await bundles.loadSkillBundle()));
+    const backups = await repository.recoveries();
+    const replacement = new FakeDirectory("replacement"); replacement.file("SKILL.md", before); replacement.write = "denied";
+    await render();
+    await drop([{ kind: "file", getAsFileSystemHandle: async () => replacement.handle() }]);
+    await click("Allow access and connect");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Your existing connection is unchanged");
+    expect(await repository.connection()).toBe(saved);
+    expect(await repository.recoveries()).toEqual(backups);
+    expect((replacement.children.get("SKILL.md") as FakeFile).content).toBe(before);
+    await click("Cancel selection");
+    expect(button("Allow access and connect")).toBeUndefined();
+    expect(await repository.connection()).toBe(saved);
+  });
+  it("refuses files, other skills and multiple items without replacing the current connection", async () => {
+    const saved = await repository.connect(folder.handle());
+    await render();
+    const acquire = vi.fn().mockResolvedValue(folder.handle());
+    await drop([{ kind: "file", getAsFileSystemHandle: acquire }, { kind: "file", getAsFileSystemHandle: acquire }]);
+    expect(acquire).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("one implementation-ledger folder");
+    const wrong = new FakeDirectory("implementation-ledger"); wrong.file("SKILL.md", before.replace("implementation-ledger", "other-skill"));
+    for (const handle of [wrong.handle(), (wrong.children.get("SKILL.md") as FakeFile).handle()]) {
+      await drop([{ kind: "file", getAsFileSystemHandle: async () => handle }]);
+      expect(document.querySelector('[role="alert"]')).not.toBeNull();
+      expect(await repository.connection()).toBe(saved);
+      expect(button("Allow access and connect")).toBeUndefined();
+    }
+    expect(skillRepository.connect).not.toHaveBeenCalled();
+  });
+  it("retains the picker fallback when drop is unsupported", async () => {
+    vi.stubGlobal("DataTransferItem", undefined);
+    await render();
+    expect(document.body.textContent).toContain("Folder drop is unavailable here");
+    await click("Choose folder");
+    expect((await repository.connection())?.name).toBe(folder.name);
+    expect(skillRepository.apply).not.toHaveBeenCalled();
+  });
+  it("ignores a delayed drop result after the manager closes", async () => {
+    let finish!: (handle: FileSystemHandle) => void;
+    await render();
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { types: ["Files"], items: [{ kind: "file", getAsFileSystemHandle: () => new Promise<FileSystemHandle>((resolve) => { finish = resolve; }) }] } });
+    await act(async () => document.querySelector('[data-skill-folder-drop]')!.dispatchEvent(event));
+    await act(async () => root.render(<SkillUpdates open={false} onOpenChange={vi.fn()} />));
+    await act(async () => finish(folder.handle()));
+    await render();
+    expect(button("Allow access and connect")).toBeUndefined();
+    expect(await repository.connection()).toBeUndefined();
+  });
+});
+
 describe("skill folder permission flow", () => {
   it("opens the toolbar manager in place, keeps it open across language changes and returns focus without requesting access", async () => {
     await setLanguage("ko");
@@ -209,11 +421,11 @@ describe("skill folder permission flow", () => {
     const request = vi.spyOn(folder, "requestPermission");
     await render();
     expect(window.showDirectoryPicker).not.toHaveBeenCalled(); expect(request).not.toHaveBeenCalled();
-    await click("Register installed skill folder");
+    await click("Choose folder");
     await waitFor(() => expect(button("Back up and update skill")).toBeDefined());
     expect(window.showDirectoryPicker).toHaveBeenCalledExactlyOnceWith({ id: "alpha-kanban-skill", mode: "readwrite" });
     expect(button("Back up and update skill")!.disabled).toBe(true);
-    const changes = document.querySelector("details")!;
+    const changes = document.querySelector("summary code")!.closest("details")!;
     await act(async () => { changes.open = true; changes.dispatchEvent(new Event("toggle")); });
     expect(changes.querySelector('[data-change="removed"] code')?.firstChild?.textContent).toBe("Old instructions");
     expect(changes.querySelector('[data-change="added"] code')?.firstChild?.textContent).toBe("Updated instructions");
@@ -222,8 +434,8 @@ describe("skill folder permission flow", () => {
     await expect((await (await folder.getFileHandle("SKILL.md")).getFile()).text()).resolves.toBe(before);
     expect(localStorage.getItem("alpha-kanban.theme")).toBe("dark");
     await act(async () => { await setLanguage("ko"); });
-    expect(document.body.textContent).toContain("읽기·쓰기 권한을 허용하세요");
-    expect(document.body.textContent).toContain("등록만으로 파일을 변경하지 않으며");
+    expect(document.body.textContent).toContain("변경 사항을 확인하고 업데이트하세요");
+    expect(document.body.textContent).toContain("연결만으로 파일을 변경하지 않습니다");
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -247,7 +459,7 @@ describe("skill folder permission flow", () => {
     const request = vi.spyOn(folder, "requestPermission").mockImplementation(async () => { folder.write = "granted"; return "granted"; });
     await render();
     expect(request).not.toHaveBeenCalled();
-    await click("Check installed skill");
+    await click("Allow access again");
     await waitFor(() => expect(button("Back up and update skill")).toBeDefined());
     expect(request).toHaveBeenCalledExactlyOnceWith({ mode: "readwrite" });
     expect(await repository.connection()).toBe(saved);

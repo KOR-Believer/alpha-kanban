@@ -1,7 +1,8 @@
-import type { ReleaseChannel } from "../../release-channel.mjs";
+import { sameReleaseChannel, type ReleaseChannel } from "../../release-channel.mjs";
 
 export type ReleaseRecord = {
   id: string; sequence: number; date: string; notify: boolean;
+  title?: { ko: string; en: string };
   notes: { ko: string[]; en: string[] };
   skill?: { compatibility: "compatible" | "unknown"; notes: { ko: string[]; en: string[] } };
 };
@@ -23,7 +24,8 @@ export function parseHistory(value: unknown): ReleaseRecord[] {
     if (!row || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(row.id) || ids.has(row.id) ||
       !Number.isSafeInteger(row.sequence) || row.sequence <= sequence || typeof row.notify !== "boolean" ||
       !/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !Number.isFinite(Date.parse(row.date)) || new Date(row.date).toISOString().slice(0, 10) !== row.date ||
-      !validNotes(row.notes) || (row.skill !== undefined && (!row.skill || !["compatible", "unknown"].includes(row.skill.compatibility) || !validNotes(row.skill.notes)))) {
+      !validNotes(row.notes) || (row.title !== undefined && ![row.title?.ko, row.title?.en].every(title => typeof title === "string" && title.trim() && title.length <= 160)) ||
+      (row.skill !== undefined && (!row.skill || !["compatible", "unknown"].includes(row.skill.compatibility) || !validNotes(row.skill.notes)))) {
       throw new Error("Invalid release history.");
     }
     ids.add(row.id); sequence = row.sequence;
@@ -39,6 +41,18 @@ export function releaseRecords(release: ReleaseInfo): ReleaseRecord[] {
 }
 
 export function releaseKey(release: ReleaseInfo) { return release.releaseId ?? release.buildId; }
+
+export function releaseTitle(record: ReleaseRecord, language: "ko" | "en") { return record.title?.[language] ?? record.id; }
+export function releaseHref(id: string) { return `/releases/${encodeURIComponent(id)}`; }
+/** Only offer a detail already shipped here, with the same content as the verified popup. */
+export function availableReleaseHref(running: ReleaseInfo, target: ReleaseInfo, record: ReleaseRecord) {
+  if (!sameReleaseChannel(running.channel, target.channel)) return undefined;
+  const local = releaseRecords(running).find(row => row.id === record.id);
+  if (!local || local.sequence !== record.sequence || local.date !== record.date ||
+    JSON.stringify(local.notes) !== JSON.stringify(record.notes) || JSON.stringify(local.title) !== JSON.stringify(record.title) ||
+    JSON.stringify(local.skill) !== JSON.stringify(record.skill)) return undefined;
+  return releaseHref(record.id);
+}
 
 const PREFIX = "alpha-kanban.releases.v1.";
 const fallback = new Map<string, string>();

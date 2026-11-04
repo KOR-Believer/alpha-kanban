@@ -20,7 +20,7 @@ export async function checkBrowserRelease(directory, env = process.env) {
     if (digest !== expected) throw new Error("Packaged skill digest does not match.");
   }
   const guide = await readFile(resolve(directory, "downloads/INSTALL.txt"), "utf8");
-  if (!guide.includes(config.origin + "/intro#updates")) throw new Error("Installation guide belongs to another channel.");
+  if (!guide.includes(config.origin + "/about#updates")) throw new Error("Installation guide belongs to another channel.");
   const repair = await readFile(resolve(directory, "repair.js"), "utf8");
   if (!repair.includes(`const releaseChannel = "${config.channel}";`) || repair.includes('"__RELEASE_CHANNEL__"')) throw new Error("Repair channel was not compiled.");
   if (release.mode === "app") {

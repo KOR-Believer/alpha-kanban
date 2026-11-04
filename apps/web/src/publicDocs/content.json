@@ -1,0 +1,822 @@
+{
+  "groups": [
+    {
+      "ko": "시작하기",
+      "en": "Getting started"
+    },
+    {
+      "ko": "기본 사용",
+      "en": "Everyday use"
+    },
+    {
+      "ko": "팀 문서 관리",
+      "en": "Team documents"
+    },
+    {
+      "ko": "문서 관리",
+      "en": "Document management"
+    },
+    {
+      "ko": "로컬 링크",
+      "en": "Local links"
+    },
+    {
+      "ko": "설정 참고",
+      "en": "Configuration"
+    },
+    {
+      "ko": "업데이트·문제 해결",
+      "en": "Updates & troubleshooting"
+    }
+  ],
+  "documents": [
+    {
+      "id": "start",
+      "group": 0,
+      "title": {
+        "ko": "소개와 첫 작업",
+        "en": "Introduction & first task"
+      },
+      "lead": {
+        "ko": "아이디어를 AI와 나누고, 계획과 티켓으로 정리해 첫 작업을 시작하세요.",
+        "en": "Discuss your idea with AI, turn it into a plan and tickets, then begin your first task."
+      },
+      "sections": [
+        {
+          "id": "workflow",
+          "title": {
+            "ko": "첫 작업까지 네 단계",
+            "en": "Four steps to your first task"
+          },
+          "body": {
+            "ko": "Alpha Kanban은 AI와 함께 만드는 작업을 Markdown 문서로 기록하고 살펴보는 도구입니다. 대화와 작업은 평소 사용하는 AI 도구에서 이어갑니다.\n\n1. **implementation-ledger 설치** — AI가 계획과 티켓을 같은 구조로 작성할 수 있도록 스킬을 준비합니다. [설치 안내](/docs/install)\n2. **아이디어를 이야기하기** — 만들고 싶은 것과 필요한 이유를 설명합니다. 처음부터 모든 요구사항을 정할 필요는 없습니다.\n3. **계획과 티켓 검토하기** — 이번에 할 일과 완료 기준을 읽고, 구현에 영향을 주는 질문을 함께 정리합니다.\n4. **구현을 요청하기** — 합의한 티켓을 기준으로 작업을 요청하고, 결과와 확인 내용을 문서로 남깁니다.",
+            "en": "Alpha Kanban helps you record and review work with AI in Markdown. Continue the conversation and implementation in the AI tool you normally use.\n\n1. **Install implementation-ledger** — Give AI a shared structure for plans and tickets. [Installation guide](/docs/install)\n2. **Discuss your idea** — Explain what you want to make and why. You do not need every requirement decided at the start.\n3. **Review the plan and tickets** — Read the scope and completion criteria, and resolve questions affecting this implementation.\n4. **Request implementation** — Work from the agreed tickets, then record the changes and verification."
+          }
+        },
+        {
+          "id": "first-prompt",
+          "title": {
+            "ko": "첫 대화 시작하기",
+            "en": "Start the conversation"
+          },
+          "body": {
+            "ko": "스킬을 설치했다면 다음 요청을 복사해 AI와 대화를 시작해 보세요. 예시의 프로젝트와 목적은 원하는 내용으로 바꿀 수 있습니다.\n\n**AI에 보낼 요청**\n\n```text\n$implementation-ledger\nreading-journal이라는 독서 기록 도구를 만들고 싶어요.\n필요한 기능을 먼저 함께 정리하고 계획과 티켓을 작성해 주세요.\n아직 구현은 시작하지 마세요.\n```",
+            "en": "After installing the skill, copy this request into your AI conversation. Replace the example project and goal with your own.\n\n**Request for your AI**\n\n```text\n$implementation-ledger\nI want to build reading-journal, a reading journal tool.\nHelp me discuss the features, then write a plan and tickets.\nDo not start implementation yet.\n```"
+          }
+        },
+        {
+          "id": "review",
+          "title": {
+            "ko": "계획을 읽고 다음 작업 정하기",
+            "en": "Review before you build"
+          },
+          "body": {
+            "ko": "계획에서 목적과 범위를, 티켓에서 할 일과 완료 기준을 확인하세요. 지금 구현할 내용에 영향을 주는 질문부터 답하고, 이후 작업에 관한 질문은 남겨 두어도 됩니다.\n\n[아이디어에서 계획·티켓으로 읽기](/docs/planning)",
+            "en": "Check the goal and scope in the plan, then the tasks and completion criteria in the tickets. Resolve questions that affect the current work; questions about later work can stay open.\n\n[Read Ideas, plans & tickets](/docs/planning)"
+          }
+        },
+        {
+          "id": "optional-board",
+          "title": {
+            "ko": "칸반은 필요할 때 사용하기",
+            "en": "Use the board when you need it"
+          },
+          "body": {
+            "ko": "외부 AI 대화만으로 계획 작성부터 구현 요청까지 진행할 수 있습니다. 문서와 진행 상황을 한눈에 보고 싶을 때 웹 칸반에 프로젝트 폴더를 연결하세요.\n\n\n> **설정 없이 시작할 수 있습니다**\n> 사용자 ID, Owner, 팀 폴더는 기본 사용의 필수 조건이 아닙니다. 여러 사람의 문서를 구분해야 할 때 [소유자 구분](/docs/owners)을 추가하세요.",
+            "en": "You can go from planning to implementation entirely in your AI conversation. Connect your project folder to the web board when you want to browse documents and progress together.\n\n\n> **Start without configuration**\n> A user ID, Owner header, and team folders are optional. Add [owner organization](/docs/owners) when you need to distinguish people’s documents."
+          }
+        }
+      ]
+    },
+    {
+      "id": "install",
+      "group": 0,
+      "title": {
+        "ko": "스킬 설치",
+        "en": "Install the skill"
+      },
+      "lead": {
+        "ko": "implementation-ledger를 준비하고 AI와 첫 작업을 시작하세요.",
+        "en": "Prepare implementation-ledger and start your first task with AI."
+      },
+      "sections": [
+        {
+          "id": "prepare",
+          "title": {
+            "ko": "설치 전에 확인하기",
+            "en": "Before installation"
+          },
+          "body": {
+            "ko": "앱에서 제공하는 implementation-ledger 전체 폴더를 준비하세요. 이미 설치한 스킬이 있다면 개인 수정 여부와 변경 내용을 먼저 비교하고 백업합니다.",
+            "en": "Use the complete implementation-ledger folder supplied by the app. If you have an existing installation, compare changes and personal customizations, then back it up."
+          }
+        },
+        {
+          "id": "request",
+          "title": {
+            "ko": "설치 요청문",
+            "en": "Installation request"
+          },
+          "body": {
+            "ko": "**AI에 보낼 요청**\n\n```text\n앱에서 받은 implementation-ledger 폴더를 설치하고 싶어요.\n기존 설치본이 있는지 확인하고, 있다면 차이를 비교해 주세요.\n개인 수정과 백업 방법을 설명하고 교체 전에 확인을 받아 주세요.\n```\n\n이 요청을 사용하는 AI 도구에 전달하세요. 설치가 끝나면 새 대화에서 `$implementation-ledger`를 불러 첫 작업을 이야기합니다.",
+            "en": "**Request for your AI**\n\n```text\nHelp me install the implementation-ledger folder supplied by the app.\nCheck for an existing installation and compare any differences.\nExplain personal changes and backups, and ask before replacing it.\n```\n\nSend this request to your AI tool. After installation, open a new conversation and invoke `$implementation-ledger` to discuss your first task."
+          }
+        },
+        {
+          "id": "existing",
+          "title": {
+            "ko": "기존 설치본이 있다면",
+            "en": "Existing installations"
+          },
+          "body": {
+            "ko": "개인 수정이 있는 설치본을 그대로 덮어쓰지 마세요. 변경 내용을 비교하고 보존할 부분을 결정한 뒤 업데이트합니다.\n\n[앱·스킬 업데이트](/docs/updates)에서 두 업데이트의 차이를 읽을 수 있습니다.",
+            "en": "Do not overwrite a customized installation without reviewing it. Compare changes, choose what to preserve, then update.\n\nRead [App & skill updates](/docs/updates) to understand the two update flows."
+          }
+        }
+      ]
+    },
+    {
+      "id": "planning",
+      "group": 1,
+      "title": {
+        "ko": "아이디어에서 계획·티켓으로",
+        "en": "Ideas, plans & tickets"
+      },
+      "lead": {
+        "ko": "목적과 범위를 합의하고, 실행할 일을 티켓으로 나눕니다.",
+        "en": "Agree on the goal and scope, then break the work into tickets."
+      },
+      "sections": [
+        {
+          "id": "discuss",
+          "title": {
+            "ko": "목적부터 이야기하기",
+            "en": "Start with the goal"
+          },
+          "body": {
+            "ko": "누가 사용할지, 어떤 문제를 해결할지, 이번 작업에서 어디까지 할지 AI에게 알려주세요. 결정되지 않은 내용은 질문으로 남깁니다.",
+            "en": "Tell your AI who will use the result, what problem it solves, and the scope of this work. Leave unresolved decisions as questions."
+          }
+        },
+        {
+          "id": "tickets",
+          "title": {
+            "ko": "완료 기준이 있는 티켓",
+            "en": "Tickets with completion criteria"
+          },
+          "body": {
+            "ko": "**AI에 보낼 요청**\n\n```text\n합의한 계획을 기준으로 티켓을 작성해 주세요.\n각 티켓에 범위와 완료 기준을 적고, 아직 결정하지 않은 질문은 별도로 남겨 주세요.\n```\n\n티켓 번호만으로 작업 순서를 판단하지 않고, 의존 관계와 최신 지시를 함께 읽습니다.",
+            "en": "**Request for your AI**\n\n```text\nWrite tickets from our agreed plan.\nInclude scope and completion criteria for each ticket, and keep unresolved questions separate.\n```\n\nRead dependencies and the latest instructions together. Ticket numbers alone do not determine execution order."
+          }
+        },
+        {
+          "id": "implement",
+          "title": {
+            "ko": "검토 후 구현 요청하기",
+            "en": "Request implementation after review"
+          },
+          "body": {
+            "ko": "티켓의 범위와 완료 기준에 동의하면 해당 티켓의 구현을 요청하세요. 변경한 내용과 확인 결과는 진행 기록으로 남깁니다.",
+            "en": "When the scope and completion criteria are agreed, request implementation of the relevant tickets. Record changes and verification results in the work log."
+          }
+        }
+      ]
+    },
+    {
+      "id": "progress",
+      "group": 1,
+      "title": {
+        "ko": "문서와 진행 확인",
+        "en": "Documents & progress"
+      },
+      "lead": {
+        "ko": "Markdown을 읽고, 칸반에서 작업의 흐름을 살펴봅니다.",
+        "en": "Read the Markdown and follow the work on the board."
+      },
+      "sections": [
+        {
+          "id": "documents",
+          "title": {
+            "ko": "문서로 작업 이해하기",
+            "en": "Understand work through documents"
+          },
+          "body": {
+            "ko": "계획은 목적과 범위, 티켓은 실행할 작업과 완료 기준을 담습니다. 작업 결과는 진행 메모에서 확인하세요.\n\n사용자의 지시와 AI가 남긴 진행 기록을 구분해 읽습니다.",
+            "en": "Plans describe the goal and scope. Tickets describe tasks and completion criteria. Read progress notes for the results.\n\nDistinguish user instructions from the AI’s work log."
+          }
+        },
+        {
+          "id": "board",
+          "title": {
+            "ko": "칸반에서 살펴보기",
+            "en": "Review on the board"
+          },
+          "body": {
+            "ko": "프로젝트 폴더를 연결하면 문서와 티켓을 모아 볼 수 있습니다. 전체 티켓에서 작업을 찾거나 문서 목록에서 원문을 여세요.",
+            "en": "Connect a project folder to browse its documents and tickets. Find tasks in All tickets or open the original from the document list."
+          }
+        },
+        {
+          "id": "search",
+          "title": {
+            "ko": "문서와 티켓 본문 검색",
+            "en": "Search document and ticket contents"
+          },
+          "body": {
+            "ko": "프로젝트 왼쪽 위 **문서·티켓 검색**은 제목·파일 이름·티켓 번호뿐 아니라 플랜, 인벤토리, 일반 Markdown, 티켓 본문을 함께 찾습니다. 일치하는 문서 묶음이 왼쪽에 나타납니다.\n\n묶음에서 티켓 결과를 열면 일치한 티켓만 보드에 남습니다. 플랜·인벤토리·일반 Markdown 결과는 해당 문서의 일치 위치로 이동합니다. **이 문서 전체 보기**로 전체 내용을 보거나 검색어를 지워 검색을 끝낼 수 있습니다. 본문을 읽는 중이면 검색 진행 상태가 표시되며, 읽지 못한 문서가 있으면 일부 결과임을 알립니다.\n\n보드 안의 **번호·제목·본문 검색**은 티켓만 대상으로 합니다. 전체 티켓 화면에서는 연결한 프로젝트들의 티켓을 함께 검색합니다. 화면 밖에 있는 카드도 검색할 수 있습니다.\n\n사용법을 찾으려면 상단 **가이드 검색**에 기능명이나 설정 이름을 입력하세요.",
+            "en": "The project sidebar’s **Search documents and tickets** searches titles, filenames, ticket numbers, and the bodies of plans, inventories, ordinary Markdown, and tickets. Matching document groups appear in the sidebar.\n\nOpening ticket results filters the board to matching tickets. A plan, inventory, or Markdown result takes you to the match in that document. Choose **View whole document** to read the full document, or clear the query to end the search. A progress message appears while contents are being read; unreadable documents produce an incomplete-results notice.\n\nThe board’s **Search ID, title, and body** field searches tickets only. All tickets searches tickets across connected projects, including cards outside the visible screen.\n\nTo find instructions, enter a feature or setting name in **Search documentation** in the header."
+          }
+        }
+      ]
+    },
+    {
+      "id": "owners",
+      "group": 2,
+      "title": {
+        "ko": "소유자 구분 시작하기",
+        "en": "Organize documents by owner"
+      },
+      "lead": {
+        "ko": "여러 사람의 문서를 나눠 관리할 때만 추가하는 선택 설정입니다.",
+        "en": "An optional setup for organizing documents written by different people."
+      },
+      "sections": [
+        {
+          "id": "when",
+          "title": {
+            "ko": "소유자 구분이 필요한 때",
+            "en": "When to use owners"
+          },
+          "body": {
+            "ko": "기본 문서 작성과 수정에는 사용자 ID나 Owner가 필요하지 않습니다. 하나의 저장소에서 사람별 문서를 모아 보고 싶을 때 소유자 폴더를 켜세요.\n\n\n> **홈의 사용자 설정만으로 켜지지 않습니다**\n> 개인 사용자 ID를 적어도 팀 모드나 사용자 폴더가 자동으로 만들어지지는 않습니다. 공유 정책에서 ownerFolders를 켜야 합니다.",
+            "en": "Basic document creation and editing do not require a user ID or Owner. Enable owner folders when you want to organize people’s documents within one repository.\n\n\n> **A home user setting does not enable owner folders**\n> A personal ID alone does not create a team mode or user folders. Enable ownerFolders in the shared policy first."
+          }
+        },
+        {
+          "id": "shared",
+          "title": {
+            "ko": "공유 정책 설정하기",
+            "en": "Set the shared policy"
+          },
+          "body": {
+            "ko": "프로젝트의 `.ak.config`에서 신규 문서의 소유자별 기본 배치를 켭니다.\n\n**.ak.config**\n\n```text\n[documents]\nownerFolders = true\n```\n\n기존 문서를 자동으로 이동시키는 설정은 아닙니다.",
+            "en": "Enable owner-based placement for new documents in the project’s `.ak.config`.\n\n**.ak.config**\n\n```text\n[documents]\nownerFolders = true\n```\n\nThis setting does not automatically move existing documents."
+          }
+        },
+        {
+          "id": "personal",
+          "title": {
+            "ko": "개인 사용자 지정하기",
+            "en": "Set your personal user"
+          },
+          "body": {
+            "ko": "개인 파일 `.ak.user`에 사용할 ID를 적고 Git에서 제외하세요.\n\n**.ak.user**\n\n```text\n[user]\nid = @alice\n```\n\n**.gitignore**\n\n```text\n.ak.user\n```\n\n문서 폴더가 기본값일 때 두 설정을 사용하면 새 문서는 `docs/@alice` 아래에 작성되고 문서 상단에 Owner가 기록됩니다.",
+            "en": "Set your ID in the private `.ak.user` file and exclude it from Git.\n\n**.ak.user**\n\n```text\n[user]\nid = @alice\n```\n\n**.gitignore**\n\n```text\n.ak.user\n```\n\nWith the default document folder and both settings in place, new documents go under `docs/@alice` and record Owner at the top."
+          }
+        },
+        {
+          "id": "meaning",
+          "title": {
+            "ko": "경로 소유자와 Owner 읽기",
+            "en": "Path owners and Owner headers"
+          },
+          "body": {
+            "ko": "| 구분 | 의미 |\n| --- | --- |\n| 경로 소유자 | 문서에서 가장 가까운 `@` 폴더의 유효한 소유자명 |\n| `Owner: @alice` | 문서에 기록된 소유자 값 |\n| 개인 사용자 ID | `.ak.user`의 `[user] id` 값. 소유자 폴더에 새 문서를 만들 때 사용할 이름 |\n\nOwner는 접근 권한, 현재 접속자 또는 티켓 실행 허가를 뜻하지 않습니다.\n\n**문서 배치 예시**\n\n```text\nreading-journal/\n  .ak.config\n  .ak.user\n  docs/\n    @alice/\n      reading-plan.md\n    @bob/\n      reading-tickets.md\n```",
+            "en": "| Value | Meaning |\n| --- | --- |\n| Path owner | A valid owner name in the closest `@` folder above the document |\n| `Owner: @alice` | An owner value recorded in the document |\n| Personal user ID | The `[user] id` value in `.ak.user`: the name used when creating documents in an owner folder |\n\nOwner does not grant access, identify the current visitor, or authorize ticket execution.\n\n**Example document layout**\n\n```text\nreading-journal/\n  .ak.config\n  .ak.user\n  docs/\n    @alice/\n      reading-plan.md\n    @bob/\n      reading-tickets.md\n```"
+          }
+        },
+        {
+          "id": "next",
+          "title": {
+            "ko": "설정과 필터 더 알아보기",
+            "en": "Configuration and filters"
+          },
+          "body": {
+            "ko": "여러 저장소나 worktree를 쓴다면 [공유 정책의 적용 순서](/docs/config)와 [worktree 동작](/docs/worktree)을 확인하세요. 작성한 문서는 [소유자별로 모아 보기](/docs/owner-filter)에서 찾습니다.",
+            "en": "If you use multiple repositories or worktrees, read [shared-policy precedence](/docs/config) and [worktree behavior](/docs/worktree). Find the resulting documents with [owner filters](/docs/owner-filter)."
+          }
+        }
+      ]
+    },
+    {
+      "id": "owner-filter",
+      "group": 2,
+      "title": {
+        "ko": "소유자별로 모아 보기",
+        "en": "Filter by owner"
+      },
+      "lead": {
+        "ko": "문서와 티켓에 표시된 소유자로 원하는 작업을 찾습니다.",
+        "en": "Find work using the owners shown on documents and tickets."
+      },
+      "sections": [
+        {
+          "id": "find",
+          "title": {
+            "ko": "소유자 확인하기",
+            "en": "Identify the owner"
+          },
+          "body": {
+            "ko": "문서 목록, 티켓 카드, 상세에서 `docs/@alice`와 같은 경로의 소유자를 확인할 수 있습니다. 소유자는 가장 가까운 `@` 폴더를 기준으로 합니다. 그 폴더명이 유효하지 않으면 바깥 폴더의 소유자로 대신 판정하지 않습니다.",
+            "en": "View the owner from a path such as `docs/@alice` in the document list, ticket cards, and details. The closest `@` folder determines the path owner. If its name is invalid, an outer folder is not used as a fallback."
+          }
+        },
+        {
+          "id": "filter",
+          "title": {
+            "ko": "여러 사람의 작업 함께 보기",
+            "en": "View several owners together"
+          },
+          "body": {
+            "ko": "전체 티켓에서 소유자를 검색하고 여러 이름을 선택하세요. 전체 티켓의 선택 목록은 프로젝트별 사이드바 필터와 독립적으로 기억합니다.\n\n필터를 바꿔도 열어 둔 문서와 작성 중인 입력은 유지됩니다. 소유자 설정 없는 문서도 계속 사용할 수 있습니다.\n\n전체 티켓에서 `@alice`와 `@bob`을 함께 고르면 둘 중 하나에 해당하는 작업이 표시됩니다(OR). 프로젝트 필터도 켰다면 그 프로젝트 안에서만 찾습니다. 아무 이름도 선택하지 않으면 전체이며, **미지정**도 함께 선택할 수 있습니다. 프로젝트 사이드바에서는 소유자 하나로 필터링합니다.",
+            "en": "Search for owners in All tickets and select multiple names. These selections are remembered independently of each project’s sidebar filter.\n\nChanging a filter preserves the open document and unsaved input. Documents without owner settings remain usable.\n\nSelecting `@alice` and `@bob` in All tickets includes either owner (OR). A project filter further limits those results. No selected names means All, and Unassigned can be included. The project sidebar filters by a single owner."
+          }
+        }
+      ]
+    },
+    {
+      "id": "organize",
+      "group": 3,
+      "title": {
+        "ko": "문서 정리",
+        "en": "Document maintenance"
+      },
+      "lead": {
+        "ko": "계속 사용하는 문서를 현재 규격에 맞춰 관리합니다.",
+        "en": "Keep documents you continue to use aligned with the current format."
+      },
+      "sections": [
+        {
+          "id": "purpose",
+          "title": {
+            "ko": "계속 쓰는 문서를 위한 관리",
+            "en": "Care for documents you keep using"
+          },
+          "body": {
+            "ko": "문서 규격이 바뀌면 새로운 정보가 필요하거나 예전 안내가 더 이상 쓰이지 않을 수 있습니다. **문서 정리**는 이런 변화를 기존 파일에 반영하는 선택 기능입니다.\n\n모든 문서를 한꺼번에 갱신할 필요는 없습니다. 계속 관리할 문서를 골라 변경 내용을 살펴보세요. 정리 여부와 관계없이 기존 문서와 칸반은 그대로 볼 수 있습니다.",
+            "en": "As the document format evolves, new information may become useful and older guidance may no longer apply. **Document maintenance** is an optional way to bring those changes into existing files.\n\nYou do not need to update every document at once. Choose the files you continue to maintain and review their proposed changes. Existing documents and boards remain readable without maintenance."
+          }
+        },
+        {
+          "id": "preview",
+          "title": {
+            "ko": "미리보기부터 확인하기",
+            "en": "Review the preview first"
+          },
+          "body": {
+            "ko": "정리할 문서를 연 뒤 **문서 정리**를 누르세요. 현재 지원하는 누락 ID 발급, 폴더 기준 Owner 보정, 예전 안내·템플릿 삭제 내용을 변경 전후로 비교할 수 있습니다.\n\n다른 문서에서 참조하는 섹션은 남깁니다. 문서 정리를 하지 않아도 기존 문서와 티켓은 계속 볼 수 있습니다.",
+            "en": "Open the document you want to clean up, then choose **Document maintenance**. Current operations include missing IDs, folder-based Owner correction, and removal of obsolete guidance and templates. Compare their proposed changes.\n\nSections referenced by other documents are retained. Existing documents and tickets remain readable without cleanup."
+          }
+        },
+        {
+          "id": "apply",
+          "title": {
+            "ko": "확인한 변경만 저장하기",
+            "en": "Save only the reviewed changes"
+          },
+          "body": {
+            "ko": "미리보기는 파일을 변경하지 않습니다. **확인한 변경 적용**을 눌러야 선택한 문서만 저장합니다. 실제 티켓 본문은 정리 대상이 아닙니다.\n\n파일 이동이나 링크 경로 변경이 필요하다면 [이동과 인수인계](/docs/handoff)를 읽으세요.",
+            "en": "A preview does not modify files. Choose **Apply reviewed changes** to save only the selected document. Actual ticket bodies are not part of cleanup.\n\nFor file moves or link-path changes, read [Move & hand off documents](/docs/handoff)."
+          }
+        }
+      ]
+    },
+    {
+      "id": "handoff",
+      "group": 3,
+      "title": {
+        "ko": "이동과 인수인계",
+        "en": "Move & hand off documents"
+      },
+      "lead": {
+        "ko": "직접 옮긴 뒤 Owner를 맞추거나, CLI로 이동과 링크 보정을 함께 검토하세요.",
+        "en": "Move documents yourself and align Owner, or use the CLI to review the move and link changes together."
+      },
+      "sections": [
+        {
+          "id": "scope",
+          "title": {
+            "ko": "두 가지 방법 고르기",
+            "en": "Choose between two methods"
+          },
+          "body": {
+            "ko": "문서를 인계할 때 CLI가 필수는 아닙니다. 직접 옮겼다면 문서 정리로 기록된 Owner를 맞출 수 있습니다. 이동할 문서와 영향을 받는 링크를 함께 처리하려면 CLI를 사용하세요.\n\n\n| 방법 | 처리하는 내용 |\n| --- | --- |\n| [직접 이동 후 문서 정리](/docs/handoff#manual) | 사용자가 파일을 옮긴 뒤 현재 폴더에 맞춰 Owner를 정리합니다. 이동 때문에 달라진 링크는 고치지 않습니다. |\n| [CLI로 이동·링크 보정](/docs/handoff#request) | 이동 전 경로를 기준으로 파일 이동, Owner, 영향을 받는 링크 변경을 검토하고 확인 후 적용합니다. |\n\n아래의 `docs`는 기본 문서 보관 폴더 예시입니다. 다른 경로를 설정했다면 그 폴더에서 진행하세요. 소유자 필터만 바꾸는 것으로 파일이 이동하지는 않습니다.",
+            "en": "The CLI is optional for a handoff. After moving a document yourself, use document maintenance to align its recorded Owner. Use the CLI when you want to handle the move and affected links together.\n\n\n| Method | What it handles |\n| --- | --- |\n| [Move manually, then maintain](/docs/handoff#manual) | You move the file, then align Owner with its current folder. Maintenance does not repair links affected by the move. |\n| [Move and repair links with the CLI](/docs/handoff#request) | Review the file move, Owner and affected link changes using the original path, then apply after confirmation. |\n\nThe examples use the default document folder, `docs`. Use your configured folder if different. Changing an owner filter does not move files."
+          }
+        },
+        {
+          "id": "manual",
+          "title": {
+            "ko": "직접 옮긴 뒤 Owner 맞추기",
+            "en": "Move manually, then align Owner"
+          },
+          "body": {
+            "ko": "1. Finder나 파일 탐색기에서 문서를 `docs/@alice`에서 `docs/@bob`으로 옮깁니다.\n2. 칸반에서 새 위치의 문서를 열고 **문서 정리**를 누릅니다.\n3. `Owner: @alice`가 `Owner: @bob`으로 바뀌는 미리보기를 확인하고 **확인한 변경 적용**을 누릅니다. Owner가 없으면 새 폴더에 맞는 값을 추가합니다.\n\n칸반의 소유자 분류는 폴더를 따릅니다. 새 위치가 확인되면 문서 정리 전에도 `@bob`으로 분류되며, 문서 정리는 본문에 기록된 Owner를 맞춥니다.\n\n정리는 선택한 문서만 저장합니다. 누락 ID나 예전 안내 정리도 제안될 수 있으니 [변경 전후 미리보기](/docs/organize)를 함께 확인하세요.\n\n\n> **링크 보정은 포함하지 않습니다**\n> 옮긴 문서 안의 상대 링크와 다른 문서에서 이 파일을 가리키는 링크는 그대로입니다. 이동과 링크 보정을 함께 처리하려면 아래 CLI 방법을 사용하세요.",
+            "en": "1. In Finder or File Explorer, move the document from `docs/@alice` to `docs/@bob`.\n2. Open the document at its new location in the board and choose **Document maintenance**.\n3. Review the change from `Owner: @alice` to `Owner: @bob`, then choose **Apply reviewed changes**. If Owner is missing, maintenance adds the value from the new folder.\n\nThe board classifies ownership by folder. Once the new location is discovered, it appears under `@bob` even before maintenance. Maintenance aligns the Owner recorded in the document.\n\nOnly the selected document is saved. The preview may also offer a missing ID or obsolete-section cleanup, so review the [before-and-after changes](/docs/organize) together.\n\n\n> **Link repair is separate**\n> Relative links inside the moved document and links pointing to it from other documents stay unchanged. Use the CLI method below to handle the move and link changes together."
+          }
+        },
+        {
+          "id": "request",
+          "title": {
+            "ko": "CLI로 이동하면서 링크 보정하기",
+            "en": "Move and repair links with the CLI"
+          },
+          "body": {
+            "ko": "지정한 문서 범위에서 이동할 파일과 영향을 받는 링크를 함께 검토합니다. 이동 전에 출발 경로와 목적지를 알고 있으므로 문서 안의 상대 링크와 다른 문서에서 이 파일을 가리키는 링크의 변경을 계산할 수 있습니다.\n\n**AI에 보낼 요청**\n\n```text\n문서 이동 CLI로 docs/@alice의 reading-plan.md를 docs/@bob으로 인계하려고 합니다.\n이동과 Owner 변경, 영향을 받는 링크 보정 계획을 먼저 보여 주세요.\n문서 번호와 기존 Document-ID, 실제 티켓 본문은 유지해 주세요.\n제가 확인하기 전에는 이동하거나 수정하지 마세요.\n```\n\n변경 계획을 읽고 확인한 뒤 적용합니다. 문서를 인수해도 티켓 구현이 자동으로 시작되지는 않습니다.\n\n브라우저의 [로컬 링크 연결](/docs/local-links)은 원본 Markdown을 고치지 않고 이 PC에서 열 위치를 연결하는 별도 기능입니다.",
+            "en": "Review the file move and affected links within the specified document scope. Knowing the source and destination before the move lets the CLI calculate changes to relative links inside the document and links pointing to it from other documents.\n\n**Request for your AI**\n\n```text\nUse the document CLI to hand off reading-plan.md from docs/@alice to docs/@bob.\nShow the move, Owner changes and affected link repairs first.\nPreserve the document number, existing Document-ID and actual ticket bodies.\nDo not move or edit anything until I confirm.\n```\n\nRead and confirm the change plan before applying it. Taking over a document does not automatically start implementing its tickets.\n\nBrowser [local link connections](/docs/local-links) are separate: they map links to folders on this PC without editing the Markdown source."
+          }
+        },
+        {
+          "id": "pc-paths",
+          "title": {
+            "ko": "PC를 바꿔 경로를 고칠 때",
+            "en": "Repair paths after changing PCs"
+          },
+          "body": {
+            "ko": "새 PC에서 문서 원문의 경로도 바꾸고 싶다면 CLI의 `rebase` 작업을 요청하세요. 현재 worktree의 문서 범위와 이전 repo 루트, 새 로컬 repo 루트를 지정합니다. Git remote 정보 또는 사용자가 확인한 대응 관계와 실제 파일을 대조하므로 clone 폴더 이름이나 깊이가 달라도 처리할 수 있습니다.\n\n이동·경로 보정 CLI는 설치한 스킬 안의 `scripts/document-cli.mjs`이며 Node.js 24와 Git으로 실행합니다. pnpm이나 별도 서버는 필요하지 않고 브라우저가 대신 실행하지도 않습니다. AI에게 이전·새 경로와 변경할 문서 범위를 알려 분석을 요청하세요.\n\n`analyze`로 고정된 변경 계획과 오류를 확인한 뒤 그 계획 ID를 지정해 `apply`, 이어서 `verify`로 실제 결과를 확인합니다. 요청과 분석 파일은 원문 사본을 담으므로 작업 저장소 밖에 보관합니다. 다른 worktree나 외부 repo는 수정하지 않습니다. 외부 repo는 정확한 참조 대상을 확인하는 용도입니다.\n\n찾을 수 없거나 여러 후보로 모호한 링크는 추측해 고치지 않습니다. 수정 중단이나 외부 편집 충돌이 나면 기록을 보존하고 `list`·`verify`로 확인한 뒤 명시적으로 `resume` 또는 `recover`를 선택합니다. 확인한 범위 밖의 문서나 대화 링크까지 고쳐지는 것은 아닙니다.\n\n이 PC에서 링크가 열리기만 하면 된다면 원문을 고칠 필요 없이 [로컬 링크 연결](/docs/local-links)을 사용할 수 있습니다.",
+            "en": "If you also want to update paths in the Markdown source on a new PC, request the CLI’s `rebase` operation. Specify the current worktree’s document scope, old repo roots, and new local repo roots. The CLI checks Git remote evidence or a user-confirmed mapping against real files, so clone names and folder depths can differ.\n\nThe move and path-repair CLI is `scripts/document-cli.mjs` in the installed skill. It runs with Node.js 24 and Git, without pnpm or a server. The browser does not run it. Give your AI tool the old and new paths and the exact document scope to analyze.\n\nUse `analyze` to review a fixed change plan and its findings, then `apply` with that plan ID and `verify` to check the actual result. Keep requests and plans outside the worktree because plans contain original document copies. Other worktrees and external repos are not modified; external repos only supply exact reference targets.\n\nMissing or ambiguous links are not repaired by guessing. If an operation is interrupted or an external edit conflicts, keep the journal, inspect `list` and `verify`, and explicitly choose `resume` or `recover`. Links outside the inspected scope, including chat links, are not covered.\n\nIf you only need links to open on this PC, use [local link connections](/docs/local-links) without editing the source."
+          }
+        }
+      ]
+    },
+    {
+      "id": "local-links",
+      "group": 4,
+      "title": {
+        "ko": "다른 PC의 링크 열기",
+        "en": "Open links from another PC"
+      },
+      "lead": {
+        "ko": "문서의 링크와 이 PC의 폴더 위치를 구분해 확인합니다.",
+        "en": "Distinguish the path in a document from the folder on this PC."
+      },
+      "sections": [
+        {
+          "id": "path",
+          "title": {
+            "ko": "문서에 적힌 경로 확인하기",
+            "en": "Check the document’s path"
+          },
+          "body": {
+            "ko": "같은 프로젝트라도 PC마다 저장한 위치가 다를 수 있습니다. 링크가 열리지 않으면 문서가 가리키는 프로젝트와 이 PC에 있는 폴더를 먼저 확인하세요.",
+            "en": "The same project can live in different locations on different PCs. If a link does not open, identify the project it references and its folder on this PC."
+          }
+        },
+        {
+          "id": "connect",
+          "title": {
+            "ko": "로컬 연결 사용하기",
+            "en": "Use a local connection"
+          },
+          "body": {
+            "ko": "문서 링크를 눌렀는데 현재 폴더에서 열 수 없으면 **로컬 링크 연결**에서 대상을 확인합니다. 허용한 workspace 아래에서 Git 정보로 repo 후보를 찾으며, 확실한 대응과 실제 파일 경로가 확인되면 연결해 엽니다. 후보가 여러 개이거나 확인할 수 없으면 직접 고릅니다. 검색 중에도 폴더 선택을 쓸 수 있습니다.\n\nrepo 이름이나 clone 폴더 이름이 같다는 이유만으로 연결하지 않습니다. 대상 repo 또는 폴더를 고른 뒤 **연결할 원래 폴더**, **선택한 폴더 안에서 열 파일**, 실제 열릴 파일을 확인하세요. 이름이 비슷한 여러 폴더가 있다면 사용할 폴더를 직접 확인합니다.\n\nrepo 루트를 연결하면 같은 이전 repo 앞 경로를 공유하는 다른 링크에도 재사용됩니다. `docs` 폴더만 연결하면 그 앞 경로 아래만 연결됩니다. 처음부터 넓게 재사용하려면 repo 루트를 선택하고 남은 경로가 `docs/guide.md`처럼 맞는지 보세요.\n\n확인한 연결은 현재 사이트의 이 브라우저에 저장합니다. 원본 Markdown·Git 설정·agent 설정은 바뀌지 않습니다. 다른 프로젝트나 PC·브라우저·채널에는 자동으로 복사되지 않습니다. 저장된 연결이 열리지 않으면 [연결 변경·해제](/docs/connections)에서 폴더와 경로를 다시 확인하세요.\n\n연결한 Markdown은 같은 뷰어의 읽기 전용 페이지로 엽니다. 연결을 바꾸려면 [연결 변경·해제](/docs/connections)를 보세요.",
+            "en": "When a document link cannot open from the current folder, use **Connect local link** to check its destination. The app searches granted workspaces for repository candidates using Git information. It can connect and open a link when a unique correspondence and the actual file path are verified. Otherwise, choose the destination yourself. Manual folder selection remains available during discovery.\n\nA matching repository or clone folder name alone is not enough. After choosing a repo or folder, check the **Old folder to replace**, **File to open inside the selected folder**, and the actual destination file. If several folders could match, confirm which one you intend to use.\n\nConnecting a repo root reuses the mapping for other links with the same old repo prefix. Connecting only `docs` covers that prefix alone. For broader reuse, choose the repo root and check that the remaining path, such as `docs/guide.md`, is correct.\n\nThe confirmed mapping stays on this site in this browser. It does not change Markdown, Git, or agent settings, and is not automatically copied to another project, PC, browser, or channel. If a saved connection stops opening, check the folder and path in [Manage connections](/docs/connections).\n\nConnected Markdown opens as a read-only page in the same reader. See [Manage connections](/docs/connections) to change it."
+          }
+        }
+      ]
+    },
+    {
+      "id": "connections",
+      "group": 4,
+      "title": {
+        "ko": "연결 변경·해제",
+        "en": "Change & remove connections"
+      },
+      "lead": {
+        "ko": "연결 대상이 달라졌을 때 로컬 연결을 정리합니다.",
+        "en": "Review a local connection when its destination has changed."
+      },
+      "sections": [
+        {
+          "id": "change",
+          "title": {
+            "ko": "연결 대상 확인하기",
+            "en": "Check the destination"
+          },
+          "body": {
+            "ko": "연결한 폴더가 바뀌었다면 해당 로컬 연결의 대상을 확인하고 올바른 폴더로 변경하세요. 변경 후 문서의 링크를 다시 열어 목적지를 확인합니다.",
+            "en": "If a connected folder has changed, review the local connection and choose the correct folder. Reopen the document link to confirm the destination."
+          }
+        },
+        {
+          "id": "remove",
+          "title": {
+            "ko": "해제와 원본 파일",
+            "en": "Removal and source files"
+          },
+          "body": {
+            "ko": "로컬 연결을 해제하는 것과 원본 폴더나 문서를 삭제하는 것은 다릅니다. 브라우저의 로컬 연결은 Markdown 원문을 바꾸지 않습니다.",
+            "en": "Removing a local connection is different from deleting a source folder or document. Browser-local connections do not change the Markdown source."
+          }
+        }
+      ]
+    },
+    {
+      "id": "config",
+      "group": 5,
+      "title": {
+        "ko": ".ak.config",
+        "en": ".ak.config"
+      },
+      "lead": {
+        "ko": "문서 보관 폴더와 소유자별 배치 설정을 프로젝트에서 공유합니다.",
+        "en": "Share the document folder and owner-placement settings within your project."
+      },
+      "sections": [
+        {
+          "id": "location",
+          "title": {
+            "ko": "파일을 어디에 놓나요?",
+            "en": "Where does the file go?"
+          },
+          "body": {
+            "ko": "`.ak.config`는 **repo 루트**에 놓고 Git으로 공유할 수 있습니다. 문서 폴더 안에 놓는 파일은 아닙니다. 아래 예시에서 설정은 `reading-journal/.ak.config`, 문서는 `reading-journal/notes/`에 있습니다.\n\n**폴더 구조**\n\n```text\nreading-journal/\n  .ak.config\n  .ak.user\n  notes/\n    01_reading_plan.md\n```\n\n개인 사용자 ID는 [.ak.user](/docs/user-config)에 적고 Git에서 제외하세요.",
+            "en": "Place `.ak.config` at the **repository root** and share it in Git. It does not go inside the document folder. This example uses `reading-journal/.ak.config` for settings and `reading-journal/notes/` for documents.\n\n**Folder layout**\n\n```text\nreading-journal/\n  .ak.config\n  .ak.user\n  notes/\n    01_reading_plan.md\n```\n\nPut personal IDs in [.ak.user](/docs/user-config) and keep that file out of Git."
+          }
+        },
+        {
+          "id": "role",
+          "title": {
+            "ko": "설정 항목과 기본값",
+            "en": "Settings and defaults"
+          },
+          "body": {
+            "ko": "| 섹션 | 키 | 기본값 | 역할 |\n| --- | --- | --- | --- |\n| `[documents]` | `root` | `docs` | 프로젝트 안의 문서 보관 경로 |\n| `[documents]` | `ownerFolders` | `false` | 새 문서를 사용자 폴더에 배치 |\n\n두 항목은 독립적입니다. 폴더 이름만 바꿔도 소유자 구분이 켜지지 않으며, 설정이 없으면 기본 사용을 그대로 이어갑니다.",
+            "en": "| Section | Key | Default | Purpose |\n| --- | --- | --- | --- |\n| `[documents]` | `root` | `docs` | Project-relative document directory |\n| `[documents]` | `ownerFolders` | `false` | Place new documents in owner folders |\n\nThe settings are independent. Changing the folder does not enable owner organization. With no settings, basic use stays the same."
+          }
+        },
+        {
+          "id": "example",
+          "title": {
+            "ko": "문서 폴더 바꾸기",
+            "en": "Choose a document folder"
+          },
+          "body": {
+            "ko": "**.ak.config**\n\n```text\n[documents]\nroot = notes\n```\n\n이 설정은 `<repo>/notes/`를 사용합니다. 생략하면 `docs`이며, `notes/planning`처럼 하위 경로도 가능합니다. 경로는 프로젝트 내부의 상대경로로 적고 Windows에서도 `/`로 구분합니다. 기존 문서는 자동 이동하지 않습니다.\n\n여기에 `ownerFolders = true`를 추가하고 개인 사용자를 `@alice`로 지정하면 새 문서는 `notes/@alice/`에 작성됩니다.",
+            "en": "**.ak.config**\n\n```text\n[documents]\nroot = notes\n```\n\nThis selects `<repo>/notes/`. Omitting it uses `docs`; nested paths such as `notes/planning` are supported. Use a project-relative path with `/` separators on every OS. Existing documents are not moved automatically.\n\nAdd `ownerFolders = true` and set your personal user to `@alice` to place new documents under `notes/@alice/`."
+          }
+        },
+        {
+          "id": "precedence",
+          "title": {
+            "ko": "무엇을 상속받나요?",
+            "en": "What is inherited?"
+          },
+          "body": {
+            "ko": "| 순서 | 설정 파일 | 적용 |\n| --- | --- | --- |\n| 1 | 현재 repo의 `.ak.config` | 이 repo에 적힌 항목 우선 |\n| 2 | 지정 workspace의 `.ak.config` | repo에서 생략한 항목만 상속 |\n| 3 | 기본값 | `root = docs`, `ownerFolders = false` |\n\n예를 들어 workspace에 `root = notes`와 `ownerFolders = true`가 있고 repo에는 `ownerFolders = false`만 있으면, 해당 repo의 `notes/`를 쓰되 사용자 폴더는 만들지 않습니다. 상속한 경로도 workspace 폴더가 아닌 **각 repo 기준**입니다.",
+            "en": "| Order | Configuration file | Behavior |\n| --- | --- | --- |\n| 1 | Current repo `.ak.config` | Values here take priority |\n| 2 | Designated workspace `.ak.config` | Only missing repo keys are inherited |\n| 3 | Defaults | `root = docs`, `ownerFolders = false` |\n\nIf the workspace sets `root = notes` and `ownerFolders = true`, while the repo sets only `ownerFolders = false`, the result is that repo’s `notes/` without owner folders. Inherited paths remain relative to **each repository**."
+          }
+        },
+        {
+          "id": "workspace",
+          "title": {
+            "ko": "workspace와 worktree에서 사용하기",
+            "en": "Use with workspaces and worktrees"
+          },
+          "body": {
+            "ko": "스킬·CLI의 workspace는 repo에 명시적으로 연결한 경로입니다. 상위 폴더를 자동 검색하지 않습니다. [workspace 연결과 worktree 안내](/docs/worktree)에서 설정 방법을 확인하세요.\n\n브라우저는 연결한 repo와 등록한 workspace에서 읽을 수 있는 설정만 사용합니다. repo가 해당 workspace의 바로 아래 폴더이면 설정을 상속합니다. repo를 따로 연결해도 등록된 workspace가 같은 폴더를 포함하는지 확인합니다.\n\nworkspace 밖의 worktree나 다른 PC에서도 같은 폴더를 쓰려면 repo의 `.ak.config`에 `root`를 적어 공유하세요. linked worktree는 현재 worktree의 공유 설정을 쓰고, 개인 사용자만 원래 repo에서 이어받습니다.",
+            "en": "The skill and CLI use a workspace explicitly connected to the repo; they do not search parent folders. See [Workspace & worktree](/docs/worktree) for setup.\n\nThe browser reads settings only from connected repos and registered workspaces. A repo directly below a registered workspace inherits its settings, even when that same repo is connected separately.\n\nFor consistent folders in worktrees outside the workspace or on another PC, commit `root` in the repo’s `.ak.config`. Linked worktrees use their current shared settings and inherit only the personal user from the original repo."
+          }
+        },
+        {
+          "id": "invalid",
+          "title": {
+            "ko": "설정 오류와 폴더 연결 범위",
+            "en": "Invalid settings and connection boundaries"
+          },
+          "body": {
+            "ko": "알 수 없는 키, 중복 키, 잘못된 값은 기본값으로 무시하지 않습니다. 오류가 난 파일과 항목을 확인해 고치세요. `ownerFolders`는 `true` 또는 `false`로 적고, `root`에는 절대경로·`..`·역슬래시를 넣지 않습니다. 기존 파일을 읽거나 수정하려고 개인 사용자 설정을 만들 필요는 없습니다.\n\n브라우저는 허용된 폴더 안만 읽을 수 있습니다. `notes`만 직접 연결하면 상위 repo의 `.ak.config`와 소유자 경계를 읽을 수 없으므로, 설정에 맞춰 보려면 repo를 연결하세요. 일반 Markdown 탐색 자체가 문서 보관 폴더 안으로 제한되는 것은 아닙니다.",
+            "en": "Unknown or duplicate keys and invalid values are errors, not defaults. Check the file and key named in the error. Write `ownerFolders` as `true` or `false`. Do not put absolute paths, `..`, or backslashes in `root`. You do not need a personal user setting merely to read or edit an existing file.\n\nThe browser can read only granted folders. Connecting `notes` itself does not expose the parent repo’s `.ak.config` or ownership boundary; connect the repo to use that configuration. Ordinary Markdown discovery is not restricted to the configured document folder."
+          }
+        }
+      ]
+    },
+    {
+      "id": "user-config",
+      "group": 5,
+      "title": {
+        "ko": ".ak.user",
+        "en": ".ak.user"
+      },
+      "lead": {
+        "ko": "문서 작성에 사용할 개인 사용자 ID를 지정합니다.",
+        "en": "Set the personal user ID used for document creation."
+      },
+      "sections": [
+        {
+          "id": "private",
+          "title": {
+            "ko": "개인 파일로 관리하기",
+            "en": "Keep the file private"
+          },
+          "body": {
+            "ko": "`.ak.user`는 개인 설정이며 Git에서 제외합니다. 사용자 ID는 공개 예시처럼 `@alice` 형태로 지정합니다.\n\n**.ak.user**\n\n```text\n[user]\nid = @alice\n```\n\n**.gitignore**\n\n```text\n.ak.user\n```",
+            "en": "`.ak.user` is a private setting and should be excluded from Git. Use an ID such as `@alice`.\n\n**.ak.user**\n\n```text\n[user]\nid = @alice\n```\n\n**.gitignore**\n\n```text\n.ak.user\n```"
+          }
+        },
+        {
+          "id": "precedence",
+          "title": {
+            "ko": "사용자 설정의 적용 순서",
+            "en": "Personal-user resolution"
+          },
+          "body": {
+            "ko": "개인 사용자 정보가 필요한 경우, 확인된 원래 repo → 지정 workspace → 홈 순서로 찾습니다. linked worktree는 개인 사용자 설정만 확인된 원래 repo에서 이어받습니다.\n\n\n> **공유 정책은 별도입니다**\n> 개인 사용자 ID만 설정해도 소유자 폴더가 켜지는 것은 아닙니다. [.ak.config](/docs/config)의 공유 정책을 함께 확인하세요.\n\n예를 들어 repo에 `@alice`, 홈에 `@writer`가 있으면 해당 repo에서는 `@alice`를 씁니다. ID가 없더라도 무설정 기본 사용은 가능합니다. `ownerFolders = true`로 새 소유자 문서를 만들 때 필요한 사용자를 찾지 못하면 설정을 요청합니다. Git 작성자명이나 OS 계정명을 임의로 대신 사용하지 않습니다.",
+            "en": "When a personal user is needed, resolution follows the verified original repo → designated workspace → home. Linked worktrees inherit only personal user settings from the verified original repo.\n\n\n> **Shared policy is separate**\n> A personal user ID alone does not enable owner folders. Check the shared policy in [.ak.config](/docs/config).\n\nFor example, a repo user of `@alice` takes priority over a home user of `@writer`. Basic use still works without an ID. If `ownerFolders = true` requires an identity for a new document and none is found, the tool asks for it; it does not substitute a Git author or OS account name."
+          }
+        }
+      ]
+    },
+    {
+      "id": "worktree",
+      "group": 5,
+      "title": {
+        "ko": "workspace와 worktree",
+        "en": "Workspace & worktree"
+      },
+      "lead": {
+        "ko": "공유 정책과 개인 설정을 각각의 기준 위치에서 읽습니다.",
+        "en": "Resolve shared policy and personal settings from their respective locations."
+      },
+      "sections": [
+        {
+          "id": "sources",
+          "title": {
+            "ko": "설정 출처 비교하기",
+            "en": "Compare setting sources"
+          },
+          "body": {
+            "ko": "| 구분 | 확인 순서 |\n| --- | --- |\n| 공유 정책 | 현재 repo → 지정 workspace → 항목별 기본값 |\n| 개인 사용자 | 확인된 원래 repo → 지정 workspace → 홈 |\n\n지정 workspace는 해당 작업에 지정한 범위입니다. 작업 중 다른 workspace로 임의로 바꾸지 않습니다.",
+            "en": "| Setting | Resolution order |\n| --- | --- |\n| Shared policy | Current repo → designated workspace → per-key defaults |\n| Personal user | Verified original repo → designated workspace → home |\n\nThe designated workspace is the scope assigned to the work. Do not silently substitute another workspace."
+          }
+        },
+        {
+          "id": "binding",
+          "title": {
+            "ko": "스킬·CLI에 workspace 지정하기",
+            "en": "Set the workspace for the skill and CLI"
+          },
+          "body": {
+            "ko": "repo 안에서 다음 명령으로 공통 Git 관리 폴더를 확인합니다. 두 번째 명령의 경로는 첫 명령 결과 뒤에 `/config`를 붙이고, workspace 경로는 실제 절대경로로 바꾸세요.\n\n**Terminal**\n\n```text\ngit rev-parse --path-format=absolute --git-common-dir\ngit config --file <common-git-directory>/config alphaKanban.workspaceRoot <absolute-workspace-path>\n```\n\n이 연결은 해당 repo의 로컬 설정이며 linked worktree와 공유합니다. 브라우저의 workspace 등록은 별도입니다. 연결하지 않으면 repo 설정과 기본값만 사용합니다.",
+            "en": "Inside the repo, find its common Git directory. In the second command, use that result followed by `/config` and the actual absolute workspace path.\n\n**Terminal**\n\n```text\ngit rev-parse --path-format=absolute --git-common-dir\ngit config --file <common-git-directory>/config alphaKanban.workspaceRoot <absolute-workspace-path>\n```\n\nThis local repo connection is shared by linked worktrees. Browser workspace registration is separate. Without a connection, only repo settings and defaults apply."
+          }
+        },
+        {
+          "id": "linked",
+          "title": {
+            "ko": "linked worktree에서 사용하기",
+            "en": "Using a linked worktree"
+          },
+          "body": {
+            "ko": "linked worktree의 공유 정책은 현재 worktree 기준입니다. 개인 사용자 설정만 확인된 원래 repo에서 이어받습니다.\n\n\n> **서로 다른 두 설정을 확인하세요**\n> 소유자 폴더가 예상과 다르게 적용된다면 현재 worktree의 .ak.config와 확인된 원래 repo의 .ak.user를 각각 확인합니다.\n\nlinked worktree 안에 따로 놓은 `.ak.user`는 원래 repo의 사용자를 덮어쓰지 않습니다. 개인 사용자 파일을 바꿀 때는 확인된 원래 repo의 파일을 사용하세요.",
+            "en": "A linked worktree uses its current shared policy. Only personal user settings are inherited from the verified original repo.\n\n\n> **Check both settings**\n> If owner-folder behavior differs from expectations, check the current worktree’s .ak.config and the verified original repo’s .ak.user separately.\n\nA separate `.ak.user` in the linked worktree does not override the original repo’s user. Change the user file in the verified original repository instead."
+          }
+        }
+      ]
+    },
+    {
+      "id": "updates",
+      "group": 6,
+      "title": {
+        "ko": "앱·스킬 업데이트",
+        "en": "App & skill updates"
+      },
+      "lead": {
+        "ko": "변경 내용을 읽고 앱과 설치된 스킬의 업데이트를 구분하세요.",
+        "en": "Read the changes and distinguish app updates from installed-skill updates."
+      },
+      "sections": [
+        {
+          "id": "app",
+          "title": {
+            "ko": "앱 업데이트와 스킬 업데이트",
+            "en": "App updates and skill updates"
+          },
+          "body": {
+            "ko": "앱은 지금 읽고 있는 웹 화면이고, 스킬은 AI 도구가 읽는 `implementation-ledger` 폴더입니다. 둘은 업데이트 대상이 다릅니다.\n\n앱의 업데이트 알림에서 변경 내용을 읽고 적용하세요. 작성 중인 입력이나 저장 작업이 있다면 먼저 마무리합니다. **앱만 업데이트**하면 설치된 스킬 파일은 그대로입니다. 변경 내역을 열어 읽는 것만으로 적용되지는 않습니다.",
+            "en": "The app is the web interface you are reading. The skill is the `implementation-ledger` folder read by your AI tool. They are separate update targets.\n\nRead the changes in the app’s update notice before applying. Finish unsaved input or active saves first. An **app-only update** leaves installed skill files unchanged. Reading release notes does not apply anything."
+          }
+        },
+        {
+          "id": "connect",
+          "title": {
+            "ko": "설치한 폴더 연결하기",
+            "en": "Connect the installed folder"
+          },
+          "body": {
+            "ko": "1. 먼저 사용하는 AI 도구에 스킬을 설치합니다. 이미 설치했다면 앱 상단 **스킬 업데이트**를 엽니다.\n2. **설치한 폴더를 찾기 어렵나요?**를 펼쳐 위치 확인 요청을 복사하고, 사용하는 AI 도구에 보내세요. 에이전트마다 설치 위치가 다르므로 실제 경로를 확인합니다.\n3. 파일 관리자에서 `implementation-ledger` 폴더 하나를 연결 영역에 놓거나 **폴더 선택**을 누릅니다. 상위 `skills` 폴더나 `SKILL.md` 파일을 고르는 것이 아닙니다.\n4. 드롭 후 **이 폴더를 연결할까요?**에서 이름을 확인하고 **접근 허용하고 연결**을 누릅니다. 폴더 선택을 이용하면 선택 과정에서 읽기·쓰기 접근을 요청합니다. 브라우저가 표시한 권한을 직접 허용하세요.\n\n폴더 선택창에서 경로로 이동하려면 macOS에서는 `Command+Shift+G`, Windows에서는 `Ctrl+L`을 누르고 AI가 알려준 경로를 붙여 넣습니다. 연결만으로 스킬 파일을 바꾸지는 않습니다. 취소하면 기존 연결을 유지합니다.",
+            "en": "1. Install the skill through your AI tool first. If it is already installed, open **Skill updates** in the app header.\n2. Expand **Can’t find the installed folder?**, copy the location request, and send it to the AI tool you use. Installation paths differ between tools; use the actual path it reports.\n3. Drop one `implementation-ledger` folder from your file manager, or choose **Choose folder**. Do not select the parent `skills` directory or the `SKILL.md` file.\n4. After a drop, check the name under **Connect this folder?** and choose **Allow access and connect**. The folder picker requests read/write access during selection. Grant permission in the prompt shown by your browser.\n\nTo enter a path in the picker, use `Command+Shift+G` on macOS or `Ctrl+L` on Windows and paste the path from your AI tool. Connecting does not change skill files. Cancelling preserves the previous connection."
+          }
+        },
+        {
+          "id": "skill",
+          "title": {
+            "ko": "변경 비교와 적용",
+            "en": "Compare changes and apply"
+          },
+          "body": {
+            "ko": "연결 뒤 **현재 설치본**과 **적용할 스킬**을 확인합니다. 현재 앱에서 제공하는 묶음과 설치된 파일 내용 전체를 비교하며, 같은 이름이나 버전처럼 보인다는 이유로 같다고 판단하지 않습니다. 과거 공식 설치본은 출처 커밋으로, 현재 제공본과 정확히 같으면 묶음 ID로 표시합니다. 출처를 모르면 미확인 설치본으로 표시합니다.\n\n추가·변경·삭제 파일을 펼치면 좌우 비교를 볼 수 있습니다. 업데이트 가능한 공식 설치본이면 스킬을 사용하는 AI 작업을 마치고 교체할 파일을 검토했다는 확인 후 **백업 후 스킬 업데이트**를 누릅니다. 완료 메시지가 나올 때까지 창을 열어 두세요.\n\n개인 수정이나 미확인 설치본은 일반 업데이트가 덮어쓰지 않습니다. **재설치 내용 확인**을 선택할 수 있다면 추가·변경·삭제 내용을 검토하고 별도 덮어쓰기 확인을 해야 합니다. 현재 앱이 호환성을 확인하지 못한 경우에는 적용 버튼이 제공되지 않습니다. **AI 도구에 비교 요청하기**의 요청으로 설치본과 변경 내용을 먼저 검토하세요. 비교 화면을 열었다고 적용을 승인한 것은 아닙니다.",
+            "en": "After connecting, compare **Installed skill** with **Skill to apply**. The app compares the complete installed file contents against its own pinned bundle, not just a matching name or version label. Older recognized releases show their source commit. An exact match to the provided bundle shows its bundle ID. Unknown contents remain an unrecognized installation.\n\nExpand added, changed, or removed files to see the side-by-side diff. For an eligible official installation, finish AI tasks using the skill, confirm that you reviewed the replacement files, and choose **Back up and update skill**. Keep the window open until verification finishes.\n\nRegular updates do not overwrite custom or unrecognized installations. When **Review reinstall** is available, review all additions, changes, and deletions and give separate overwrite confirmation. If the current app cannot establish compatibility, it does not offer an apply button. Use **Compare with your AI tool instead** to review the installation and changes first. Opening a comparison is not consent to replace files."
+          }
+        },
+        {
+          "id": "backup",
+          "title": {
+            "ko": "백업과 함께 남는 것",
+            "en": "Backups and what stays unchanged"
+          },
+          "body": {
+            "ko": "교체 전 파일과 적용할 파일 내용은 이 사이트의 브라우저 저장소에 백업됩니다. 연결 해제나 복원 후에도 자동 삭제되지 않습니다. 표시 용량은 백업에 들어 있는 파일 내용의 합계입니다. 브라우저 데이터를 지우기 전에 **백업 내보내기**로 사본을 보관하세요.\n\n앱과 스킬을 함께 업데이트할 때에도 해당 제공본의 변경 내용을 확인하고 승인합니다. 스킬 교체는 프로젝트 문서를 정리하거나 티켓을 실행하지 않습니다. 복원 절차는 [백업과 복원](/docs/backup)에서 확인하세요.",
+            "en": "Before replacement, both the original and intended file contents are backed up in this site’s browser storage. Backups are not automatically deleted after disconnecting or restoring. The displayed size is the sum of the stored file contents. Use **Export backup** before clearing browser data.\n\nA combined app and skill update still requires reviewing and approving that specific bundle. Skill replacement neither cleans up project documents nor starts ticket work. See [Backups and restoration](/docs/backup)."
+          }
+        },
+        {
+          "id": "stable",
+          "title": {
+            "ko": "정식 스킬로 돌아가기",
+            "en": "Return to the stable skill"
+          },
+          "body": {
+            "ko": "카나리에서 스킬을 쓰는 AI 작업과 파일 변경을 마친 뒤 정식 앱을 엽니다. 같은 설치 폴더를 연결하고 정식 앱이 제공하는 스킬과 비교하세요. 재설치가 가능한 경우 덮어쓸 내용을 확인한 뒤 적용합니다. 호환성 검토 안내가 표시되면 먼저 AI와 비교하세요.\n\n정식 앱은 현재 파일의 백업을 따로 만듭니다. 카나리에서 만든 백업은 카나리에서 복원합니다. 스킬을 바꿔도 프로젝트 문서와 개인 설정은 되돌아가지 않습니다.",
+            "en": "Finish AI tasks and skill changes in Canary, then open the stable app. Connect the same installed folder and compare it with the stable app’s supplied skill. When reinstall is available, review the replacements before applying. If compatibility review is required, compare with your AI tool first.\n\nThe stable app makes its own backup of the current files. Restore a Canary backup in Canary. Replacing a skill does not revert project documents or personal settings."
+          },
+          "channels": [
+            "canary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "backup",
+      "group": 6,
+      "title": {
+        "ko": "백업과 복원",
+        "en": "Backup & restore"
+      },
+      "lead": {
+        "ko": "교체할 파일과 보존할 개인 수정을 확인합니다.",
+        "en": "Review the files to replace and the personal changes to preserve."
+      },
+      "sections": [
+        {
+          "id": "before",
+          "title": {
+            "ko": "업데이트 전에 비교하기",
+            "en": "Compare before updating"
+          },
+          "body": {
+            "ko": "스킬 파일을 교체하기 전에 현재 설치본과 제공된 묶음의 차이를 확인하세요. 개인 수정이 있으면 보존 방법을 정하고 백업합니다.",
+            "en": "Before replacing skill files, compare the current installation with the supplied bundle. Decide how to preserve customizations, then back up."
+          }
+        },
+        {
+          "id": "restore",
+          "title": {
+            "ko": "저장된 백업 복원하기",
+            "en": "Restore a saved backup"
+          },
+          "body": {
+            "ko": "앱 상단 **스킬 업데이트**를 열고 **스킬 백업**에서 날짜와 상태를 확인합니다. **백업 내보내기**는 교체 전후 파일 내용을 별도 JSON으로 보관합니다.\n\n되돌릴 항목의 **백업 복원**을 누른 뒤 해당 스킬을 쓰는 AI 작업이 끝났는지 확인하고 **확인 후 복원**을 누릅니다. **취소**를 누르면 저장하지 않습니다. 복원하려는 폴더 접근을 다시 요청할 수 있습니다.\n\n복원은 기록된 상태와 일치하는 파일만 교체합니다. 앱 밖에서 수정한 파일이 있으면 덮어쓰지 않고 멈춥니다. 오류의 대상과 실제 파일을 비교한 뒤 대응하세요. 중단된 교체가 있다면 그 복구를 먼저 해결합니다. 복원 후에도 백업은 남습니다.\n\n> **문서 백업과 구분하세요**\n> 스킬 백업은 설치된 스킬 파일을 위한 것입니다. 프로젝트 Markdown과 작업 파일은 Git이나 별도 백업으로 보존하세요. 내보낸 JSON을 앱에 가져오는 기능은 없으므로, 별도 복구가 필요하면 그 내용과 현재 파일을 AI 도구로 비교하세요.",
+            "en": "Open **Skill updates** in the app header and find the date and state under **Skill backups**. **Export backup** saves the before-and-after file contents as a separate JSON copy.\n\nChoose **Restore backup**, finish AI tasks using that skill, then choose **Confirm restore**. **Cancel** leaves the files unchanged. The browser may ask for access to the restoration folder again.\n\nRestoration replaces only files matching the recorded state. External edits stop restoration instead of being overwritten. Compare the reported file and its actual contents before proceeding. Resolve an interrupted replacement first. Backups remain after restoration.\n\n> **Separate from document backups**\n> Skill backups cover installed skill files. Preserve project Markdown and work files in Git or a separate backup. There is no JSON import in the app; for a separate recovery, ask your AI tool to compare the exported contents with the current files."
+          }
+        }
+      ]
+    },
+    {
+      "id": "folder-access",
+      "group": 6,
+      "title": {
+        "ko": "폴더 접근 복구",
+        "en": "Recover folder access"
+      },
+      "lead": {
+        "ko": "폴더 위치와 권한을 확인해 문서를 다시 엽니다.",
+        "en": "Check folder location and access to reopen documents."
+      },
+      "sections": [
+        {
+          "id": "location",
+          "title": {
+            "ko": "폴더 위치 확인하기",
+            "en": "Check the folder location"
+          },
+          "body": {
+            "ko": "프로젝트 폴더가 이동하거나 이름이 바뀌었는지 먼저 확인하세요. 사용하려는 폴더가 맞는지 확인한 뒤 앱에서 다시 선택합니다.",
+            "en": "First check whether the project folder moved or was renamed. Confirm the intended folder, then select it again in the app."
+          }
+        },
+        {
+          "id": "permission",
+          "title": {
+            "ko": "접근 권한 확인하기",
+            "en": "Check access permission"
+          },
+          "body": {
+            "ko": "워크스페이스·프로젝트·스킬 폴더를 등록할 때 읽기·쓰기 권한을 요청합니다. 등록은 접근 권한을 저장하는 절차이며 파일을 변경하지 않습니다.\n\n프로젝트의 **다시 연결 필요** 상태에서는 **폴더 다시 연결**을 눌러 저장된 폴더의 권한을 다시 허용합니다. 스킬 업데이트의 **접근 필요** 상태에서는 **접근 다시 허용**을 누릅니다. 브라우저 권한창에서 취소하면 문서를 쓰지 않습니다.\n\n접근 권한과 파일 부재는 다른 문제입니다. 폴더가 이동했거나 파일이 삭제되었다면 원래 위치와 Git·별도 백업을 확인하세요. 권한을 허용하는 것만으로 사라진 파일을 만들거나 같은 이름의 다른 파일로 대신 열지는 않습니다.",
+            "en": "Registering a workspace, project, or skill folder requests read/write access. Registration saves access, not a file change.\n\nFor a project marked **Reconnect needed**, choose **Reconnect folder** and allow access to the saved folder again. In Skill updates, choose **Allow access again** when it shows **Access needed**. Cancelling the browser prompt does not write documents.\n\nAccess permission and a missing file are different problems. If the folder moved or a file was deleted, check its original location, Git, or your separate backup. Granting permission neither recreates missing files nor substitutes another file with the same name."
+          }
+        }
+      ]
+    }
+  ]
+}

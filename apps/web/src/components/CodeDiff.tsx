@@ -37,7 +37,9 @@ export function codeDiff(before: string, after: string) {
   return { groups, added, removed };
 }
 
-export function CodeDiff({ before, after, label }: { before: string; after: string; label?: string }) {
+export function CodeDiff({ before, after, label, beforeLabel, afterLabel }: {
+  before: string; after: string; label?: string; beforeLabel?: string; afterLabel?: string;
+}) {
   const { t, i18n } = useTranslation();
   const diff = useMemo(() => codeDiff(before, after), [before, after]);
   const [expanded, setExpanded] = useState<Record<number, number>>({});
@@ -62,7 +64,7 @@ export function CodeDiff({ before, after, label }: { before: string; after: stri
     <div className="ak-diff-summary" aria-label={t("{{added}} lines added, {{removed}} lines removed", { added: number(diff.added), removed: number(diff.removed) })}>
       <span className="text-[var(--ak-success)]">+{number(diff.added)}</span><span className="text-destructive">−{number(diff.removed)}</span>
     </div>
-    <div className="ak-diff-head"><span>{t("Before")}</span><span>{t("After")}</span><span>{t("Changes")}</span></div>
+    <div className="ak-diff-head"><span>{beforeLabel ?? t("Before")}</span><span>{afterLabel ?? t("After")}</span><span>{t("Changes")}</span></div>
     {diff.groups.map((group, index) => {
       if (group.changed) {
         const limit = PAGE + (expanded[index] ?? 0);

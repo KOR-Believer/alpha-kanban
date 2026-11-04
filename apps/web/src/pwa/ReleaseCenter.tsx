@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { BookOpen, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "../i18n";
-import { Button } from "../components/ui/button";
+import { Button, buttonVariants } from "../components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ChannelBadge } from "../components/AppBrand";
 import { pwaClient } from "./client";
@@ -10,10 +10,10 @@ import { appActivity } from "./activity";
 import { SkillUpdates } from "../skills/SkillUpdates";
 import { useAppSkillUpdate } from "../skills/useAppSkillUpdate";
 import { skillError } from "../skills/repository";
-import { skillChannelLabel } from "../skills/distribution";
+import { SkillComparisonSummary } from "../skills/SkillComparisonSummary";
 import { SkillReplacementNotice } from "../skills/SkillReplacementNotice";
 import { SkillChanges } from "../skills/SkillChanges";
-import { markNotified, markReleasesRead, observeRelease, releaseRecords, unreadReleases, wasNotified, type ReleaseInfo, type ReleaseRecord } from "./releases";
+import { availableReleaseHref, markNotified, markReleasesRead, observeRelease, releaseRecords, releaseTitle, unreadReleases, wasNotified, type ReleaseInfo, type ReleaseRecord } from "./releases";
 
 const OPEN_EVENT = "alpha-kanban:release-notes";
 // Vite replaces this define with an object literal; keep its identity across renders.
@@ -143,11 +143,12 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
         <DialogHeader><div className="ak-channel-title"><DialogTitle>{t("Update history")}</DialogTitle><ChannelBadge /></div><DialogDescription>{t(reading?.pending ? "Changes in the update ready to apply" : "Changes in this app and earlier releases")}</DialogDescription></DialogHeader>
         <DialogBody className="space-y-5 pb-4">
           {reading?.records.length ? reading.records.map((record) => <section key={record.id} className="space-y-2">
-            <h3 className="text-sm font-semibold">{record.id}</h3>
+            <h3 className="text-sm font-semibold">{releaseTitle(record, locale)}</h3>
             <time className="text-xs text-muted-foreground" dateTime={record.date}>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(record.date + "T00:00:00Z"))}</time>
             <ul className="list-disc space-y-2 pl-5 text-sm">{record.notes[locale].map((note, index) => <li key={index}>{note}</li>)}</ul>
             {record.skill ? <div className="space-y-2 text-sm"><h4 className="font-medium">{t("Skill updates")}</h4><ul className="list-disc space-y-2 pl-5">{record.skill.notes[locale].map((note, index) => <li key={index}>{note}</li>)}</ul>
-              {record.skill.compatibility === "unknown" ? <p className="text-muted-foreground">{t("Ask Codex to review compatibility before changing your skill or documents.")}</p> : null}</div> : null}
+              {record.skill.compatibility === "unknown" ? <p className="text-muted-foreground">{t("Ask your AI tool to review compatibility before changing your skill or documents.")}</p> : null}</div> : null}
+            {availableReleaseHref(release, reading.release, record) ? <a href={availableReleaseHref(release, reading.release, record)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "outline", size: "sm" })}>{t("Read release details (opens in a new tab)")}</a> : null}
           </section>) : <ul className="list-disc space-y-2 pl-5 text-sm">{reading?.release.notes[locale].map((note, index) => <li key={index}>{note}</li>)}</ul>}
           {changed ? <p role="status" className="text-sm text-muted-foreground">{t("The prepared update changed. Review its notes again before applying.")}</p> : null}
           {reading?.pending && !changed ? <section className="space-y-3 border-t border-border pt-4" aria-busy={!prepared || prepared.state === "checking"}>
@@ -157,7 +158,7 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
             {prepared?.state === "current" ? <p className="text-sm text-muted-foreground">{t("Your registered skill already matches this update. Its files will stay unchanged.")}</p> : null}
             {prepared?.state === "update" && prepared.review ? <>
               <p className="break-all text-sm">{t("Registered folder")}: <strong>{prepared.review.connection.name}</strong></p>
-              <p className="text-xs text-muted-foreground">{t(skillChannelLabel(reading.release.channel))}: <code>{prepared.review.bundle.version}</code></p>
+              <SkillComparisonSummary review={prepared.review} channel={reading.release.channel} />
               <SkillChanges review={prepared.review} />
               <p className="text-sm text-muted-foreground">{t("After the app reloads, your skill will be backed up in this browser and updated. Keep the window open until it finishes. You can restore the backup in Skill updates.")}</p>
             </> : null}
@@ -170,6 +171,10 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
           {!reading?.pending && reading?.records.some((record) => record.skill) ? <Button size="sm" variant="outline" onClick={() => { resumeReading.current = reading; close(); }}>{t("Skill updates")}</Button> : null}
         </DialogBody>
         <DialogFooter className="flex-col items-stretch">
+          <div className="flex flex-wrap gap-2">
+            <a href="/releases" target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>{t("All releases (opens in a new tab)")}</a>
+            <a href="/docs/updates" target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>{t("Read documentation (opens in a new tab)")}</a>
+          </div>
           {reading?.pending && !changed && prepared?.state === "update" ? <SkillReplacementNotice /> : null}
           {!confirming && app.status === "blocked" ? <p role="status" className="text-sm">{t("Save or discard unfinished changes in other app windows too, and wait for saves to finish. Close any unresponsive windows, then try again.")}</p> : null}
           {applyError ? <p role="alert" className="text-sm text-destructive">{t(applyError, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}

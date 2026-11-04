@@ -25,9 +25,17 @@
     "skill": {
       "compatibility": "compatible",
       "notes": {
-        "ko": ["이번 배포는 설치된 스킬을 관리하는 기능을 추가하며, 동봉 스킬의 규칙과 플랜·티켓·인벤토리 문서 형식은 바꾸지 않습니다. 스킬 파일을 업데이트할 때는 앱 업데이트와 별도로 확인을 받습니다."],
-        "en": ["This release adds management of installed skills without changing the bundled skill's rules or plan, ticket, and inventory document formats. Updating skill files requires separate confirmation from app updates."]
+        "ko": [
+          "이번 배포는 설치된 스킬을 관리하는 기능을 추가하며, 동봉 스킬의 규칙과 플랜·티켓·인벤토리 문서 형식은 바꾸지 않습니다. 스킬 파일을 업데이트할 때는 앱 업데이트와 별도로 확인을 받습니다."
+        ],
+        "en": [
+          "This release adds management of installed skills without changing the bundled skill's rules or plan, ticket, and inventory document formats. Updating skill files requires separate confirmation from app updates."
+        ]
       }
+    },
+    "title": {
+      "ko": "앱 업데이트 내역과 설치된 스킬 관리",
+      "en": "Update history and installed skill management"
     }
   },
   {
@@ -50,9 +58,17 @@
     "skill": {
       "compatibility": "compatible",
       "notes": {
-        "ko": ["동봉 스킬의 규칙과 문서 형식은 그대로입니다. 설치본이 이번 묶음과 이미 같으면 스킬 파일을 변경하지 않습니다."],
-        "en": ["The bundled skill's rules and document formats are unchanged. Skill files already matching this bundle are left untouched."]
+        "ko": [
+          "동봉 스킬의 규칙과 문서 형식은 그대로입니다. 설치본이 이번 묶음과 이미 같으면 스킬 파일을 변경하지 않습니다."
+        ],
+        "en": [
+          "The bundled skill's rules and document formats are unchanged. Skill files already matching this bundle are left untouched."
+        ]
       }
+    },
+    "title": {
+      "ko": "앱과 등록된 스킬을 함께 업데이트",
+      "en": "Update the app and registered skill together"
     }
   },
   {
@@ -73,9 +89,17 @@
     "skill": {
       "compatibility": "unknown",
       "notes": {
-        "ko": ["문서 컨텍스트 도구와 선택적 Owner 템플릿이 추가되었습니다. 기존 설치본은 Codex로 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."],
-        "en": ["Adds the document context tool and optional Owner templates. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."]
+        "ko": [
+          "문서 컨텍스트 도구와 선택적 Owner 템플릿이 추가되었습니다. 기존 설치본은 Codex로 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."
+        ],
+        "en": [
+          "Adds the document context tool and optional Owner templates. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."
+        ]
       }
+    },
+    "title": {
+      "ko": "소유자별 문서 작성",
+      "en": "Create documents by owner"
     }
   },
   {
@@ -103,6 +127,10 @@
           "The bundled skill is unchanged from the previous release. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."
         ]
       }
+    },
+    "title": {
+      "ko": "소유자로 문서와 티켓 모아 보기",
+      "en": "Filter documents and tickets by owner"
     }
   },
   {
@@ -112,20 +140,28 @@
     "notify": true,
     "notes": {
       "ko": [
-        "지원하지 않거나 손상된 형식의 문서는 티켓 수정 대신 Markdown 원문으로 확인할 수 있습니다. 전체 티켓에서도 해당 문서를 찾아 열 수 있습니다.",
+        "문서 형식과 소유자·문서 ID를 확인하는 도구를 추가했습니다. 기존 문서는 형식이나 메타데이터를 바꾸지 않아도 보드와 Markdown으로 계속 읽을 수 있습니다.",
         "기존 문서는 형식을 바꾸지 않고 계속 사용할 수 있습니다. 같은 프로젝트에 중복된 문서 ID가 있으면 저장 전에 알려줍니다."
       ],
       "en": [
-        "Documents with unsupported or damaged formats open as Markdown instead of editable tickets. You can find and open these documents from All tickets.",
+        "Adds tools to check document formats, owners and document IDs. Existing documents remain readable in the board and Markdown views without changing their format or metadata.",
         "Keep using existing documents without converting their format. Duplicate document IDs in the same project are reported before saving."
       ]
     },
     "skill": {
       "compatibility": "unknown",
       "notes": {
-        "ko": ["스킬 개정과 문서 형식 지원 범위를 구분하고, 형식 검증과 소유자·UUID 분석 도구를 제공합니다. 기존 문서를 자동 변환하지 않습니다. 설치본을 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."],
-        "en": ["Separates the skill revision from supported document formats and adds format checks and owner/UUID analysis helpers. Existing documents are not converted automatically. Compare the installation, preserve personal changes, and back up before updating."]
+        "ko": [
+          "스킬 개정과 문서 형식 지원 범위를 구분하고, 형식 검증과 소유자·UUID 분석 도구를 제공합니다. 기존 문서를 자동 변환하지 않습니다. 설치본을 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."
+        ],
+        "en": [
+          "Separates the skill revision from supported document formats and adds format checks and owner/UUID analysis helpers. Existing documents are not converted automatically. Compare the installation, preserve personal changes, and back up before updating."
+        ]
       }
+    },
+    "title": {
+      "ko": "문서 형식과 메타데이터 확인",
+      "en": "Document format and metadata checks"
     }
   }
 ]

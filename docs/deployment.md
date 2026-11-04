@@ -6,7 +6,7 @@ This guide is for the project owner or an authorized maintainer operating the ho
 
 - Public origin: `https://kanban.giveit2.me`.
 - `/`: project workspace and PWA entry point.
-- `/intro`: introduction and skill installation guide.
+- `/about`: introduction and skill installation guide.
 - `/sw.js`: stable service worker URL. Manifest `id`, `start_url`, and `scope` remain `/`.
 
 Keep this origin and PWA identity stable across releases. Folder handles and settings are stored per origin and browser profile; changing the address does not migrate them. The local Markdown files remain on disk.
@@ -50,7 +50,7 @@ The two origins retain the existing local storage, IndexedDB and cache keys inde
 
 Use the Node.js and pnpm versions documented in [Contributing](../CONTRIBUTING.md), and install dependencies from the lockfile before building. Publish the complete output, including the generated service worker, repair files, skill archive, fonts, and `_headers`.
 
-Serve the app over HTTPS with SPA routing for `/`, `/intro`, `/all`, and `/w/:id`. Cloudflare Pages provides [default SPA handling](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering) when the output root has no `404.html`. Verify actual responses after deployment: worker scripts, release metadata, repair assets, and missing static assets must not be mistaken for the app's HTML shell.
+Serve the app over HTTPS with SPA routing for `/`, `/about`, legacy `/intro`, `/all`, `/w/:id`, `/docs/*`, and `/releases/*`. The app redirects `/intro` to `/about` while preserving query strings and section hashes. Cloudflare Pages provides [default SPA handling](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering) when the output root has no `404.html`. Verify actual responses after deployment: worker scripts, release metadata, repair assets, and missing static assets must not be mistaken for the app's HTML shell.
 
 ## Release checks
 

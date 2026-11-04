@@ -49,7 +49,7 @@ export function useAppSkillUpdate(release: ReleaseInfo, target: ReleaseInfo | un
       const review = await repository.inspect(connection, await pwaClient.preparedSkillBundle(target));
       if (review.state === "current") return { ...base, state: "current", review } as PreparedSkillUpdate;
       if (review.state === "custom") throw new Error("Personal or unrecognized files will not be overwritten. Ask your agent to compare them.");
-      if (review.state === "review") throw new Error("Ask Codex to review compatibility before changing your skill or documents.");
+      if (review.state === "review") throw new Error("Ask your AI tool to review compatibility before changing your skill or documents.");
       if (await connection.handle.queryPermission({ mode: "readwrite" }) !== "granted") throw new Error("Allow access to the registered skill folder to continue.");
       return { ...base, state: "update", review } as PreparedSkillUpdate;
     })().then((value) => { if (!cancelled) setPrepared(value); }).catch((reason) => {

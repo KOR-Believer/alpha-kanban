@@ -16,6 +16,6 @@ try {
     const result = await installSkill({ target, distribution });
     console.log("Installed implementation-ledger skill to " + result.target + "\nVerified bundle: " + result.version + "\nReceipt: " + result.receipt);
     console.log("Restart Codex so the skill list refreshes. File bytes were verified; Codex recognition has not been checked.");
-    console.log("Optional: register this exact folder to compare and confirm updates:\nhttps://kanban.giveit2.me/intro#updates");
+    console.log("Optional: register this exact folder to compare and confirm updates:\nhttps://kanban.giveit2.me/about#updates");
   }
 } catch (error) { console.error(error.message); process.exitCode = 1; }

@@ -14,7 +14,7 @@ describe("intro interaction", () => {
   let container: HTMLDivElement;
   beforeEach(async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    window.history.replaceState({}, "", "/intro");
+    window.history.replaceState({}, "", "/about");
     await setLanguage("ko");
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   });
@@ -86,7 +86,7 @@ describe("intro interaction", () => {
   });
 
   it("keeps install/update hashes and request types distinct, with translated copy feedback", async () => {
-    window.history.replaceState({}, "", "/intro#updates");
+    window.history.replaceState({}, "", "/about#updates");
     await render(<SkillInstallPanel variant="intro" />);
     await clickText("업데이트 요청문 확인·복사");
     const dialog = document.querySelector('[role="dialog"]')!;
@@ -112,7 +112,7 @@ describe("intro interaction", () => {
     expect(dialog.querySelector('[role="status"]')?.textContent).toContain("Update request copied");
     await clickText("Close", dialog);
     await act(async () => {
-      window.history.replaceState({}, "", "/intro#skill"); window.dispatchEvent(new HashChangeEvent("hashchange"));
+      window.history.replaceState({}, "", "/about#skill"); window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
     await clickText("Review and copy install request");
     expect(document.querySelector("textarea")?.value).toBe(skillAgentRequest((key, values) => key.replace(/{{(\w+)}}/g, (_, name) => values?.[name] ?? ""), "install"));
@@ -138,16 +138,16 @@ describe("intro interaction", () => {
     const dialog = document.querySelector('[role="dialog"]')!;
     const download = dialog.querySelector<HTMLAnchorElement>("a[download]")!;
     expect(download.getAttribute("href")).toBe(`/downloads/implementation-ledger-${__APP_RELEASE__.skillBundle}.zip`);
-    expect(download.textContent).toBe("Codex 스킬 다운로드");
+    expect(download.textContent).toBe("스킬 ZIP 다운로드");
     await act(async () => setLanguage("en"));
     expect(dialog.querySelector("a[download]")).toBe(download);
     expect(download.getAttribute("href")).toBe(`/downloads/implementation-ledger-${__APP_RELEASE__.skillBundle}.zip`);
-    expect(download.textContent).toBe("Download Codex skill");
+    expect(download.textContent).toBe("Download skill ZIP");
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("keeps mode buttons and anchor destinations aligned", async () => {
-    window.history.replaceState({}, "", "/intro#skill");
+    window.history.replaceState({}, "", "/about#skill");
     await render(<SkillInstallPanel variant="intro" />);
     await clickText("기존 스킬 업데이트");
     expect(window.location.hash).toBe("#updates");

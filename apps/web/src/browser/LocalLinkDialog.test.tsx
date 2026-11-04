@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,17 +36,22 @@ describe("local link connection UI", () => {
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-  async function render(href = "file:///old/repo/report.md#section", initial = "/w/source?doc=d_source") {
+  async function render(href = "file:///old/repo/report.md#section", initial = "/w/source?doc=d_source", dirty = false) {
     history = createMemoryHistory({ initialEntries: [initial] });
     function Page() {
       const linked = useLinkedNavigation();
+      useEffect(() => {
+        const owner = {};
+        linked.protectDraft(owner, dirty, false);
+        return () => linked.protectDraft(owner, false, false);
+      }, [linked.protectDraft, dirty]);
       return <><div hidden={Boolean(linked.id)}><Source context={context} href={href} /></div>{linked.id ? <LinkedDocumentPage /> : null}</>;
     }
     const route = createRootRoute({ component: () => <LinkedNavigationProvider><Page /></LinkedNavigationProvider> });
     const router = createRouter({ routeTree: route.addChildren([createRoute({ getParentRoute: () => route, path: "/w/source" })]), history });
     await act(async () => { await router.load(); root.render(<RouterProvider router={router} />); });
   }
-  function button(key: string) { const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.textContent?.trim() === t(key)); expect(found, key).toBeDefined(); return found!; }
+  function button(key: string) { const found = [...document.querySelectorAll<HTMLElement>("button, a")].find((element) => element.textContent?.trim() === t(key)); expect(found, key).toBeDefined(); return found!; }
   async function click(key: string) { await act(async () => button(key).click()); }
   async function follow(text = "Read document") { await act(async () => [...document.querySelectorAll<HTMLAnchorElement>("a")].find((element) => element.textContent === text)!.click()); }
   async function ready(check: () => boolean) {
@@ -96,6 +101,21 @@ describe("local link connection UI", () => {
     await ready(() => Boolean(document.querySelector('[data-linked-document]')));
     expect(history.location.href).not.toBe(address);
   });
+  it("allows search-only URL changes while retaining the hidden draft exit guard", async () => {
+    const at = await service.attempt(context, "/old/repo/report.md");
+    const opened = await service.save(context, at.location, "/old/repo", { handle: target.handle(), label: "target" });
+    const address = "/w/source?doc=d_source&linked=" + opened.context.documentId;
+    await render(undefined, address, true);
+    await ready(() => Boolean(document.querySelector('[data-linked-document]')));
+    await act(async () => history.replace(address + "&q=needle&match=old"));
+    expect(history.location.href).toContain("q=needle");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => history.push("/w/source?doc=d_other&q=needle"));
+    await ready(() => Boolean(document.querySelector('[role="dialog"]')));
+    expect(history.location.href).toContain("doc=d_source");
+    await click("Cancel");
+    expect(history.location.href).toContain("linked=");
+  });
   it("shows an unknown saved ID and storage failure without navigating to another document", async () => {
     const address = "/w/source?doc=d_source&linked=ld_missing";
     await render(undefined, address); await ready(() => Boolean(document.querySelector('[role="alert"]')));
@@ -109,7 +129,7 @@ describe("local link connection UI", () => {
   it("makes manual selection available during discovery and cancels without saving or discarding the old connection", async () => {
     vi.mocked(browserLinkMappings.scan).mockImplementation(() => new Promise(() => undefined));
     await render(); await follow(); await ready(() => Boolean(document.querySelector('[role="dialog"]')));
-    expect(button("Choose folder directly").disabled).toBe(false);
+    expect(button("Choose folder directly").hasAttribute("disabled")).toBe(false);
     picker.mockRejectedValueOnce(new DOMException("cancel", "AbortError"));
     await click("Choose folder directly"); expect(document.querySelector('[role="alert"]')).toBeNull();
     await click("Choose folder directly");

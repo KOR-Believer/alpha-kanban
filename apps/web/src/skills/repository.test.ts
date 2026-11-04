@@ -335,6 +335,22 @@ describe("explicit skill reinstall", () => {
 });
 
 describe("skill payload validation", () => {
+  it.each(["about", "intro", "untrusted"])("validates the %s update URL together with its pinned skill header", async page => {
+    const updateUrl = page === "untrusted" ? "https://other.test/about#updates" : `https://kanban.giveit2.me/${page}#updates`;
+    const ledger = { skillRevision: "2", readFormats: ["unversioned", "1"], writeFormats: ["unversioned", "1"], newDocumentFormat: "unversioned", formatField: "Ledger-Format", updateUrl };
+    const metadata = { version: ledger.skillRevision, "read-formats": ledger.readFormats.join(","), "write-formats": ledger.writeFormats.join(","), "new-document-format": ledger.newDocumentFormat, "update-url": updateUrl };
+    const content = `---\nname: implementation-ledger\nmetadata:\n${Object.entries(metadata).map(([key, value]) => `  ${key}: "${value}"`).join("\n")}\n---\n`;
+    const target = await files({ "SKILL.md": content });
+    const bundle: SkillBundle = { schema: 1, name: "implementation-ledger", version: (await skillHash("implementation-ledger/SKILL.md" + content)).slice(0, 12), files: target, known: [], ledger,
+      source: { repository: "https://github.com/KOR-Believer/alpha-kanban", commit: "a".repeat(40), kind: "commit" } };
+    if (page === "untrusted") await expect(validateBundle(bundle, bundle.version)).rejects.toThrow("Invalid skill provenance");
+    else {
+      expect(await validateBundle(bundle, bundle.version)).toBe(bundle);
+      bundle.ledger!.updateUrl = `https://kanban.giveit2.me/${page === "about" ? "intro" : "about"}#updates`;
+      await expect(validateBundle(bundle, bundle.version)).rejects.toThrow("Invalid skill provenance");
+    }
+  });
+
   it("pins the complete payload including the trusted old-file registry", async () => {
     const { bundle, digest } = await fixture();
     expect(await validateBundle(bundle, bundle.version, digest)).toBe(bundle);

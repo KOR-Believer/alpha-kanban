@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter, type RouterHistory } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, redirect, type RouterHistory } from "@tanstack/react-router";
 import { AppRoot } from "./AppRoot";
 
 export function createAppRouter(history?: RouterHistory) {
@@ -7,7 +7,18 @@ export function createAppRouter(history?: RouterHistory) {
     createRoute({ getParentRoute: () => rootRoute, path: "/" }),
     createRoute({ getParentRoute: () => rootRoute, path: "/w/$workspaceId" }),
     createRoute({ getParentRoute: () => rootRoute, path: "/all" }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/intro" }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/about" }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/intro",
+      beforeLoad: ({ location }) => {
+        throw redirect({ href: "/about" + location.href.slice(location.pathname.length), replace: true });
+      },
+    }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/docs" }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/docs/$" }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/releases" }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/releases/$" }),
   ];
   return createRouter({ routeTree: rootRoute.addChildren(routes), history });
 }

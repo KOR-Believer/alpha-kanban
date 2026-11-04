@@ -24,6 +24,8 @@ import { buildDocumentSets } from "@alpha-kanban/shared/documents";
 import { skillRepository } from "../skills/repository";
 import { OWNER_FILTERS_KEY } from "../ownerFilters";
 import { ALL_BOARD_OWNER_FILTERS_KEY } from "../allBoardOwnerFilters";
+import { createDocumentSearchEntry } from "../documentSearch";
+import { attachTicketSearch } from "../ticketSearch";
 
 const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>(), router: { history: { block: () => () => {} } } }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -70,6 +72,8 @@ describe("browser mode UI boundaries", () => {
     vi.spyOn(browserRepository, "tickets").mockResolvedValue(response);
     vi.spyOn(browserRepository, "markdown").mockResolvedValue({ file: response.file, markdown: "# Original document\n\nOriginal body", outline: [{ level: 1, line: 1, title: "Original document" }] });
     vi.spyOn(browserRepository, "subscribe").mockReturnValue(() => undefined);
+    vi.spyOn(browserRepository, "prepareDocumentSearch").mockResolvedValue(undefined);
+    vi.spyOn(browserRepository.documentSearch, "get").mockImplementation(async (file) => createDocumentSearchEntry(file, "# Unrelated fixture contents"));
     vi.spyOn(browserRepository, "boardOrder").mockResolvedValue({ keys: [] });
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0, networkMode: "always", refetchOnWindowFocus: false } } });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -172,7 +176,7 @@ describe("browser mode UI boundaries", () => {
   it.each([false, true])("keeps direct intro entry independent of auto-open=%s, folder queries and agents", async (autoOpen) => {
     localStorage.setItem("alpha-kanban.autoOpenLastWorkspace", String(autoOpen));
     vi.mocked(browserRepository.workspaces).mockResolvedValue({ workspaces: [workspace], lastWorkspaceId: workspace.id });
-    routing.location = { pathname: "/intro", searchStr: "", hash: "", href: "/intro" };
+    routing.location = { pathname: "/about", searchStr: "", hash: "", href: "/about" };
     const oldTitle = document.title;
     await render(<AppRoot />);
     expect(container.querySelector("h1")?.textContent).toBe("Alpha Kanban");
@@ -261,6 +265,8 @@ describe("browser mode UI boundaries", () => {
     await render(<BrowserStartPage autoOpen={false} onAutoOpen={vi.fn()} onSelect={vi.fn()}
       workspaces={state === "direct" ? [workspace] : []} error={null} isLoading={state === "loading"} />);
     expect(Boolean(container.querySelector("[data-tour-offer]"))).toBe(state === "empty");
+    expect(container.querySelector(".ak-site-header [data-tour-offer]")).toBeNull();
+    if (state === "empty") expect(container.querySelector(".ak-start-content [data-tour-offer]")).not.toBeNull();
     expect(document.querySelector(".driver-popover")).toBeNull();
     expect(window.showDirectoryPicker).not.toHaveBeenCalled();
   });
@@ -459,16 +465,22 @@ describe("browser mode UI boundaries", () => {
       : surface === "project" ? <App /> : <AllProjectsBoard />);
     expect(container.querySelectorAll("header [data-tour-help], .ak-start-navigation [data-tour-help]")).toHaveLength(1);
     expect(container.querySelector("[data-tour-replay]")).toBeNull();
-    expect(container.querySelector('header a[href="/intro"], .ak-start-navigation a[href="/intro"]')).toBeNull();
+    expect(Boolean(container.querySelector('header a[href="/about"], .ak-start-navigation a[href="/about"]'))).toBe(surface === "start");
     const help = container.querySelector<HTMLButtonElement>("[data-tour-help]")!;
     expect(help.textContent).toBe("도움말");
     await act(async () => { help.focus(); help.click(); });
     const menu = await waitForElement('[role="dialog"]', document);
-    expect([...menu.querySelectorAll("button, a")].map((item) => item.textContent)).toEqual(["화면 둘러보기", "AI와 계획·티켓 만들기", "Alpha Kanban 소개"]);
-    expect(menu.querySelector("a")?.getAttribute("href")).toBe("/intro");
+    expect([...menu.querySelectorAll("button, a")].map((item) => item.textContent)).toEqual(["화면 둘러보기", "AI와 계획·티켓 만들기", ...(surface === "start" ? [] : ["공식 문서 읽기 (새 탭)", "Alpha Kanban 소개"])]);
+    const publicGuide = menu.querySelector<HTMLAnchorElement>('a[href="/docs"]');
+    if (surface === "start") expect(publicGuide).toBeNull();
+    else {
+      expect(publicGuide?.target).toBe("_blank");
+      expect(publicGuide?.rel).toContain("noreferrer");
+      expect(menu.querySelector('a[href="/about"]')).not.toBeNull();
+    }
     await act(async () => { await setLanguage("en"); });
     expect(help.textContent).toBe("Help");
-    expect([...menu.querySelectorAll("button, a")].map((item) => item.textContent)).toEqual(["Take a quick tour", "Create plans and tickets with AI", "About Alpha Kanban"]);
+    expect([...menu.querySelectorAll("button, a")].map((item) => item.textContent)).toEqual(["Take a quick tour", "Create plans and tickets with AI", ...(surface === "start" ? [] : ["Read documentation (opens in a new tab)", "About Alpha Kanban"])]);
     await act(async () => { await setLanguage("ko"); });
     const read = [...menu.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "AI와 계획·티켓 만들기")!;
     await act(async () => read.click());
@@ -520,11 +532,11 @@ describe("browser mode UI boundaries", () => {
     await act(async () => { select.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
     const name = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent === "이름순")!;
     await act(async () => { name.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
-    expect([...other.querySelectorAll<HTMLButtonElement>("button[title]")].map((item) => item.title)).toEqual(["root/alpha", "root/missing", "root/zulu"]);
-    expect(other.querySelector<HTMLButtonElement>('[title="root/missing"]')!.disabled).toBe(true);
+    expect([...other.querySelectorAll<HTMLButtonElement>("a[title]")].map((item) => item.title)).toEqual(["root/alpha", "root/missing", "root/zulu"]);
+    expect(other.querySelector('[title="root/missing"]')!.getAttribute("aria-disabled")).toBe("true");
     expect(other.textContent).toContain("Reconnect fixture");
     await typeInto(input, "alpha");
-    expect(other.querySelectorAll("button[title]")).toHaveLength(1);
+    expect(other.querySelectorAll("a[title]")).toHaveLength(1);
     await act(async () => container.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click());
     await act(async () => { await setLanguage("en"); });
     expect(input.value).toBe("alpha");
@@ -558,7 +570,98 @@ describe("browser mode UI boundaries", () => {
     }
   });
 
-  it("filters cached sidebar groups in a popover without navigation, rereading files or losing a ticket draft", async () => {
+  it("opens unified results as a filtered board or a shared Markdown reader and preserves the query on back/refresh", async () => {
+    const tickets = ledger.replace("목표:\n- goal", "설계 세부 메모:\n- 청록색 등대\n\n목표:\n- goal");
+    const plan = { ...response.file, id: "d_plan", type: "plan" as const, filename: "01_test_plan.md", relativePath: "docs/01_test_plan.md", workspaceRelativePath: "docs/01_test_plan.md" };
+    const inventory = { ...plan, id: "d_inventory", type: "inventory" as const, filename: "01_test_inventory.md", relativePath: "docs/01_test_inventory.md", workspaceRelativePath: "docs/01_test_inventory.md" };
+    const sources = new Map([[response.file.id, tickets], [plan.id, "# 한국어 계획\n\n청록색 등대를 확인한다."], [inventory.id, "# 조사\n\n청록색 등대의 위치"], [plainFile.id, "# 일반 문서\n\n청록색 등대 기록"]]);
+    const files = [response.file, plan, inventory, plainFile];
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets(files) });
+    vi.mocked(browserRepository.documentSearch.get).mockImplementation(async (file) => createDocumentSearchEntry(file, sources.get(file.id)!, file.type === "tickets" ? parseTicketDocument(tickets) : undefined));
+    vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: attachTicketSearch(parseTicketDocument(tickets), tickets) });
+    vi.mocked(browserRepository.markdown).mockImplementation(async (_workspace, id) => ({ file: files.find((file) => file.id === id)!, markdown: sources.get(id)!, outline: [] }));
+    selectDocument();
+    await render(<App />);
+    const search = container.querySelector<HTMLInputElement>('[role="searchbox"]')!;
+    await typeInto(search, "청록색 등대");
+    await waitForElement('nav[data-project-search="청록색 등대"][aria-busy="false"]');
+    const nav = container.querySelector('nav[aria-label="문서"]')!;
+    expect(nav.children).toHaveLength(2);
+    expect(nav.textContent).toContain("인벤토리");
+    expect(nav.textContent).toContain("1개 일치");
+    // Typing leaves the selected board untouched until a result is chosen.
+    expect(container.querySelectorAll(".ak-project-board article")).toHaveLength(2);
+    const resultLink = nav.querySelector<HTMLAnchorElement>('a[title="docs/01_test_tickets.md"]')!;
+    const target = new URL(resultLink.href);
+    expect(target.searchParams.get("doc")).toBe(response.file.id);
+    expect(target.searchParams.get("q")).toBe("청록색 등대");
+    expect(target.searchParams.get("match")).toBe("청록색 등대");
+    const currentHref = routing.location.href;
+    await act(async () => resultLink.dispatchEvent(new MouseEvent("click", { button: 1, bubbles: true, cancelable: true })));
+    expect(routing.location.href).toBe(currentHref);
+    await act(async () => resultLink.click());
+    expect(container.querySelectorAll(".ak-project-board article")).toHaveLength(1);
+    const matchedRoute = routing.location.href;
+    expect(new URL(matchedRoute, "http://localhost").searchParams.get("match")).toBe("청록색 등대");
+    expect(container.querySelector('[aria-label="티켓 검색"]')).toBeNull();
+    const whole = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "이 문서 전체 보기")!;
+    await act(async () => whole.click());
+    expect(container.querySelectorAll(".ak-project-board article")).toHaveLength(2);
+    expect(search.value).toBe("청록색 등대");
+    await act(async () => routing.navigate({ href: matchedRoute }));
+    expect(container.querySelectorAll(".ak-project-board article")).toHaveLength(1);
+    await act(async () => nav.querySelector<HTMLButtonElement>('a[title="docs/01_test_plan.md"]')!.click());
+    expect((await waitForElement(".ak-markdown")).textContent).toContain("청록색 등대");
+    expect(container.querySelector("[data-search-hit]")).not.toBeNull();
+    // A remount uses URL state rather than a previous component's state.
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><App key="refreshed" /></QueryClientProvider>));
+    expect(container.querySelector<HTMLInputElement>('[role="searchbox"]')?.value).toBe("청록색 등대");
+    expect(routing.location.searchStr).toContain("doc=d_plan");
+    expect(browserRepository.prepareDocumentSearch).toHaveBeenCalled();
+  });
+
+  it("opens a name-only match unfiltered, and a ticket document's common prose in Markdown", async () => {
+    const source = ledger.replace("Keep this unknown section.", "공통 안내 전용 문장");
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    vi.mocked(browserRepository.documentSearch.get).mockResolvedValue(createDocumentSearchEntry(response.file, source, parseTicketDocument(source)));
+    vi.mocked(browserRepository.tickets).mockResolvedValue({ ...response, document: attachTicketSearch(parseTicketDocument(source), source) });
+    vi.mocked(browserRepository.markdown).mockResolvedValue({ file: response.file, markdown: source, outline: [] });
+    selectDocument(); await render(<App />);
+    const search = container.querySelector<HTMLInputElement>('[role="searchbox"]')!;
+    await typeInto(search, response.file.filename);
+    await waitForElement('nav[aria-busy="false"]');
+    await act(async () => container.querySelector<HTMLButtonElement>('nav a')!.click());
+    expect(container.querySelectorAll(".ak-project-board article")).toHaveLength(2);
+    expect(routing.location.searchStr).not.toContain("match=");
+    await typeInto(search, "공통 안내 전용 문장");
+    await waitForElement('nav[data-project-search="공통 안내 전용 문장"][aria-busy="false"]');
+    await act(async () => container.querySelector<HTMLButtonElement>('nav a')!.click());
+    expect(routing.location.searchStr).toContain("view=markdown");
+    expect((await waitForElement("[data-search-hit]")).textContent).toContain("공통 안내 전용 문장");
+    await typeInto(search, "");
+    expect(routing.location.searchStr).not.toContain("match=");
+    expect(routing.location.searchStr).toContain("doc=d_test");
+  });
+
+  it("distinguishes an incomplete search from no matches and can retry without navigating away", async () => {
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
+    vi.mocked(browserRepository.documentSearch.get).mockResolvedValue(undefined);
+    vi.mocked(browserRepository.prepareDocumentSearch).mockRejectedValue(new Error("Denied"));
+    selectDocument(); await render(<App />);
+    await typeInto(container.querySelector<HTMLInputElement>('[role="searchbox"]')!, "absent");
+    await waitForElement('nav[data-project-search="absent"][aria-busy="false"]');
+    expect(container.textContent).toContain("일부 결과만 표시됩니다");
+    expect(container.textContent).not.toContain("조건에 맞는 문서가 없습니다");
+    vi.mocked(browserRepository.documentSearch.get).mockResolvedValue(createDocumentSearchEntry(response.file, "readable now"));
+    vi.mocked(browserRepository.prepareDocumentSearch).mockResolvedValue(undefined);
+    const retry = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "검색 다시 준비")!;
+    await act(async () => retry.click());
+    await waitForElement('nav[data-project-search="absent"][aria-busy="false"]');
+    expect(container.textContent).toContain("조건에 맞는 문서가 없습니다");
+    expect(routing.location.searchStr).toContain("doc=d_test");
+  });
+
+  it("filters cached sidebar groups in a popover without changing selection, rereading files or losing a ticket draft", async () => {
     selectDocument("TEST-01");
     const plain = { ...response.file, id: "d_notes", type: "markdown" as const, slug: "notes", filename: "notes.md", relativePath: "docs/notes.md", workspaceRelativePath: "docs/notes.md" };
     const sets = buildDocumentSets([response.file, plain]).map((set) => set.slug === response.file.slug ? { ...set, ticketProgress: { doneTickets: 1, totalTickets: 1 } } : set);
@@ -579,6 +682,7 @@ describe("browser mode UI boundaries", () => {
     expect(nav.textContent).not.toContain("notes");
     expect(nav.textContent).toContain("test");
     await typeInto(search, "no-match");
+    await waitForElement('nav[data-project-search="no-match"][aria-busy="false"]');
     expect(nav.children).toHaveLength(0);
     expect(container.textContent).toContain("조건에 맞는 문서가 없습니다");
     await typeInto(search, "");
@@ -588,11 +692,11 @@ describe("browser mode UI boundaries", () => {
     expect(JSON.parse(localStorage.getItem("alpha-kanban.documentFilters")!)).toEqual({ hidePlainMarkdown: true, hideCompletedSets: true });
     await act(async () => { await setLanguage("en"); });
     expect(filters.textContent).toContain("Hide completed sets (100%)");
-    expect(search.placeholder).toBe("Search documents");
+    expect(search.placeholder).toBe("Search documents and tickets");
     expect(draft.isConnected).toBe(true);
     expect(draft.value).toBe("Keep my instructions");
     expect(container.querySelector(".ak-project-board")?.textContent).toContain("TEST-01");
-    expect(routing.navigate).not.toHaveBeenCalled();
+    expect(routing.navigate.mock.calls.every(([options]) => options.replace === true && options.href.includes("doc=d_test") && options.href.includes("ticket=TEST-01"))).toBe(true);
     expect(browserRepository.documentSets).toHaveBeenCalledTimes(reads.sets);
     expect(browserRepository.files).toHaveBeenCalledTimes(reads.files);
     expect(browserRepository.tickets).toHaveBeenCalledTimes(reads.tickets);
@@ -639,10 +743,10 @@ describe("browser mode UI boundaries", () => {
     await render(<App />);
     expect(container.querySelector("h1")?.textContent).toBe("프로젝트");
     const section = container.querySelector<HTMLElement>('section[aria-label="최근 프로젝트"]')!;
-    const recent = [...section.querySelectorAll<HTMLButtonElement>("button[title]")].filter((button) => !button.closest("details"));
+    const recent = [...section.querySelectorAll<HTMLButtonElement>("a[title]")].filter((button) => !button.closest("details"));
     expect(recent.map((button) => button.title)).toEqual(["root/project-6", "root/project-5", "root/project-4", "root/project-3", "root/project-2"]);
     const other = container.querySelector('section[aria-label="다른 프로젝트"]')!;
-    expect(other.querySelectorAll("button[title]")).toHaveLength(2);
+    expect(other.querySelectorAll("a[title]")).toHaveLength(2);
     expect(container.querySelectorAll(".ak-project-list-scroll")).toHaveLength(2);
     expect(container.querySelectorAll("aside")).toHaveLength(0);
     expect(container.textContent).toContain("설치 요청문 확인·복사");
@@ -836,7 +940,7 @@ describe("browser mode UI boundaries", () => {
     expect(browserRepository.tickets).not.toHaveBeenCalled();
     expect(routing.navigate).not.toHaveBeenCalled();
 
-    const button = container.querySelector<HTMLButtonElement>('nav[aria-label="문서"] button[title="docs/notes.md"]')!;
+    const button = container.querySelector<HTMLButtonElement>('nav[aria-label="문서"] a[title="docs/notes.md"]')!;
     expect(button).not.toBeNull();
     await act(async () => button.click());
     const reader = await waitForElement(".ak-markdown");
@@ -888,7 +992,7 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector(".ak-project-guide")).not.toBeNull();
     expect(container.querySelector(".ak-project-board")).toBeNull();
     expect(container.querySelector(".ak-markdown")).toBeNull();
-    expect(container.querySelector('nav[aria-label="문서"] button[title="docs/notes.md"]')).not.toBeNull();
+    expect(container.querySelector('nav[aria-label="문서"] a[title="docs/notes.md"]')).not.toBeNull();
     expect(browserRepository.markdown).not.toHaveBeenCalledWith(other.id, file.id);
   });
 
@@ -904,7 +1008,7 @@ describe("browser mode UI boundaries", () => {
     const append = vi.spyOn(browserRepository, "append");
     await render(<App />);
     expect(container.querySelector(".ak-markdown")?.textContent).toContain("Plain Markdown body");
-    const guideButton = [...container.querySelectorAll<HTMLButtonElement>("aside button")].find((button) => button.textContent === "사용 안내")!;
+    const guideButton = [...container.querySelectorAll<HTMLButtonElement>("aside a")].find((button) => button.textContent === "사용 안내")!;
     expect(guideButton).toBeDefined();
     expect(guideButton.closest(".ak-scroll-area")).toBeNull();
     expect(guideButton.getAttribute("aria-current")).toBeNull();
@@ -930,7 +1034,7 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector("#workspace-title")?.textContent).toBe("Usage guide");
     expect(search.value).toBe("not-present");
     await typeInto(search, "");
-    await act(async () => container.querySelector<HTMLButtonElement>('nav[aria-label="Documents"] button[title="docs/notes.md"]')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('nav[aria-label="Documents"] a[title="docs/notes.md"]')!.click());
     expect((await waitForElement(".ak-markdown")).textContent).toContain("Plain Markdown body");
     expect(container.querySelector(".ak-project-guide")).toBeNull();
     expect(guideButton.getAttribute("aria-current")).toBeNull();

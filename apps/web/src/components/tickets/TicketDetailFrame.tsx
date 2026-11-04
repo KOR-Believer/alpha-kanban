@@ -1,12 +1,14 @@
 import { useTranslation } from "@/i18n";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronDown, ExternalLink, FileText, Maximize2, Minimize2, MoveDiagonal2, PanelRight, RectangleHorizontal, RotateCcw, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, ChevronDown, ExternalLink, FileText, Maximize2, Minimize2, PanelRight, RectangleHorizontal, RotateCcw, X } from "lucide-react";
+import { NavigationLink } from "../NavigationLink";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ChannelBadge } from "@/components/AppBrand";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { TicketDetailMode } from "../../appRoute";
-import type { ResizeEdge, TicketDetailPresentation } from "./useTicketDetailPresentation";
+import type { TicketDetailPresentation } from "./useTicketDetailPresentation";
+import { PanelResizeHandles } from "../ui/PanelResizeHandles";
 import { usePwaDraft } from "../../pwa/usePwaDraft";
 import { TourButton, useScreenTour } from "../../onboarding/ScreenTour";
 import { useLinkedNavigation } from "../../browser/linkedNavigation";
@@ -17,11 +19,12 @@ const views = [
   { mode: "full", label: "Full view", icon: Maximize2 },
 ] as const;
 
-export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWorkspace, hasDraft, isBusy, children }: {
+export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWorkspace, workspaceHref, hasDraft, isBusy, children }: {
   ticketId: string;
   presentation: TicketDetailPresentation;
   onClose: () => void;
   onOpenInWorkspace?: () => void;
+  workspaceHref?: string;
   hasDraft: boolean;
   isBusy: boolean;
   children: ReactNode;
@@ -92,10 +95,10 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
             </span>
             <div className="ak-drawer-actions">
               <TourButton tour={tour} labelKey="Tour ticket details" />
-              {onOpenInWorkspace ? (
-                <Button size="sm" variant="outline" disabled={isBusy} onClick={() => requestExit("workspace")}>
+              {onOpenInWorkspace && workspaceHref ? (
+                <NavigationLink href={workspaceHref} className={buttonVariants({ size: "sm", variant: "outline" })} disabled={isBusy} onNavigate={() => requestExit("workspace")}>
                   <ExternalLink aria-hidden="true" />{t("Go to project")}
-                </Button>
+                </NavigationLink>
               ) : null}
               <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
                 <PopoverTrigger asChild>
@@ -131,11 +134,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
             <div className="ak-ticket-detail-document">{children}</div>
           </div>
         </div>
-        {presentation.mode !== "full" ? (
-          (presentation.mode === "side" ? ["left"] as const : ["left", "right", "top", "bottom", "bottom-right"] as const).map((edge) => (
-            <ResizeHandle key={edge} edge={edge} presentation={presentation} />
-          ))
-        ) : null}
+        <PanelResizeHandles presentation={presentation} label={(edge) => t("Resize ticket {{edge}}", { edge: t(edge) })} />
         <Dialog open={pendingExit !== null} onOpenChange={(open) => { if (!open) setPendingExit(null); }}>
           <DialogContent className="w-[min(440px,calc(100vw-2rem))]">
             <DialogHeader className="pr-12">
@@ -154,37 +153,5 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
         </Dialog>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function ResizeHandle({ edge, presentation }: { edge: ResizeEdge; presentation: TicketDetailPresentation }) {
-  const { t } = useTranslation();
-  const vertical = edge === "top" || edge === "bottom";
-  const corner = edge === "bottom-right";
-  return (
-    <button type="button" className="ak-focus-ring ak-ticket-resize-handle" data-edge={edge}
-      role={corner ? undefined : "separator"} aria-label={t("Resize ticket {{edge}}", { edge: t(edge) })}
-      aria-orientation={corner ? undefined : vertical ? "horizontal" : "vertical"}
-      aria-valuemin={corner ? undefined : vertical ? presentation.limits.minHeight : presentation.limits.minWidth}
-      aria-valuemax={corner ? undefined : vertical ? presentation.limits.maxHeight : presentation.limits.maxWidth}
-      aria-valuenow={corner ? undefined : vertical ? presentation.height : presentation.width}
-      title={t("Drag to resize. Double-click to reset.")}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        event.currentTarget.focus({ preventScroll: true });
-        presentation.startResize(edge, event.clientX, event.clientY, event.pointerId);
-      }}
-      onDoubleClick={presentation.resetSize}
-      onKeyDown={(event) => {
-        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "Enter", " "].includes(event.key)) return;
-        event.preventDefault();
-        const step = event.shiftKey ? 40 : 10;
-        if (event.key === "Home" || event.key === "End") presentation.resizeToLimit(edge, event.key === "Home" ? "min" : "max");
-        else if (event.key === "Enter" || event.key === " ") presentation.resetSize();
-        else presentation.nudgeResize(edge, event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0, event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0);
-      }}>
-      {corner ? <MoveDiagonal2 className="size-3" aria-hidden="true" /> : <span aria-hidden="true" />}
-    </button>
   );
 }

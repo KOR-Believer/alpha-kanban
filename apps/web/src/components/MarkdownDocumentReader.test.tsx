@@ -33,3 +33,26 @@ it("uses the identical reading view, GFM rendering and heading navigation for or
     expect(scroll.mock.instances.at(-1)).toBe(linked.querySelector('h2'));
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it("locates source matches while preserving GFM text, blocks and document properties", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+  const markdown = "# Search\nOwner: @alice\n\nİ header\n\n| Name | Value |\n| --- | --- |\n| target | 청록색 등대 |\n\n```txt\nCODE_NEEDLE\n```\n";
+  const doc = { markdown, outline: parseMarkdownOutline(markdown) };
+  const file: ReaderFile = { id: "d_match", workspaceId: "bw_source", type: "markdown", filename: "notes.md", slug: "notes", workspaceRelativePath: "notes.md", relativePath: "notes.md" };
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    const render = async (searchQuery = "") => { await act(async () => root.render(<MarkdownDocumentReader document={doc} file={file} searchQuery={searchQuery} />)); };
+    await render();
+    const original = host.querySelector(".ak-markdown")!.innerHTML;
+    await render("청록색 등대");
+    expect(host.querySelector("tr[data-search-hit]")?.textContent).toContain("청록색 등대");
+    expect(scroll.mock.instances.at(-1)).toBe(host.querySelector("[data-search-hit]"));
+    await render("code_needle");
+    expect(host.querySelector("[data-search-hit]")?.textContent).toBe("CODE_NEEDLE\n");
+    await render();
+    expect(host.querySelector(".ak-markdown")!.innerHTML).toBe(original);
+    expect(doc.markdown).toBe(markdown);
+    expect(host.querySelector("dl")?.textContent).toContain("@alice");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

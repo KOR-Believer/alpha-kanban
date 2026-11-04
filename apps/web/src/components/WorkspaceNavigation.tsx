@@ -1,3 +1,5 @@
+import { NavigationLink } from "./NavigationLink";
+import { buildAppRoute } from "../appRoute";
 import type { ReactNode } from "react";
 import type { WorkspaceSummary } from "@alpha-kanban/shared";
 import { ChevronDown, Loader2 } from "lucide-react";
@@ -57,23 +59,22 @@ export function WorkspaceButton({ isSelected, onSelect, workspace, disabled }: {
   workspace: WorkspaceSummary;
   disabled?: boolean;
 }) {
-  return <button
+  return <NavigationLink href={buildAppRoute({ workspaceId: workspace.id })}
     className={[
       "ak-row ak-focus-ring grid min-h-14 min-w-0 gap-1 px-3 py-2 text-left transition-colors",
       isSelected ? "ak-row-active" : "",
       workspace.isAvailable ? "" : "opacity-70",
     ].join(" ")}
     disabled={disabled || !workspace.isAvailable}
-    onClick={() => void onSelect()}
+    onNavigate={() => void onSelect()}
     title={workspace.root}
-    type="button"
   >
     <span className="flex min-w-0 items-center justify-between gap-2">
       <span className="truncate text-sm font-medium text-[var(--ak-ink)]">{workspace.label}</span>
       <WorkspaceDocumentCount workspace={workspace} />
     </span>
     <span className="ak-body-muted break-all text-xs leading-4">{workspace.root}</span>
-  </button>;
+  </NavigationLink>;
 }
 
 export function StartPageHeader({ autoOpen, onAutoOpen, children }: {

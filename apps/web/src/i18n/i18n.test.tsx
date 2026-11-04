@@ -14,6 +14,26 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("UI language", () => {
+  it("names the shared site menu in both languages", async () => {
+    expect(["Kanban", "About", "Site navigation"].map(key => t(key))).toEqual(["칸반", "소개", "사이트 메뉴"]);
+    await setLanguage("en");
+    expect(["Kanban", "About", "Site navigation"].map(key => t(key))).toEqual(["Kanban", "About", "Site navigation"]);
+  });
+  it("explains folder drop, separate consent and access recovery in both languages", async () => {
+    const keys = ["Connected", "Drop your installed folder here", "Allow access and connect", "Connecting does not change files. Each update needs a separate confirmation.", "Your connection is saved. Allow access again to check the installed files.", "Drop one implementation-ledger folder at a time. Your existing connection is unchanged."];
+    for (const key of keys) expect(t(key)).not.toBe(key);
+    expect(t("Connected")).toBe("연결됨");
+    await setLanguage("en");
+    for (const key of keys) expect(t(key)).toBe(key);
+  });
+  it("explains unified search results and retry states in both languages", async () => {
+    expect(t("Search documents and tickets")).toBe("문서·티켓 검색");
+    expect(t("{{count}} documents could not be searched. Results are incomplete.", { count: 2 })).toContain("문서 2개");
+    expect(t("View whole document")).toBe("이 문서 전체 보기");
+    await setLanguage("en");
+    expect(t("Results for “{{query}}”", { query: "needle" })).toBe("Results for “needle”");
+    expect(t("Retry search preparation")).toBe("Retry search preparation");
+  });
   it("explains a failed maintenance analysis with a retry action in both languages", async () => {
     const message = "Document analysis could not finish. Try the preview again.";
     expect(errorSummary(new Error(message))).toBe("문서 분석을 완료하지 못했습니다. 미리보기를 다시 시도해 주세요.");
@@ -103,6 +123,18 @@ describe("UI language", () => {
     await setLanguage("en");
     expect(t("Review reinstall")).toBe("Review reinstall");
     expect(t("This installation differs from known official bundles. Regular updates will not replace it.")).toContain("Regular updates will not replace it");
+  });
+
+  it("localizes skill dialog sizing controls and file change labels", async () => {
+    expect(t("Expand dialog")).toBe("전체 화면으로 보기");
+    expect(t("Restore dialog size")).toBe("이전 크기로 복원");
+    expect(t("Resize dialog {{edge}}", { edge: t("bottom-right") })).toBe("창 오른쪽 아래 크기 조절");
+    expect([t("Add file"), t("Change file"), t("Remove file")]).toEqual(["추가", "변경", "삭제"]);
+    expect([t("Installed skill"), t("Skill to apply"), t("Bundle ID"), t("Source commit")]).toEqual(["현재 설치본", "적용할 스킬", "번들 ID", "원본 커밋"]);
+    expect(t("Unrecognized installation")).toBe("배포본 식별 안 됨");
+    await setLanguage("en");
+    expect(t("Expand dialog")).toBe("Expand dialog");
+    expect(t("Resize dialog {{edge}}", { edge: t("bottom-right") })).toBe("Resize dialog bottom-right");
   });
 
   it("localizes the launcher and intro while preserving URLs in installation requests", async () => {

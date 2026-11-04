@@ -214,7 +214,7 @@ try {
     await installCdp.send("PWA.changeAppUserSettings", { manifestId: origin + "/", displayMode: "standalone" });
     await installCdp.send("PWA.getOsAppState", { manifestId: origin + "/" });
     const opened = context.waitForEvent("page");
-    await installCdp.send("PWA.launch", { manifestId: origin + "/", url: origin + "/intro" });
+    await installCdp.send("PWA.launch", { manifestId: origin + "/", url: origin + "/about" });
     installWindow = await opened; await installWindow.waitForLoadState();
     assert.equal(await installWindow.evaluate(() => matchMedia("(display-mode: standalone)").matches), true, "Chrome launched a browser tab, not a standalone app window");
     record("Chrome PWA installation and standalone route launch via CDP (not native prompt)");
@@ -271,7 +271,7 @@ try {
   await page.getByRole("button", { name: "라이트 모드로 전환" }).click();
   await assertThemeColor(page, "--ak-surface", false);
   record("Project and All tickets routes use their own header surface without changing the saved theme");
-  await page.goto(origin + "/intro#updates");
+  await page.goto(origin + "/about#updates");
   const skillRelease = JSON.parse(await readFile(resolve(root, "scripts/skill-releases.json"), "utf8"))[0];
   const oldFiles = [];
   for (const file of skillRelease.files) oldFiles.push({ path: file.path, content: (await exec("git", ["show", `${skillRelease.source}:skills/implementation-ledger/${file.path}`], { cwd: root })).stdout });
@@ -347,7 +347,7 @@ try {
   await openMenu(page); await page.getByRole("button", { name: "업데이트 확인", exact: true }).click();
   await until(async () => Boolean(await workerInfo(page, "waiting")), "waiting update");
   const downloadPage = await context.newPage();
-  await downloadPage.goto(origin + "/intro");
+  await downloadPage.goto(origin + "/about");
   assert.equal((await workerInfo(downloadPage)).buildId, versions.a.release.buildId);
   await context.setOffline(true); networkUnavailable = true;
   await downloadSkill(downloadPage, versions.a, "waiting-update-offline");
@@ -537,7 +537,7 @@ try {
   if (installed) {
     const cdp = await context.newCDPSession(page);
     const opened = context.waitForEvent("page");
-    await cdp.send("PWA.launch", { manifestId: origin + "/", url: origin + "/intro" });
+    await cdp.send("PWA.launch", { manifestId: origin + "/", url: origin + "/about" });
     const window = await opened;
     await window.getByRole("heading", { name: "Alpha Kanban", exact: true }).waitFor();
     assert.equal(await window.evaluate(() => matchMedia("(display-mode: standalone)").matches), true);
@@ -546,7 +546,7 @@ try {
     await window.close(); await cdp.detach();
     record("Installed app cold-launches offline after the Chrome process was closed");
   }
-  await page.goto(origin + "/intro"); await page.getByRole("heading", { name: "Alpha Kanban", exact: true }).waitFor();
+  await page.goto(origin + "/about"); await page.getByRole("heading", { name: "Alpha Kanban", exact: true }).waitFor();
   await downloadSkill(page, versions.b, "updated-cold-offline");
   record("Updated app downloads the complete skill ZIP offline with matching archive and per-file hashes");
   await openMenu(page); await page.getByRole("button", { name: "업데이트 내역", exact: true }).click();

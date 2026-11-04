@@ -33,7 +33,8 @@ import type { TicketWriteGuard } from "./components/tickets/TicketStatusFields";
 import { useTicketDetailPresentation } from "./components/tickets/useTicketDetailPresentation";
 import { TicketProgressBar } from "./components/tickets/TicketProgressBar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { NavigationLink } from "./components/NavigationLink";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -219,7 +220,7 @@ export function AllProjectsBoard() {
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--ak-canvas-soft)] text-foreground">
       <header className="ak-all-board-toolbar ak-channel-header">
-        <Button onClick={() => navigate({ to: "/" })} size="sm" variant="ghost"><ArrowLeft aria-hidden="true" />{t("Workspaces")}</Button>
+        <NavigationLink href="/" onNavigate={() => void navigate({ to: "/" })} className={buttonVariants({ size: "sm", variant: "ghost" })}><ArrowLeft aria-hidden="true" />{t("Workspaces")}</NavigationLink>
         <h1 className="ak-title text-sm">{t("All tickets")}</h1><ChannelBadge />
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{t("{{count}} tickets", { count: visible.length })}</span>
@@ -381,7 +382,7 @@ function BoardCard({ ticket, searchQuery, disabled, detailMode, dropPosition, on
         {ticket.priority ? <Badge variant={priorityVariant(ticket.priority)}>{ticket.priority}</Badge> : null}
       </div>
       <a data-ticket-open href={projectHref} draggable={false} className="ak-focus-ring mt-2 block rounded-sm"
-        onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(); } }}>
+        onClick={(event) => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(); } }}>
         <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>{ticket.id}</span><DocumentOwnerBadge file={ticket.file} />
         </span>

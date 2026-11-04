@@ -1,20 +1,26 @@
-import { useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { useEffect, type CSSProperties } from "react";
+import { Link, useLocation } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
-import { AppBrand } from "./components/AppBrand";
+import { SiteHeader, useSiteHeaderSize } from "./components/SiteHeader";
+import { SiteFooter } from "./components/SiteFooter";
 import { appBrand, brandedTitle } from "./brand";
 import { useTranslation } from "./i18n";
-import { LanguageSelector } from "./components/LanguageSelector";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { PwaMenu } from "./pwa/PwaMenu";
 import { SkillInstallPanel } from "./components/SkillGuide";
 import { buttonVariants } from "./components/ui/button";
 import { IntroDemoBoard } from "./components/IntroDemoBoard";
 import { IntroConversation } from "./components/intro/IntroConversation";
-import { GitHubIcon } from "./components/GitHubIcon";
 
 export function IntroPage() {
   const { t } = useTranslation();
+  const { header, headerHeight } = useSiteHeaderSize();
+  const hash = useLocation({ select: location => location.hash });
+  useEffect(() => {
+    if (!hash) return;
+    // A client-side legacy redirect happens after the browser's initial anchor scroll.
+    // Wait for the measured header offset before bringing the section into view.
+    const frame = requestAnimationFrame(() => document.getElementById(hash)?.scrollIntoView({ block: "start" }));
+    return () => cancelAnimationFrame(frame);
+  }, [hash]);
   const description = t("Plan with AI and see the whole picture in Kanban. The implementation-ledger skill records scope, decisions, implementation, and verification in Markdown. Follow progress and read the reasoning behind each task.");
   useEffect(() => {
     const oldTitle = document.title;
@@ -38,23 +44,8 @@ export function IntroPage() {
     <Link to="/" className={buttonVariants({ size: "lg" })}>{t("Start Kanban")}<ArrowUpRight aria-hidden="true" /></Link>
     <a href="#skill" className={buttonVariants({ variant: "outline", size: "lg" })}>{t("Install the skill")}<ArrowUpRight aria-hidden="true" /></a>
   </div>;
-  return <div className="ak-intro-page" id="top">
-    <header className="ak-intro-header"><div className="ak-intro-wrap">
-      <Link to="/" className="ak-public-brand ak-focus-ring"><AppBrand /></Link>
-      <nav aria-label={t("Introduction navigation")}>
-        <a href="#kanban" className="ak-intro-section-link ak-focus-ring">{t("Board")}</a>
-        <a href="#workflow" className="ak-intro-section-link ak-focus-ring">{t("Workflow")}</a>
-        <a href="#skill" className="ak-intro-section-link ak-focus-ring">{t("Skill guide")}</a>
-        <a
-          href="https://github.com/KOR-Believer/alpha-kanban"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={t("Open Alpha Kanban on GitHub (opens in a new tab)")}
-          className={buttonVariants({ variant: "ghost", size: "sm" })}
-        ><GitHubIcon />{t("GitHub")}</a>
-        <LanguageSelector /><ThemeToggle /><PwaMenu />
-      </nav>
-    </div></header>
+  return <div className="ak-intro-page" id="top" style={{ "--ak-site-header-offset": `${headerHeight}px` } as CSSProperties}>
+    <SiteHeader ref={header} page="/about" className="ak-intro-header" />
     <main>
       <section className="ak-intro-wrap ak-intro-hero">
         <h1>{t("Alpha Kanban")}</h1><p className="ak-intro-lead">{description}</p>{actions}<IntroDemoBoard />
@@ -72,6 +63,6 @@ export function IntroPage() {
       </div></section>
       <section className="ak-intro-wrap ak-intro-closing"><h2>{t("From an agreed plan to results you can review.")}</h2>{actions}</section>
     </main>
-    <footer className="ak-intro-footer"><div className="ak-intro-wrap"><span>{"Alpha Kanban / implementation-ledger"}</span><div><a href="#updates" className="ak-focus-ring">{t("Update an existing skill")}</a><a href="https://github.com/KOR-Believer/alpha-kanban" target="_blank" rel="noreferrer" className="ak-focus-ring">{t("GitHub source")}</a></div></div></footer>
+    <div className="ak-intro-wrap"><SiteFooter /></div>
   </div>;
 }

@@ -35,7 +35,7 @@ Unsupported/invalid format checks apply to the shared writer and the standalone 
 
 ## Updating the skill
 
-Check [the official update guide](https://kanban.giveit2.me/intro#updates) only on an installation/update request or a compatibility problem. Offline or failed lookup means **latest version unverified**, not current or compatible. Compare exact files and provenance, back up and preserve personal changes, and obtain the user's applicable overwrite approval. Do not replace global installations as part of project implementation.
+Check [the official update guide](https://kanban.giveit2.me/about#updates) only on an installation/update request or a compatibility problem. Offline or failed lookup means **latest version unverified**, not current or compatible. Compare exact files and provenance, back up and preserve personal changes, and obtain the user's applicable overwrite approval. Do not replace global installations as part of project implementation.
 
 Instruction-only fixes increment the skill revision without changing document format. Compatible optional fields can stay within format 1 if older readers preserve their semantics and bytes. Required new structure or changed state/field meaning needs a new document format and explicit read/write support tests; do not silently widen the supported range. Unknown versions remain unsupported even if a numeric comparison says they are older.
 

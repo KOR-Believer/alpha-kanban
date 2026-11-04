@@ -6,7 +6,7 @@ metadata:
   read-formats: "unversioned,1"
   write-formats: "unversioned,1"
   new-document-format: "unversioned"
-  update-url: "https://kanban.giveit2.me/intro#updates"
+  update-url: "https://kanban.giveit2.me/about#updates"
 ---
 
 # Implementation Ledger

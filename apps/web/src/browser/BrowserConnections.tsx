@@ -5,6 +5,7 @@ import { Download, Folder, FolderOpen, FolderPlus, Link2, Plus, RefreshCw, Trash
 import { useTranslation } from "../i18n";
 import { ProjectLists, StartPageNavigation } from "../components/ProjectLauncher";
 import { SkillGuide } from "../components/SkillGuide";
+import { SiteFooter } from "../components/SiteFooter";
 import { StartPageHeader, WorkspaceButton, WorkspaceSwitcherTrigger } from "../components/WorkspaceNavigation";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -14,7 +15,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { browserRepository, browserSupported, type Connection, type RecoveryRecord } from "./repository";
 import { appActivity } from "../pwa/activity";
 import { usePwaDraft } from "../pwa/usePwaDraft";
-import { TourHelp, useScreenTour } from "../onboarding/ScreenTour";
+import { TourButton, TourHelp, useScreenTour } from "../onboarding/ScreenTour";
 import { LinkConnectionManager } from "./LocalLinkDialog";
 
 const connectionKey = ["browser-connections"];
@@ -73,13 +74,14 @@ export function BrowserStartPage({ autoOpen, onAutoOpen, onSelect, workspaces, e
     eligible: connections.isSuccess && !isLoading && !error && !actions.error && connections.data.length === 0 && workspaces.length === 0,
   });
   return <div className="ak-start-page" data-release-start={!isLoading && !error && connections.isSuccess ? "ready" : undefined}>
-    <StartPageNavigation help={<TourHelp tour={tour} />} />
+    <StartPageNavigation help={<TourHelp tour={tour} publicLinks={false} invitation={false} />} />
     <div className="ak-start-content">
     <StartPageHeader autoOpen={autoOpen} onAutoOpen={onAutoOpen}>
       <Button data-tour="open-project" size="sm" disabled={!supported || actions.busy} onClick={() => void actions.pick("project", onSelect)}><FolderOpen />{t("Open project")}</Button>
       <Button data-tour="register-workspace" size="sm" disabled={!supported || actions.busy} variant="outline" onClick={() => void actions.pick("root")}><FolderPlus />{t("Register workspace")}</Button>
       <BrowserNewProject />
     </StartPageHeader>
+    {tour.offered ? <TourButton tour={tour} /> : null}
     {!supported ? <ErrorText message="Open this page in desktop Chrome over HTTPS or localhost." /> : null}
     <ErrorText message={actions.error || (error instanceof Error ? error.message : "")} />
     <ProjectLists workspaces={workspaces} onSelect={onSelect} isLoading={isLoading} reconnect={(workspace) => <BrowserReconnect workspaceId={workspace.id} />} />
@@ -93,6 +95,7 @@ export function BrowserStartPage({ autoOpen, onAutoOpen, onSelect, workspaces, e
       <p>{t("Register a workspace to discover its immediate subfolders as projects. You can also open one project directly.")}</p>
     </section>
     <BrowserSkillGuide />
+    <SiteFooter />
     </div>
   </div>;
 }

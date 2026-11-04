@@ -6,7 +6,7 @@ const blockedOrigins = "__OTHER_CHANNEL_ORIGINS__";
 const matchesChannel = (value) => value === channel || (value === undefined && channel === "stable");
 const prefix = "alpha-kanban-app-v1-";
 const appClients = async () => (await self.clients.matchAll({ type: "window", includeUncontrolled: true }))
-  .filter((client) => new URL(client.url).origin === self.location.origin && /^\/(?:index\.html|intro|all|w\/[^/]+)?\/?$/.test(new URL(client.url).pathname));
+  .filter((client) => new URL(client.url).origin === self.location.origin && /^\/(?:index\.html|about|intro|all|w\/[^/]+|(?:docs|releases)(?:\/[^/]+)*)?\/?$/.test(new URL(client.url).pathname));
 
 self.addEventListener("install", (event) => event.waitUntil(Promise.resolve().then(() => {
   if (blockedOrigins.includes(self.location.origin)) throw new Error("Release channel and hosted origin do not match.");
@@ -47,7 +47,7 @@ if (mode === "retired") {
   self.addEventListener("fetch", (event) => {
     const url = new URL(event.request.url);
     if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
-    const navigation = event.request.mode === "navigate" && /^\/(?:index\.html|intro|all|w\/[^/]+)?\/?$/.test(url.pathname);
+    const navigation = event.request.mode === "navigate" && /^\/(?:index\.html|about|intro|all|w\/[^/]+|(?:docs|releases)(?:\/[^/]+)*)?\/?$/.test(url.pathname);
     if (!navigation && !/^\/(assets|icons|fonts|downloads)\//.test(url.pathname)) return;
     if (navigation) event.waitUntil(finishRetirement());
     event.respondWith((async () => {

@@ -3,9 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { WorkspaceSummary } from "@alpha-kanban/shared";
 import { FolderKanban, LayoutGrid, Search } from "lucide-react";
 import { useTranslation } from "../i18n";
-import { LanguageSelector } from "./LanguageSelector";
-import { ThemeToggle } from "./ThemeToggle";
-import { AppBrand } from "./AppBrand";
+import { SiteHeader } from "./SiteHeader";
 import { PwaMenu } from "../pwa/PwaMenu";
 import { SkillUpdatesButton } from "../skills/SkillUpdates";
 import { WorkspaceButton } from "./WorkspaceNavigation";
@@ -16,18 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 export function StartPageNavigation({ help }: { help?: ReactNode }) {
   const { t } = useTranslation();
-  return <div className="ak-start-navigation">
-    <Link to="/" className="ak-public-brand ak-focus-ring"><AppBrand /></Link>
-    <nav aria-label={t("Start navigation")}>
-      <LanguageSelector />
-      <ThemeToggle />
-      <span aria-hidden="true" className="ak-toolbar-divider" />
+  return <SiteHeader page="/" className="ak-start-navigation" tools={<>
       <PwaMenu />
       <SkillUpdatesButton placement="toolbar" />
       {help}
       <Link to="/all" title={t("All tickets")} className={buttonVariants({ size: "sm", variant: "ghost" })}><LayoutGrid aria-hidden="true" /><span className="ak-toolbar-label">{t("All tickets")}</span></Link>
-    </nav>
-  </div>;
+    </>} />;
 }
 
 export function partitionProjects(workspaces: WorkspaceSummary[]) {
