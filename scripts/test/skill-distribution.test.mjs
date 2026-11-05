@@ -83,6 +83,8 @@ test("copied standalone CLI passes actual worktree/handoff/rebase/recovery scena
   // The subprocess gets only the self-contained executable, no source checkout imports or skill sibling files.
   const executable = path.join(f.target, "document-cli.mjs");
   await cp(path.join(repoRoot, "skills/implementation-ledger/scripts/document-cli.mjs"), executable);
-  const output = execFileSync(process.execPath, ["--test", path.join(repoRoot, "scripts/test/document-cli.test.mjs")], { cwd: f.base, env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT")), AK_TEST_CLI_PATH: executable }, encoding: "utf8", timeout: 120000, maxBuffer: 2 * 1024 * 1024 });
+  // This runs the complete worktree/recovery suite, including real Git operations.
+  // Keep a bounded timeout without cutting off healthy runs on a busy build host.
+  const output = execFileSync(process.execPath, ["--test", path.join(repoRoot, "scripts/test/document-cli.test.mjs")], { cwd: f.base, env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT")), AK_TEST_CLI_PATH: executable }, encoding: "utf8", timeout: 600000, maxBuffer: 2 * 1024 * 1024 });
   assert.match(output, /fail 0/);
 });

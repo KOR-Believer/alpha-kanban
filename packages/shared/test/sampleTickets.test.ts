@@ -10,8 +10,14 @@ const samplePath = new URL("examples/sample_tickets.md", root);
 const sample = readFileSync(samplePath, "utf8");
 
 describe("README sample tickets", () => {
-  it.each(["README.md", "README.en.md"])("%s links to the validated sample", (readme) => {
-    expect(readFileSync(new URL(readme, root), "utf8")).toContain("](examples/sample_tickets.md)");
+  it.each([["README.md", "ko"], ["README.en.md", "en"]])("%s links to a valid public example", (readme, locale) => {
+    const path = `examples/reading-journal/${locale}/01_reading_tickets.md`;
+    expect(readFileSync(new URL(readme, root), "utf8")).toContain(`](${path})`);
+    const output = execFileSync(process.execPath, [
+      fileURLToPath(new URL("skills/implementation-ledger/scripts/check-ledger.mjs", root)),
+      fileURLToPath(new URL(path, root)),
+    ], { encoding: "utf8" });
+    expect(output).toContain("OK");
   });
 
   it("uses the current ledger structure without duplicate status tables or embedded templates", () => {

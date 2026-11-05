@@ -25,7 +25,7 @@ describe("public release content boundary", () => {
     const running = fixture("stable", 1);
     expect(publicReleases(running).map(row => row.sequence)).toEqual([2, 1]);
     expect(publicReleases(running, "canary")).toEqual([]);
-    expect(publicReleases(fixture("canary")).map(row => row.id)).toEqual(["2026-11-03-canary-baseline"]);
+    expect(publicReleases(fixture("canary", 0)).map(row => row.id)).toEqual(["2026-11-03-canary-baseline"]);
     expect(releaseArticle(running, "2026-11-01-document-owner-context")).toBeUndefined();
     expect(releaseArticle(running, canary[0]!.id)).toBeUndefined();
     expect(releaseArticle(fixture("canary"), stable[0]!.id)).toBeUndefined();
@@ -130,7 +130,7 @@ describe("public release pages", () => {
     expect(container.querySelector('main a[href="/releases"]')).not.toBeNull();
   });
   it("renders a canary rich example after its explanation without filesystem effects", async () => {
-    const release = fixture("canary"), records = publicReleases(release), record = records[0]!;
+    const release = fixture("canary", 0), records = publicReleases(release), record = records[0]!;
     await act(async () => root.render(<ReleasesContent release={release} records={records} record={record} article={releaseArticle(release, record.id)} isList={false} go={vi.fn()} />));
     const headings = [...container.querySelectorAll("h2")];
     expect(headings.findIndex(el => el.id === "local-links")).toBeLessThan(headings.findIndex(el => el.id === "visual-guide"));

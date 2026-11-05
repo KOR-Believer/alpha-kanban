@@ -60,7 +60,7 @@ const server = createServer(async (request, response) => {
     return;
   }
   let path = url.pathname.slice(1);
-  if (!path || /^(intro|all|w\/[^/.]+)\/?$/.test(path)) path = "index.html";
+  if (!path || /^(intro|about|all|w\/[^/.]+|docs(?:\/[^/.]+)?|releases(?:\/[^/.]+)?)\/?$/.test(path)) path = "index.html";
   const file = resolve(serving.dir, path);
   if (!file.startsWith(serving.dir + "/")) { response.writeHead(400).end(); return; }
   try {
@@ -132,7 +132,7 @@ async function downloadSkill(page, version, label) {
   await page.getByRole("button", { name: "설치 요청문 확인·복사", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.locator("summary").filter({ hasText: "직접 설치 안내" }).click();
-  const link = dialog.getByRole("link", { name: "Codex 스킬 다운로드", exact: true });
+  const link = dialog.getByRole("link", { name: "스킬 ZIP 다운로드", exact: true });
   assert.equal(await link.getAttribute("href"), `/downloads/${archive}`);
   const fetched = page.waitForResponse((response) => response.url() === `${origin}/downloads/${archive}`);
   const downloaded = page.waitForEvent("download");
@@ -184,7 +184,7 @@ async function original(page) { return page.evaluate(async () => {
 const fixture = `# PWA Smoke\n\n[Saved colleague link](/Users/colleague/product/docs/linked.md)\n\n## Status\n- 현재 진행률: 0 / 1 tickets\n\n## Ticket List\n\n### PWA-01. Offline smoke ticket\n\nStatus: TODO\nProgress: 0%\nRepository:\n\n- smoke-project\n\nPriority: P1\nType: Feature\nDepends on:\n\n- 없음\n\n목표:\n\n- 오프라인 저장\n\n현재 문제:\n\n- 없음\n\n구현 범위:\n\n- 테스트\n\n제외 범위:\n\n- 없음\n\n완료 기준:\n\n- [ ] 확인\n\n검증:\n\n- [ ] 확인\n\n사용자 지시:\n\n진행 메모:\n`;
 
 async function openSavedLink(page, name) {
-  await page.getByRole("button", { name: "마크다운", exact: true }).click();
+  await page.getByRole("link", { name: "마크다운", exact: true }).click();
   const sourceUrl = page.url();
   await page.getByRole("link", { name: "Saved colleague link", exact: true }).click();
   const reader = page.locator("section[aria-label]").filter({ has: page.locator("[data-linked-document]") });
@@ -193,9 +193,9 @@ async function openSavedLink(page, name) {
   assert.match(new URL(page.url()).searchParams.get("linked"), /^ld_/);
   assert.equal(await page.getByRole("dialog").count(), 0);
   await page.screenshot({ path: resolve(output, `linked-document-${name}.png`) });
-  await reader.getByRole("button", { name: "출발 문서로 돌아가기", exact: true }).click();
+  await reader.getByRole("link", { name: "출발 문서로 돌아가기", exact: true }).click();
   await page.waitForURL(sourceUrl);
-  await page.getByRole("button", { name: "보드", exact: true }).click();
+  await page.getByRole("link", { name: "보드", exact: true }).click();
 }
 
 try {
@@ -285,7 +285,7 @@ try {
     window.showDirectoryPicker = async () => root;
   }, oldFiles);
   await page.getByRole("button", { name: "설치된 스킬 등록·관리", exact: true }).click();
-  await page.getByRole("button", { name: "설치된 스킬 폴더 등록", exact: true }).click();
+  await page.getByRole("button", { name: "폴더 선택", exact: true }).click();
   await page.getByRole("heading", { name: "이 설치본에 적용할 업데이트가 있습니다" }).waitFor();
   assert.equal(await page.getByRole("button", { name: "백업 후 스킬 업데이트" }).isDisabled(), true);
   await page.getByRole("checkbox").check();
