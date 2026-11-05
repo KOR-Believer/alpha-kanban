@@ -54,5 +54,36 @@
         "en": ["The bundled skill's rules and document formats are unchanged. Skill files already matching this bundle are left untouched."]
       }
     }
+  },
+  {
+    "id": "2026-11-05-stable-skill-reinstall",
+    "sequence": 3,
+    "date": "2026-11-05",
+    "notify": true,
+    "title": {
+      "ko": "백업 후 정식 스킬로 다시 설치",
+      "en": "Back up and reinstall the stable skill"
+    },
+    "notes": {
+      "ko": [
+        "카나리나 직접 수정한 스킬도 변경 파일을 비교하고 동의한 뒤 정식 앱의 스킬로 다시 설치할 수 있습니다.",
+        "현재 파일 전체를 먼저 백업하며, 백업 용량을 확인하거나 파일로 내보내고 복원할 수 있습니다. 일반 업데이트의 보호 규칙은 그대로 유지됩니다."
+      ],
+      "en": [
+        "Review changed files and explicitly confirm before replacing a canary or customized skill with the stable app’s bundle.",
+        "All current files are backed up first. View backup content sizes, export a copy or restore it. Regular update safeguards remain unchanged."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "동봉 스킬과 문서 형식은 기존 정식판과 동일합니다."
+        ],
+        "en": [
+          "The bundled skill and document formats are unchanged from the previous stable release."
+        ]
+      }
+    }
   }
 ]

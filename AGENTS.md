@@ -114,3 +114,5 @@
 - Build recovery/retirement with the same `/sw.js` URL; keep tombstones available for returning clients. Do not clean other applications' registrations/caches or use `Clear-Site-Data`. Follow `docs/pwa_operations.md` for controlled repair and retirement.
 - `PwaMenu` uses the existing shadcn wrappers and translation catalog. The small independent `/repair.html` cannot rely on a potentially broken React/CSS bundle; its native semantic controls and colocated Korean/English recovery strings are a deliberate exception, not a second app design system.
 - `pnpm test:pwa` uses isolated Chrome profiles and OPFS handles. Report that separately from native install-dialog, real OS folder permission and deployed Cloudflare checks; never mark those passed from an OPFS test.
+
+- Explicit skill reinstall uses the app-pinned bundle, full before/after CodeDiff, fresh overwrite consent and durable backups. Preserve regular/PWA update guards; unknown target compatibility never enables reinstall. CodeDiff uses the existing semantic theme tokens and bounded expandable changes.

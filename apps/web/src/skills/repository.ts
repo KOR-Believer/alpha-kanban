@@ -11,6 +11,7 @@ export type SkillReview = {
 export type SkillRecovery = {
   id: string; connection: SkillConnection; before: SnapshotFile[]; intended: SkillFile[];
   createdAt: string; state: "pending" | "applied" | "restored";
+  operation?: "update" | "reinstall";
   created?: Array<{ path: string; handle: FileSystemFileHandle }>;
 };
 type Fingerprint = Pick<SnapshotFile, "path" | "sha256" | "mtime">;
@@ -76,6 +77,33 @@ async function snapshot(root: FileSystemDirectoryHandle, requireSkill = true) {
   if (new Set(files.map((file) => file.path.toLowerCase())).size !== files.length) throw new Error("Invalid skill path.");
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
+async function checkReinstallPaths(root: FileSystemDirectoryHandle, target: SkillFile[]) {
+  const paths = new Map<string, { path: string; kind: FileSystemHandleKind }>();
+  function add(path: string, kind: FileSystemHandleKind) {
+    const previous = paths.get(path.toLowerCase());
+    if (previous && (previous.path !== path || previous.kind !== kind)) {
+      throw new Error("The installed skill's file and folder paths conflict with this bundle. Ask your agent to compare them.");
+    }
+    paths.set(path.toLowerCase(), { path, kind });
+  }
+  for (const file of target) {
+    const parts = file.path.split("/");
+    parts.forEach((_, index) => add(parts.slice(0, index + 1).join("/"), index === parts.length - 1 ? "file" : "directory"));
+  }
+  let entries = 0;
+  async function walk(directory: FileSystemDirectoryHandle, prefix = "", depth = 0) {
+    if (depth > 5) throw new Error("Invalid skill path.");
+    for await (const entry of directory.values()) {
+      if (++entries > MAX_FILES * 2) throw new Error("The skill folder is too large to manage here. Use the agent request instead.");
+      const path = prefix + entry.name;
+      if (!safeSkillPath(path)) throw new Error("Invalid skill path.");
+      add(path, entry.kind);
+      if (entry.kind === "directory") await walk(entry as FileSystemDirectoryHandle, path + "/", depth + 1);
+    }
+  }
+  // Include empty directories and directory casing: neither appears in a file-only snapshot.
+  await walk(root);
+}
 function same(a: Array<Pick<SkillFile, "path" | "sha256">>, b: Array<Pick<SkillFile, "path" | "sha256">>) {
   return a.length === b.length && a.every((file) => b.some((other) => other.path === file.path && other.sha256 === file.sha256));
 }
@@ -121,7 +149,12 @@ export class SkillRepository {
   async apply(review: SkillReview) {
     return this.lock(LOCK, () => appActivity.run(() => this.applyReview(review), true));
   }
-  private async checkReview(review: SkillReview) {
+  // Only the explicit reinstall flow calls this; normal and PWA updates still require a known snapshot.
+  async reinstall(review: SkillReview) {
+    return this.lock(LOCK, () => appActivity.run(() => this.applyReview(review, crypto.randomUUID(), "reinstall"), true));
+  }
+  private async checkReview(review: SkillReview, operation: "update" | "reinstall" = "update") {
+    if (operation === "reinstall" && !this.target.digest) throw new Error("Skill information is unavailable. Use the agent request instead.");
     await validateBundle(review.bundle, this.target.version, this.target.digest);
     await permission(review.connection.handle, "readwrite");
     const connection = await this.connection();
@@ -129,15 +162,20 @@ export class SkillRepository {
     if ((await this.recoveries()).some((record) => record.state === "pending")) throw new Error("Review the unfinished skill update before changing its connection.");
     const current = await this.inspect(connection, review.bundle);
     if (!unchanged(current.files, review.files)) throw new Error(CHANGED);
-    if (current.state !== "update") throw new Error("Personal or unrecognized files will not be overwritten. Ask your agent to compare them.");
+    if (operation === "update" && current.state !== "update") throw new Error("Personal or unrecognized files will not be overwritten. Ask your agent to compare them.");
+    if (operation === "reinstall") {
+      if (current.state === "review") throw new Error("Ask Codex to review compatibility before changing your skill or documents.");
+      await checkReinstallPaths(connection.handle, review.bundle.files);
+    }
     return current;
   }
-  private async applyReview(review: SkillReview, id: string = crypto.randomUUID()) {
-    const current = await this.checkReview(review);
+  private async applyReview(review: SkillReview, id: string = crypto.randomUUID(), operation: "update" | "reinstall" = "update") {
+    const current = await this.checkReview(review, operation);
     const connection = current.connection;
-    const recovery: SkillRecovery = { id, connection, before: current.files, intended: review.bundle.files, createdAt: new Date().toISOString(), state: "pending" };
+    const recovery: SkillRecovery = { id, connection, before: current.files, intended: review.bundle.files, createdAt: new Date().toISOString(), state: "pending", operation };
     await this.storage.set(RECOVERY + recovery.id, recovery);
     if (!unchanged(await snapshot(connection.handle), recovery.before)) throw new Error(CHANGED);
+    if (operation === "reinstall") await checkReinstallPaths(connection.handle, recovery.intended);
     await this.replace(recovery, false);
     await this.storage.set(RECOVERY + recovery.id, { ...recovery, state: "applied" });
     return recovery.id;

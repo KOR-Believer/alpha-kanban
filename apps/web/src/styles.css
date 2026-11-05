@@ -641,3 +641,29 @@
     opacity: 1;
   }
 }
+
+.ak-code-diff { container-type: inline-size; min-width: 0; border: 1px solid var(--border); border-radius: var(--ak-radius-sm); overflow: clip; background: var(--card); }
+.ak-diff-summary { display: flex; gap: var(--ak-space-sm); padding: var(--ak-space-xs) var(--ak-space-sm); border-bottom: 1px solid var(--border); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ak-diff-head, .ak-diff-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ak-diff-head { background: var(--muted); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; }
+.ak-diff-head > span { padding: var(--ak-space-xs) var(--ak-space-sm); }
+.ak-diff-head > span:last-child { display: none; }
+.ak-diff-cell { display: grid; grid-template-columns: 3.25rem 1.25rem minmax(0, 1fr); min-width: 0; padding-block: 2px; font: 12px/1.6 ui-monospace, monospace; }
+.ak-diff-cell[data-side="before"] { border-right: 1px solid var(--border); }
+.ak-diff-cell[data-change="removed"] { background: var(--ak-danger-soft); }
+.ak-diff-cell[data-change="added"] { background: var(--ak-success-soft); }
+.ak-diff-cell[data-empty] { background: var(--muted); }
+.ak-diff-number { color: var(--muted-foreground); text-align: right; padding-right: var(--ak-space-xs); user-select: none; }
+.ak-diff-sign { color: var(--muted-foreground); user-select: none; }
+[data-change="removed"] > .ak-diff-sign { color: var(--destructive); }
+[data-change="added"] > .ak-diff-sign { color: var(--ak-success); }
+.ak-diff-cell code { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: var(--ak-space-sm); font: inherit; tab-size: 4; }
+.ak-diff-eof { display: block; color: var(--muted-foreground); font-style: italic; }
+.ak-diff-expand { width: 100%; height: auto; min-height: 32px; border-radius: 0; border-block: 1px solid var(--border); background: var(--muted); color: var(--muted-foreground); white-space: normal; }
+@container (max-width: 640px) {
+  .ak-diff-head, .ak-diff-row { grid-template-columns: minmax(0, 1fr); }
+  .ak-diff-head > span { display: none; }
+  .ak-diff-head > span:last-child { display: block; }
+  .ak-diff-cell[data-side="before"] { border-right: 0; }
+  .ak-diff-row[data-context] > [data-side="before"], .ak-diff-cell[data-empty] { display: none; }
+}

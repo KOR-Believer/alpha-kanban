@@ -27,6 +27,43 @@ async function fixture() {
 }
 afterEach(() => { vi.restoreAllMocks(); appActivity.resume(); });
 
+describe("sequential channel replacement", () => {
+  it("returns to stable without a canary backup and restores each origin's own complete preimage", async () => {
+    const f = await fixture();
+    await f.repository.apply(await f.repository.inspect(f.connection, f.bundle));
+    const content = f.bundle.files.map((file) => ({ ...file, content: file.content + "\nCanary fixture" }));
+    const canaryFiles = await files(Object.fromEntries(content.map((file) => [file.path, file.content])));
+    const canary: SkillBundle = { ...f.bundle, files: canaryFiles, known: [], version: (await skillHash(canaryFiles.map((file) => "implementation-ledger/" + file.path + file.content).join(""))).slice(0, 12) };
+    const stableApp = new SkillRepository(new MemoryStorage(), testLocks(), f.config);
+    const canaryApp = new SkillRepository(new MemoryStorage(), testLocks(), { version: canary.version, digest: await skillHash(JSON.stringify(canary)), compatible: true });
+    const stableConnection = await stableApp.connect(f.root.handle()), canaryConnection = await canaryApp.connect(f.root.handle());
+    f.root.file("personal.md", "Personal rules preserved only in the backup");
+    const before = await canaryApp.inspect(canaryConnection, canary);
+    const staleStable = await stableApp.inspect(stableConnection, f.bundle);
+    expect(before.state).toBe("custom");
+    await expect(canaryApp.apply(before)).rejects.toThrow("Personal or unrecognized");
+    await expect(canaryApp.approveAppUpdate(before, "a".repeat(16), "b".repeat(16))).rejects.toThrow("Personal or unrecognized");
+    const canaryBackup = await canaryApp.reinstall(before);
+    expect((await stableApp.inspect(stableConnection, f.bundle)).state).toBe("custom");
+    expect(await stableApp.recoveries()).toEqual([]);
+    await expect(stableApp.reinstall(staleStable)).rejects.toThrow("changed outside");
+    const stableReview = await stableApp.inspect(stableConnection, f.bundle);
+    await expect(stableApp.apply(stableReview)).rejects.toThrow("Personal or unrecognized");
+    const stableBackup = await stableApp.reinstall(stableReview);
+    expect((await stableApp.inspect(stableConnection, f.bundle)).state).toBe("current");
+    expect((await stableApp.recoveries())[0]!.before).toEqual(stableReview.files);
+    expect((await canaryApp.recoveries())[0]!.before).toEqual(before.files);
+    await stableApp.restore(stableBackup);
+    expect((await canaryApp.inspect(canaryConnection, canary)).state).toBe("current");
+    await canaryApp.restore(canaryBackup);
+    const restored = await canaryApp.inspect(canaryConnection, canary);
+    expect(restored.files.map(({ path, sha256 }) => ({ path, sha256 }))).toEqual(before.files.map(({ path, sha256 }) => ({ path, sha256 })));
+    await stableApp.disconnect(); await canaryApp.disconnect();
+    expect((await stableApp.recoveries())[0]!.state).toBe("restored");
+    expect((await canaryApp.recoveries())[0]!.state).toBe("restored");
+  });
+});
+
 describe("registered skill updates", () => {
   it("rejects empty, parent and other skill folders without writing files", async () => {
     const { repository } = await fixture();
@@ -173,6 +210,127 @@ describe("registered skill updates", () => {
     existing.failAfterClose = true;
     await expect(repository.apply(await repository.inspect(connection, bundle))).rejects.toThrow("could not be verified");
     expect((await repository.recoveries())[0]!.state).toBe("pending");
+  });
+});
+
+describe("explicit skill reinstall", () => {
+  it("reinstalls an unknown snapshot only through the separate entry, backs up extra files and restores everything", async () => {
+    const { repository, connection, bundle, existing, root } = await fixture();
+    existing.content += " canary with personal rules";
+    root.file("personal.md", "사용자 추가 내용");
+    const review = await repository.inspect(connection, bundle);
+    expect(review.state).toBe("custom");
+    expect(await repository.recoveries()).toHaveLength(0);
+    await expect(repository.apply(review)).rejects.toThrow("Personal or unrecognized");
+    await expect(repository.approveAppUpdate(review, "a".repeat(16), "b".repeat(16))).rejects.toThrow("Personal or unrecognized");
+    existing.onOpen = () => expect(appActivity.prepare()).toBe(false);
+    const id = await repository.reinstall(review);
+    const backup = (await repository.recoveries())[0]!;
+    expect(backup.operation).toBe("reinstall");
+    expect(backup.before).toEqual(review.files);
+    expect(backup.state).toBe("applied");
+    expect((await repository.inspect(connection, bundle)).state).toBe("current");
+    expect(root.children.has("personal.md")).toBe(false);
+    await repository.restore(id);
+    const restored = await repository.inspect(connection, bundle);
+    expect(restored.files.map(({ path, sha256 }) => ({ path, sha256 }))).toEqual(review.files.map(({ path, sha256 }) => ({ path, sha256 })));
+    expect(restored.state).toBe("custom");
+    await repository.disconnect();
+    expect(await repository.recoveries()).toHaveLength(1);
+  });
+
+  it.each(["content", "mtime", "extra", "missing", "connection"])("rejects a stale reinstall after %s changes", async (kind) => {
+    const { repository, connection, bundle, existing, root } = await fixture();
+    existing.content += " canary";
+    const review = await repository.inspect(connection, bundle);
+    if (kind === "content") existing.content += " new rule";
+    if (kind === "mtime") existing.mtime++;
+    if (kind === "extra") root.file("personal.md", "mine");
+    if (kind === "missing") root.children.delete("SKILL.md");
+    if (kind === "connection") await repository.disconnect();
+    await expect(repository.reinstall(review)).rejects.toThrow();
+    expect(existing.opens).toBe(0);
+    expect(await repository.recoveries()).toHaveLength(0);
+  });
+
+  it.each(["permission", "quota", "digest", "unbound", "compatibility"])("retains the original when reinstall fails its %s guard", async (kind) => {
+    const { repository, connection, bundle, existing, root, storage, lock, config } = await fixture();
+    existing.content += " canary";
+    const original = existing.content;
+    const review = await repository.inspect(connection, bundle);
+    let target = repository;
+    if (kind === "permission") root.write = "denied";
+    if (kind === "quota") vi.spyOn(storage, "set").mockRejectedValue(new DOMException("Full", "QuotaExceededError"));
+    if (kind === "digest") review.bundle.known = [];
+    if (kind === "unbound") target = new SkillRepository(storage, lock, { ...config, digest: undefined });
+    if (kind === "compatibility") target = new SkillRepository(storage, lock, { ...config, compatible: false });
+    await expect(target.reinstall(review)).rejects.toThrow();
+    expect(existing.content).toBe(original); expect(existing.opens).toBe(0);
+    expect(await repository.recoveries()).toHaveLength(0);
+  });
+
+  it.each(["case", "file-directory", "directory-case", "empty-directory-case", "empty-directory-file"])("rejects a %s path collision before writing a reinstall", async (kind) => {
+    const { repository, connection, bundle, existing, root } = await fixture();
+    if (kind === "case") root.directory("assets").file("NEW.md", "personal");
+    if (kind === "file-directory") root.file("assets", "personal file at a target directory path");
+    if (kind === "directory-case") root.directory("Assets").file("personal.md", "personal");
+    if (kind === "empty-directory-case") root.directory("Assets");
+    if (kind === "empty-directory-file") root.directory("assets").directory("new.md");
+    await expect(repository.reinstall(await repository.inspect(connection, bundle))).rejects.toThrow("paths conflict");
+    expect(existing.opens).toBe(0); expect(await repository.recoveries()).toHaveLength(0);
+  });
+
+  it("persists the full backup before writing and rechecks external edits made during that backup", async () => {
+    const { repository, connection, bundle, existing, storage } = await fixture();
+    existing.content += " canary";
+    const review = await repository.inspect(connection, bundle);
+    const save = storage.set.bind(storage);
+    vi.spyOn(storage, "set").mockImplementation(async (key, value) => {
+      await save(key, value);
+      if (key.startsWith("skill-update:recovery:")) existing.content += " concurrent edit";
+    });
+    await expect(repository.reinstall(review)).rejects.toThrow("changed outside");
+    expect(existing.opens).toBe(0);
+    expect((await repository.recoveries())[0]?.before).toEqual(review.files);
+    expect((await repository.recoveries())[0]?.state).toBe("pending");
+  });
+
+  it("keeps a failed reinstall recoverable after restart and refuses another reinstall until recovery", async () => {
+    const { repository, connection, bundle, existing, reference, root, storage, lock, config } = await fixture();
+    existing.content += " canary"; root.file("personal.md", "preserve me");
+    const review = await repository.inspect(connection, bundle);
+    existing.onOpen = () => expect([...storage.records.keys()].some((key) => key.startsWith("skill-update:recovery:"))).toBe(true);
+    reference.failClose = true;
+    await expect(repository.reinstall(review)).rejects.toThrow("Close failed");
+    const restarted = new SkillRepository(storage, lock, config);
+    await expect(restarted.reinstall(await restarted.inspect(connection, bundle))).rejects.toThrow("unfinished");
+    reference.failClose = false;
+    const backup = (await restarted.recoveries())[0]!;
+    await restarted.restore(backup.id);
+    expect((await restarted.inspect(connection, bundle)).files.map(({ path, sha256 }) => ({ path, sha256 }))).toEqual(review.files.map(({ path, sha256 }) => ({ path, sha256 })));
+  });
+
+  it("serializes duplicate reinstall attempts and preserves external changes during restore", async () => {
+    const { repository, connection, bundle, existing } = await fixture();
+    existing.content += " canary";
+    const review = await repository.inspect(connection, bundle);
+    const results = await Promise.allSettled([repository.reinstall(review), repository.reinstall(review)]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(await repository.recoveries()).toHaveLength(1);
+    existing.content += " subsequent personal edit";
+    await expect(repository.restore((await repository.recoveries())[0]!.id)).rejects.toThrow("changed outside");
+    expect(existing.content).toContain("subsequent personal edit");
+  });
+
+  it("restores older backups without an operation label", async () => {
+    const { repository, connection, bundle, storage, existing } = await fixture();
+    const original = existing.content;
+    const id = await repository.apply(await repository.inspect(connection, bundle));
+    const backup = (await repository.recoveries())[0]!;
+    delete backup.operation;
+    await storage.set("skill-update:recovery:" + id, backup);
+    await repository.restore(id);
+    expect(existing.content).toBe(original);
   });
 });
 

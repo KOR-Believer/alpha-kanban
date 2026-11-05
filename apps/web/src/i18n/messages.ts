@@ -642,6 +642,29 @@ export const korean: Record<string, string> = {
   "{{count}} completion or validation items are unchecked. Changing status will not change these checkboxes.": "완료 기준과 검증 항목 중 {{count}}개가 미체크 상태입니다. 상태를 변경해도 체크 항목은 유지됩니다.",
 
   "Read-only": "읽기 전용",
+
+  "Changes in {{path}}": "{{path}} 변경 내용",
+  "Document changes": "문서 변경 내용",
+  "Changes": "변경 내용",
+  "Removed line": "삭제된 줄",
+  "Added line": "추가된 줄",
+  "No newline at end of file": "파일 끝에 줄바꿈 없음",
+  "Show {{count}} unchanged lines": "변경 없는 {{count}}줄 펼치기",
+  "Show {{count}} more changed lines": "변경된 {{count}}줄 더 보기",
+  "{{added}} lines added, {{removed}} lines removed": "{{added}}줄 추가, {{removed}}줄 삭제",
+  "Before": "변경 전",
+  "After": "변경 후",
+  "This installation differs from known official bundles. Regular updates will not replace it.": "알려진 공식 배포본과 내용이 다릅니다. 일반 업데이트로는 교체하지 않습니다.",
+  "Review reinstall": "재설치 내용 확인",
+  "Review skill reinstall": "스킬 재설치 내용 확인",
+  "Reinstall this app's skill": "이 앱의 스킬로 다시 설치",
+  "Review each changed file below. Reinstalling replaces personal changes and removes files absent from this app's bundle. Your current files will be backed up first.": "아래 파일을 펼쳐 변경 내용을 확인하세요. 다시 설치하면 개인 수정 내용이 교체되고 이 앱의 배포본에 없는 파일은 삭제됩니다. 현재 파일 전체를 먼저 백업합니다.",
+  "Backup file contents: {{size}} (before and after).": "백업 파일 내용: {{size}} (교체 전후 합계).",
+  "Total backup file contents: {{size}}.": "전체 백업 파일 내용: {{size}}.",
+  "Backups stay on this site in this browser and are not automatically deleted, even after restoring or disconnecting.": "백업은 이 브라우저의 현재 사이트에 보관하며, 복원하거나 연결을 해제해도 자동으로 지우지 않습니다.",
+  "I have reviewed the changes and agree to replace this installation, including personal changes and extra files.": "변경 내용을 확인했으며, 개인 수정 내용과 추가 파일을 포함해 현재 설치본을 교체하는 데 동의합니다.",
+  "Back up and reinstall": "백업 후 다시 설치",
+  "The installed skill's file and folder paths conflict with this bundle. Ask your agent to compare them.": "설치본의 파일·폴더 경로가 이 앱의 배포본과 충돌합니다. Codex에 비교를 요청하세요.",
 };
 
 // Existing Korean UI keys also have English counterparts; document content is not translated.

@@ -2,12 +2,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FakeDirectory, MemoryStorage, testLocks } from "../browser/browserFixtures";
+import { FakeDirectory, FakeFile, MemoryStorage, testLocks } from "../browser/browserFixtures";
 import { setLanguage } from "../i18n";
 import { appActivity } from "../pwa/activity";
 import * as bundles from "./bundle";
 import { SkillRepository, skillRepository } from "./repository";
 import { SkillUpdates, SkillUpdatesButton } from "./SkillUpdates";
+import { formatSkillBytes } from "./backupSize";
 
 let root: Root, container: HTMLDivElement;
 let folder: FakeDirectory, storage: MemoryStorage, repository: SkillRepository;
@@ -54,6 +55,7 @@ beforeEach(async () => {
   vi.spyOn(skillRepository, "disconnect").mockImplementation(repository.disconnect.bind(repository));
   vi.spyOn(skillRepository, "inspect").mockImplementation(repository.inspect.bind(repository));
   vi.spyOn(skillRepository, "apply").mockImplementation(repository.apply.bind(repository));
+  vi.spyOn(skillRepository, "reinstall").mockImplementation(repository.reinstall.bind(repository));
   vi.spyOn(skillRepository, "restore").mockImplementation(repository.restore.bind(repository));
   vi.stubGlobal("showDirectoryPicker", vi.fn().mockResolvedValue(folder.handle()));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -61,6 +63,110 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount()); container.remove();
   vi.restoreAllMocks(); vi.unstubAllGlobals(); appActivity.resume();
+});
+
+describe("explicit skill reinstall UI", () => {
+  async function customInstallation() {
+    const skill = folder.children.get("SKILL.md") as FakeFile;
+    skill.content += "\nCanary instructions and 개인 수정";
+    const extra = folder.file("personal.md", "<script>do not execute</script>\nPersonal notes");
+    await repository.connect(folder.handle());
+    await render();
+    return { skill, extra };
+  }
+
+  it("shows before/after content without writing, preserves consent across language changes and clears it on cancel/recheck/close", async () => {
+    const { skill } = await customInstallation();
+    const original = skill.content;
+    const permission = vi.spyOn(folder, "requestPermission");
+    expect(button("Back up and update skill")).toBeUndefined();
+    await click("Review reinstall");
+    expect(button("Back up and reinstall")!.disabled).toBe(true);
+    expect(appActivity.prepare()).toBe(false);
+    const section = document.querySelector('[aria-label="Review skill reinstall"]')!;
+    for (const details of section.querySelectorAll("details")) {
+      await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
+    }
+    expect(section.querySelectorAll(".ak-code-diff")).toHaveLength(2);
+    expect(section.querySelector('[data-change="removed"] code')?.textContent).toContain("Old instructions");
+    expect(section.querySelector('[data-change="added"] code')?.textContent).toContain("Updated instructions");
+    expect(section.textContent).toContain("Remove file");
+    expect(section.textContent).toContain("<script>do not execute</script>");
+    expect(section.querySelector("script")).toBeNull();
+    await act(async () => section.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+    await act(async () => { await setLanguage("ko"); });
+    expect(section.isConnected).toBe(true);
+    expect(button("백업 후 다시 설치")!.disabled).toBe(false);
+    expect(section.textContent).toContain("현재 파일 전체를 먼저 백업");
+    expect(localStorage.getItem("alpha-kanban.theme")).toBe("dark");
+    await act(async () => { await setLanguage("en"); });
+    await click("Cancel");
+    expect(appActivity.busy).toBe(false);
+    await click("Review reinstall");
+    expect(button("Back up and reinstall")!.disabled).toBe(true);
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+    await click("Check installed skill");
+    expect(button("Back up and reinstall")).toBeUndefined();
+    await click("Review reinstall");
+    expect(button("Back up and reinstall")!.disabled).toBe(true);
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+    await act(async () => root.render(<SkillUpdates open={false} onOpenChange={vi.fn()} />));
+    await render();
+    expect(button("Back up and reinstall")).toBeUndefined();
+    await click("Review reinstall");
+    expect(button("Back up and reinstall")!.disabled).toBe(true);
+    expect(skillRepository.reinstall).not.toHaveBeenCalled(); expect(skillRepository.apply).not.toHaveBeenCalled();
+    expect(await repository.recoveries()).toHaveLength(0); expect(skill.content).toBe(original);
+    // Only the explicit recheck requests permission; opening and cancelling previews never do.
+    expect(permission).toHaveBeenCalledExactlyOnceWith({ mode: "readwrite" });
+  });
+
+  it("requires explicit consent, then backs up, reinstalls and restores unknown files with size and retention information", async () => {
+    const { skill, extra } = await customInstallation();
+    const original = skill.content;
+    const size = formatSkillBytes(new TextEncoder().encode(original + extra.content + after).length, "en");
+    await click("Review reinstall");
+    expect(document.body.textContent).toContain(`Backup file contents: ${size}`);
+    expect(skillRepository.reinstall).not.toHaveBeenCalled();
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+    expect(skillRepository.reinstall).not.toHaveBeenCalled();
+    await click("Back up and reinstall");
+    expect(skillRepository.reinstall).toHaveBeenCalledTimes(1); expect(skillRepository.apply).not.toHaveBeenCalled();
+    expect(skill.content).toBe(after); expect(folder.children.has("personal.md")).toBe(false);
+    expect((await repository.recoveries())[0]?.before.find((file) => file.path === "personal.md")?.content).toBe(extra.content);
+    expect(document.body.textContent).toContain(`Total backup file contents: ${size}`);
+    expect(document.body.textContent).toContain("not automatically deleted");
+    await click("Restore backup"); await click("Confirm restore");
+    expect(skill.content).toBe(original);
+    await expect((await (await folder.getFileHandle("personal.md")).getFile()).text()).resolves.toBe(extra.content);
+    await click("Disconnect");
+    expect(await repository.recoveries()).toHaveLength(1);
+    expect(document.body.textContent).toContain(`Total backup file contents: ${size}`);
+  });
+
+  it("rejects external changes after preview and requires a fresh review", async () => {
+    const { skill } = await customInstallation();
+    await click("Review reinstall");
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+    skill.content += "\nEdit after consent";
+    await click("Back up and reinstall");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("changed outside");
+    expect(skill.content).toContain("Edit after consent"); expect(skill.opens).toBe(0);
+    expect(await repository.recoveries()).toHaveLength(0);
+    expect(button("Back up and reinstall")).toBeUndefined();
+    await click("Check installed skill"); await click("Review reinstall");
+    expect(button("Back up and reinstall")!.disabled).toBe(true);
+  });
+
+  it("does not expose reinstall when target compatibility is unknown", async () => {
+    await customInstallation();
+    const inspect = repository.inspect.bind(repository);
+    vi.mocked(skillRepository.inspect).mockImplementation(async (...args) => ({ ...await inspect(...args), state: "review" }));
+    await click("Check installed skill");
+    expect(button("Review reinstall")).toBeUndefined();
+    expect(button("Back up and update skill")).toBeUndefined();
+    expect(document.body.textContent).toContain("review compatibility");
+  });
 });
 
 describe("skill folder permission flow", () => {
@@ -107,6 +213,10 @@ describe("skill folder permission flow", () => {
     await waitFor(() => expect(button("Back up and update skill")).toBeDefined());
     expect(window.showDirectoryPicker).toHaveBeenCalledExactlyOnceWith({ id: "alpha-kanban-skill", mode: "readwrite" });
     expect(button("Back up and update skill")!.disabled).toBe(true);
+    const changes = document.querySelector("details")!;
+    await act(async () => { changes.open = true; changes.dispatchEvent(new Event("toggle")); });
+    expect(changes.querySelector('[data-change="removed"] code')?.firstChild?.textContent).toBe("Old instructions");
+    expect(changes.querySelector('[data-change="added"] code')?.firstChild?.textContent).toBe("Updated instructions");
     expect(skillRepository.apply).not.toHaveBeenCalled();
     expect(await repository.recoveries()).toHaveLength(0);
     await expect((await (await folder.getFileHandle("SKILL.md")).getFile()).text()).resolves.toBe(before);
