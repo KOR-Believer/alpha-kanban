@@ -69,6 +69,24 @@ Serve the app over HTTPS with SPA routing for `/`, `/about`, legacy `/intro`, `/
 
 Local previews establish application behavior, not production DNS, edge routing, headers, or OS installation behavior. Record deployment checks separately from local test results.
 
+## 2026-11-05 deployment receipt
+
+The owner approved the canary deployment and a separate stable backport containing only skill comparison, complete backup and explicit reinstall. The team-document changes have not been promoted to master.
+
+| Public service | Source commit | Served build | Release | Skill bundle |
+| --- | --- | --- | --- | --- |
+| [Canary](https://kanban-canary.giveit2.me/) | `a50358d` on `release/canary` | `4c1f1f7557066ddd` | `2026-11-05-canary-documents-and-guides` | `54911d5cedca` |
+| [Stable](https://kanban.giveit2.me/) | `385a828` on `master` | `ea940dda1a4191bc` | `2026-11-05-stable-skill-reinstall` | `3adcbdb5a017` |
+
+- Both projects use `pnpm build`, `apps/web/dist-browser`, Node 24 and pnpm 11.3.0. Production branches are `master` and `release/canary`; production channel settings are explicitly `stable` and `canary`. Stable retains its existing preview policy with `release/canary` excluded. Canary preview branch builds are disabled.
+- The canary custom domain is Active with SSL enabled and points to `alpha-kanban-canary.pages.dev`. Existing stable DNS and manifest identity remain unchanged.
+- Downloaded responses from both custom origins passed SHA-256 checks for every offline asset: 115 canary assets and 109 stable assets. The pinned JSON payload, every ZIP file, worker build, manifest identity, MIME/cache headers and direct SPA routes matched. The canary output also passed the repository's deployment-target checker. Chrome showed the matching build and offline readiness at each origin.
+- Canary docs, configuration section links, release list and the deployed release detail opened at the public custom domain. Stable still serves its existing application routes; its new docs/releases pages have not been deployed. The stable skill bundle is byte-for-byte unchanged from the preceding stable release.
+- Reinstall remains an explicit operation in Skill updates: register the dedicated folder, inspect changes, confirm replacement, then back up and apply the stable app's pinned bundle. Ordinary and PWA-bound updates retain their existing guards. Each origin retains its own backups; deployment does not replace anyone's installed skill.
+- Local channel builds and the two 30-scenario PWA runs passed separately, including isolated Chrome restart, offline download, draft/write guards, update, restore, repair and retirement. These use OPFS and CDP installation, not native OS folder/install prompts. See [release and skill validation](release_skill_validation.md#2026-11-05-channel-release-verification-akc-0405) for the actual native-folder evidence and remaining checks.
+
+The stable backport published sequence 3. Its exact logical record is retained in the canary branch's stable history, and the unpublished team-document records follow it as sequences 4–6. Before a future approved master promotion, retain that published record and review the dates and compatibility of the still-unpublished stable records. Rebuild for stable; do not copy canary output.
+
 ## Recovery and retirement
 
 Follow [PWA operations and preservation](pwa_operations.md) for recovery builds, controlled updates, retirement, and incident drills. Retain the stable worker URL and user data. An emergency build replaces the normal build output; publish it only as part of the intended recovery procedure, then restore a verified normal release when appropriate.

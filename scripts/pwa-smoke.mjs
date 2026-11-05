@@ -131,7 +131,7 @@ async function downloadSkill(page, version, label) {
   const archive = `implementation-ledger-${version.release.skillBundle}.zip`;
   await page.getByRole("button", { name: "설치 요청문 확인·복사", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.locator("summary").filter({ hasText: "직접 설치 안내" }).click();
+  await dialog.locator("summary").filter({ hasText: "직접 설치 예시: Codex" }).click();
   const link = dialog.getByRole("link", { name: "스킬 ZIP 다운로드", exact: true });
   assert.equal(await link.getAttribute("href"), `/downloads/${archive}`);
   const fetched = page.waitForResponse((response) => response.url() === `${origin}/downloads/${archive}`);
@@ -174,7 +174,9 @@ async function snapshot(page) {
     const rows = await new Promise((done) => { const request = tx.objectStore("records").getAll(); request.onsuccess = () => done(request.result); });
     const keys = await new Promise((done) => { const request = db.transaction("records").objectStore("records").getAllKeys(); request.onsuccess = () => done(request.result); });
     db.close();
-    return { records: keys.map((key, index) => [key, JSON.parse(JSON.stringify(rows[index], (name, value) => name === "lastOpenedAt" ? undefined : value instanceof FileSystemHandle ? { kind: value.kind, name: value.name } : value))]), settings: Object.fromEntries(Object.entries(localStorage).filter(([key]) => !key.startsWith("alpha-kanban.releases.v1."))) };
+    // Search text is a derived cache and refreshes after the explicit file write
+    // below. Compare durable user state, not a stale copy of that document body.
+    return { records: keys.map((key, index) => [key, JSON.parse(JSON.stringify(rows[index], (name, value) => name === "lastOpenedAt" ? undefined : value instanceof FileSystemHandle ? { kind: value.kind, name: value.name } : value))]).filter(([key]) => !String(key).startsWith("document-search:v1:")), settings: Object.fromEntries(Object.entries(localStorage).filter(([key]) => !key.startsWith("alpha-kanban.releases.v1."))) };
   });
 }
 async function original(page) { return page.evaluate(async () => {
@@ -184,7 +186,7 @@ async function original(page) { return page.evaluate(async () => {
 const fixture = `# PWA Smoke\n\n[Saved colleague link](/Users/colleague/product/docs/linked.md)\n\n## Status\n- 현재 진행률: 0 / 1 tickets\n\n## Ticket List\n\n### PWA-01. Offline smoke ticket\n\nStatus: TODO\nProgress: 0%\nRepository:\n\n- smoke-project\n\nPriority: P1\nType: Feature\nDepends on:\n\n- 없음\n\n목표:\n\n- 오프라인 저장\n\n현재 문제:\n\n- 없음\n\n구현 범위:\n\n- 테스트\n\n제외 범위:\n\n- 없음\n\n완료 기준:\n\n- [ ] 확인\n\n검증:\n\n- [ ] 확인\n\n사용자 지시:\n\n진행 메모:\n`;
 
 async function openSavedLink(page, name) {
-  await page.getByRole("link", { name: "마크다운", exact: true }).click();
+  await page.getByRole("button", { name: "마크다운", exact: true }).click();
   const sourceUrl = page.url();
   await page.getByRole("link", { name: "Saved colleague link", exact: true }).click();
   const reader = page.locator("section[aria-label]").filter({ has: page.locator("[data-linked-document]") });
@@ -195,7 +197,7 @@ async function openSavedLink(page, name) {
   await page.screenshot({ path: resolve(output, `linked-document-${name}.png`) });
   await reader.getByRole("link", { name: "출발 문서로 돌아가기", exact: true }).click();
   await page.waitForURL(sourceUrl);
-  await page.getByRole("link", { name: "보드", exact: true }).click();
+  await page.getByRole("button", { name: "보드", exact: true }).click();
 }
 
 try {
@@ -443,7 +445,7 @@ try {
   assert.match(await appVersion(page), new RegExp(versions.b.release.buildId));
   assert.match(await appVersion(second), new RegExp(versions.b.release.buildId));
   if (installWindow) {
-    assert.match(await appVersion(installWindow), new RegExp(versions.b.release.buildId));
+    assert.equal((await workerInfo(installWindow)).buildId, versions.b.release.buildId);
     await installWindow.screenshot({ path: resolve(output, "installed-updated.png") });
     await installWindow.close();
     record("Installed standalone window participates in the coordinated update");
@@ -549,6 +551,8 @@ try {
   await page.goto(origin + "/about"); await page.getByRole("heading", { name: "Alpha Kanban", exact: true }).waitFor();
   await downloadSkill(page, versions.b, "updated-cold-offline");
   record("Updated app downloads the complete skill ZIP offline with matching archive and per-file hashes");
+  // Public guide headers have navigation links; app update controls live on the workspace.
+  await page.goto(origin + "/");
   await openMenu(page); await page.getByRole("button", { name: "업데이트 내역", exact: true }).click();
   await page.getByText("적용 대상 B의 변경 내용", { exact: true }).waitFor(); await page.keyboard.press("Escape");
   record("Release history remains readable on an offline cold launch");
