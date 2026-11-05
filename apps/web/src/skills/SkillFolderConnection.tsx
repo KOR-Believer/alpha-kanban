@@ -26,7 +26,7 @@ export function SkillFolderConnection({ connection, candidate, needsAccess, busy
   const depth = useRef(0);
   const disabled = busy || recovery;
   return <>
-    <section data-skill-folder-drop="" aria-label={t("Skill folder connection")}
+    <section data-tour="skill-folder" data-skill-folder-drop="" aria-label={t("Skill folder connection")}
       className={`grid gap-3 rounded-[var(--ak-radius-md)] border bg-muted/30 p-4 ${dragging && !disabled ? "border-primary ring-2 ring-primary/30" : "border-border"}`}
       onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files")) { depth.current++; setDragging(true); } }}
       onDragLeave={() => { if (--depth.current <= 0) { depth.current = 0; setDragging(false); } }}
@@ -69,7 +69,7 @@ function FolderLocationHelp() {
   const [notice, setNotice] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   return <details className="border-b border-border pb-4 text-sm">
-    <summary className="ak-focus-ring cursor-pointer font-medium">{t("Can't find the installed folder?")}</summary>
+    <summary data-tour="skill-location" className="ak-focus-ring cursor-pointer font-medium">{t("Can't find the installed folder?")}</summary>
     <div className="mt-3 grid gap-3">
       <p className="text-muted-foreground">{t("Ask your AI tool for the actual installation path. Connect that folder itself.")}</p>
       <Textarea ref={input} readOnly value={t(FIND_SKILL_REQUEST)} rows={4} aria-label={t("Request to locate the installed skill")} />

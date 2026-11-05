@@ -12,7 +12,7 @@ export function SkillReinstallReview({ review, busy, confirmed, onConfirmedChang
   review: SkillReview; busy: boolean; confirmed: boolean; onConfirmedChange: (confirmed: boolean) => void; onApply: () => void; onCancel: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  return <section className="space-y-3" aria-label={t("Review skill reinstall")}>
+  return <section data-tour="skill-reinstall" className="space-y-3" aria-label={t("Review skill reinstall")}>
     <h3 className="text-sm font-semibold">{t("Reinstall this app's skill")}</h3>
     <p className="text-sm">{t("Review each changed file below. Reinstalling replaces personal changes and removes files absent from this app's bundle. Your current files will be backed up first.")}</p>
     <SkillComparisonSummary review={review} />

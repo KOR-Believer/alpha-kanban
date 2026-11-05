@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorkspaceSummary } from "@alpha-kanban/shared";
 import { Download, Folder, FolderOpen, FolderPlus, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -151,14 +151,16 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
   const connections = useQuery({ queryKey: connectionKey, queryFn: () => browserRepository.connections(), retry: false });
   const recoveries = useQuery({ queryKey: recoveryKey, queryFn: () => browserRepository.recoveries(), retry: false });
   const [removing, setRemoving] = useState<Connection>();
+  const tourContainer = useRef<HTMLDivElement>(null);
+  const tour = useScreenTour("connections", { enabled: open && !actions.busy && !removing, eligible: false, container: tourContainer });
   return <>
     <Button data-tour="local-folders" variant="outline" size="sm" title={t(triggerLabel)} onClick={() => setOpen(true)}><Link2 /><span className="ak-toolbar-label">{t(triggerLabel)}</span>{recoveries.data?.length ? <span role="status">({t("Recovery pending")}: {recoveries.data.length})</span> : null}</Button>
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{t("Local folders")}</DialogTitle><DialogDescription>{t("Connections and board order are saved only in this browser and site address.")}</DialogDescription></DialogHeader>
+      <DialogContent ref={tourContainer} onEscapeKeyDown={event => { if (tour.active) event.preventDefault(); }} onInteractOutside={event => { if (tour.active) event.preventDefault(); }}>
+        <DialogHeader className="pr-12"><DialogTitle>{t("Local folders")}</DialogTitle><DialogDescription>{t("Connections and board order are saved only in this browser and site address.")}</DialogDescription><TourButton tour={tour} labelKey="Tour this dialog" /></DialogHeader>
         <DialogBody><div className="grid gap-4">
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!browserSupported() || actions.busy} onClick={() => void actions.pick("root")}><FolderPlus />{t("Connect workspace root")}</Button>
+            <Button data-tour="folder-connections" variant="outline" disabled={!browserSupported() || actions.busy} onClick={() => void actions.pick("root")}><FolderPlus />{t("Connect workspace root")}</Button>
             <Button variant="ghost" onClick={() => void actions.refresh()}><RefreshCw />{t("Refresh")}</Button>
           </div>
           <ErrorText message={actions.error || (connections.error instanceof Error ? connections.error.message : "") || (recoveries.error instanceof Error ? recoveries.error.message : "")} />
@@ -170,7 +172,7 @@ export function BrowserFilesMenu({ triggerLabel = "Local folders" }: { triggerLa
             <Button variant="ghost" size="icon" aria-label={t("Disconnect folder")} title={t("Disconnect folder")} onClick={() => setRemoving(connection)}><Trash2 /></Button>
           </div>)}
           <LinkConnectionManager />
-          <h3 className="text-sm font-semibold">{t("Recovery records")}</h3>
+          <h3 data-tour="folder-recovery" className="text-sm font-semibold">{t("Recovery records")}</h3>
           {!recoveries.data?.length ? <p className="text-sm text-muted-foreground">{t("No pending recovery records.")}</p> : recoveries.data.map((record) => <Recovery key={record.id} record={record} />)}
         </div></DialogBody>
         <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{t("Close")}</Button></DialogFooter>

@@ -6,6 +6,7 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { browserLinkMappings } from "./repository";
 import { folderPrefixes, relativeToPrefix, LocalLinkError } from "./linkPaths";
@@ -39,6 +40,8 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(attempt.error?.message ?? "");
   const [existing, setExisting] = useState(attempt.mapping);
+  const tourContainer = useRef<HTMLDivElement>(null);
+  const tour = useScreenTour("link", { enabled: !busy, eligible: false, scope: `${context.documentId}:${preview ? "preview" : "choose"}:${target?.label ?? ""}`, container: tourContainer });
   const abort = useRef<AbortController | null>(null);
   const automaticAbort = useRef<AbortController | null>(null);
   const selectionAbort = useRef<AbortController | null>(null);
@@ -90,13 +93,13 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
   const matches = scan?.repos.filter((repo) => (rootFilter === "all" || repo.rootId === rootFilter) && (repo.label + " " + repo.remotes.join(" ")).toLowerCase().includes(search.toLowerCase())) ?? [];
   const remaining = prefix ? relativeToPrefix(attempt.location.path, prefix) : undefined;
   const review = () => run(async () => setPreview(await browserLinkMappings.preview(context, attempt.location, prefix, target!, existing?.prefix === prefix ? existing : undefined)));
-  return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><DialogContent className="w-[min(680px,calc(100vw-2rem))]" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}>
-    <DialogHeader className="pr-12"><DialogTitle>{t(preview ? "Review link connection" : existing ? "Change link connection" : "Connect local link")}</DialogTitle><DialogDescription>{t("Choose a local repository or folder, then check which old path it replaces.")}</DialogDescription></DialogHeader>
+  return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><DialogContent ref={tourContainer} className="w-[min(680px,calc(100vw-2rem))]" onEscapeKeyDown={(event) => { if (busy || tour.active) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy || tour.active) event.preventDefault(); }}>
+    <DialogHeader className="pr-12"><DialogTitle>{t(preview ? "Review link connection" : existing ? "Change link connection" : "Connect local link")}</DialogTitle><DialogDescription>{t("Choose a local repository or folder, then check which old path it replaces.")}</DialogDescription><TourButton tour={tour} labelKey="Tour this dialog" /></DialogHeader>
     <DialogBody><div className="grid min-w-0 gap-4 text-sm">
-      <details className="min-w-0"><summary className="cursor-pointer font-medium">{t("Original link path")}</summary><code className="mt-2 block break-all text-xs text-muted-foreground">{attempt.location.path}</code></details>
+      <details className="min-w-0"><summary data-tour="link-original" className="cursor-pointer font-medium">{t("Original link path")}</summary><code className="mt-2 block break-all text-xs text-muted-foreground">{attempt.location.path}</code></details>
       {error ? <p role="alert" className="text-sm text-destructive">{t(error)}</p> : null}
       {preview ? <>
-        <section className="grid gap-3 rounded-lg border border-border p-4">
+        <section data-tour="link-preview" className="grid gap-3 rounded-lg border border-border p-4">
           <h3 className="font-semibold">{t("Connection to save")}</h3><FolderIdentity target={target!} />
           <div className="grid gap-1"><span className="text-xs text-muted-foreground">{t("Old folder to replace")}</span><code className="break-all">{prefix}</code></div>
           <div className="grid gap-1"><span className="text-xs text-muted-foreground">{t("File to open inside the selected folder")}</span><code className="break-all">{remaining}</code></div>
@@ -115,7 +118,7 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
             onOpen(await browserLinkMappings.retry(existing, attempt.location));
           })}>{t(manage ? "Check folder access" : "Allow access and retry")}</Button>
         </div> : null}
-        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{t("Folder on this computer")}</h3><Button variant="outline" size="sm" disabled={busy} onClick={() => void chooseFolder()}><FolderOpen />{t("Choose folder directly")}</Button></div>
+        <div data-tour="link-folders" className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{t("Folder on this computer")}</h3><Button variant="outline" size="sm" disabled={busy} onClick={() => void chooseFolder()}><FolderOpen />{t("Choose folder directly")}</Button></div>
         {browserLinkMappings.autoDiscover ? <>
           <div className="flex min-w-0 flex-wrap gap-2"><Input className="min-w-0 flex-1" aria-label={t("Search discovered repositories")} placeholder={t("Search discovered repositories")} value={search} onChange={(event) => { touch(); setSearch(event.target.value); }} />
             {roots.length > 1 ? <Select value={rootFilter} onValueChange={setRootFilter}><SelectTrigger size="field" className="max-w-full" aria-label={t("Connected root")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("All connected roots")}</SelectItem>{roots.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select> : null}
@@ -125,7 +128,7 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
           <div className="grid gap-1">{matches.slice(0, 30).map((repo) => <Button key={repo.id} variant={target?.repo?.id === repo.id ? "secondary" : "ghost"} className="h-auto justify-start whitespace-normal py-3 text-left" aria-pressed={target?.repo?.id === repo.id} disabled={busy} onClick={() => void run(() => choose({ handle: repo.handle, label: repo.label, repo }))}><span className="min-w-0 flex-1"><FolderIdentity target={{ handle: repo.handle, label: repo.label, repo }} /></span>{target?.repo?.id === repo.id ? <Check className="shrink-0" /> : null}</Button>)}</div>
           {matches.length > 30 ? <p className="text-xs text-muted-foreground">{t("Narrow the search to see more repositories.")}</p> : !scanning && !matches.length ? <p className="text-sm text-muted-foreground">{t("No matching repositories. Choose a folder directly.")}</p> : null}
         </> : null}
-        {target ? <section className="grid min-w-0 gap-3 border-t border-border pt-4">
+        {target ? <section data-tour="link-selection" className="grid min-w-0 gap-3 border-t border-border pt-4">
           <p className="break-all font-medium">{t("Selected folder: {{folder}}", { folder: target.label })}</p>
           {proposals.length > 1 ? <p>{t("Several paths exist in this folder. Choose the intended file.")}</p> : null}
           <label className="grid min-w-0 gap-2 font-medium">{t("Old folder to replace")}<Select value={prefix} onValueChange={setPrefix} disabled={busy}><SelectTrigger size="field" className="w-full min-w-0"><SelectValue placeholder={t("Choose a matching path")} /></SelectTrigger><SelectContent>{(proposals.length ? proposals.map((item) => item.prefix) : prefixes).map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select></label>
@@ -133,7 +136,7 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
         </section> : null}
       </>}
     </div></DialogBody>
-    <DialogFooter className="flex-wrap">{preview ? <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setPreview(undefined); setError(""); }}><ArrowLeft />{t("Back")}</Button> : null}<Button variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button disabled={!target || !remaining || busy} onClick={() => void (preview ? run(async () => {
+    <DialogFooter className="flex-wrap">{preview ? <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setPreview(undefined); setError(""); }}><ArrowLeft />{t("Back")}</Button> : null}<Button variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button data-tour="link-apply" disabled={!target || !remaining || busy} onClick={() => void (preview ? run(async () => {
       const resource = await browserLinkMappings.save(context, attempt.location, prefix, target!, preview.expected, undefined, undefined, preview);
       onOpen(resource);
     }) : review())}>{t(preview ? manage ? "Save link connection" : existing?.prefix === prefix ? "Replace connection and open" : "Connect and open" : "Review selected folder")}</Button></DialogFooter>
@@ -149,7 +152,7 @@ export function LinkConnectionManager() {
   const [busy, setBusy] = useState(false);
   const refresh = () => browserLinkMappings.list().then(setMappings).catch((failure) => setError(browserLinkMappings.error(failure).message));
   useEffect(() => { void refresh(); }, []);
-  return <section className="grid gap-2">
+  return <section data-tour="link-connections" className="grid gap-2">
     <h3 className="text-sm font-semibold">{t("Link connections")}</h3>
     {error ? <p role="alert" className="text-sm text-destructive">{t(error)}</p> : null}
     {!mappings.length ? <p className="text-sm text-muted-foreground">{t("No saved link connections. Open a missing local link to connect its folder.")}</p> : mappings.map((mapping) => <div key={mapping.id} className="grid gap-2 border-b border-border py-2 text-sm">

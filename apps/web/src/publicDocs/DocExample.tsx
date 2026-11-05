@@ -32,7 +32,7 @@ function Pair({ left, right }: { left: ReactNode; right: ReactNode }) {
 export function DocExample({ id }: { id: string }) {
   const { t } = useTranslation();
   const [revision, setRevision] = useState(0);
-  return <section className="ak-docs-example" aria-labelledby="visual-guide">
+  return <section data-tour="docs-example" className="ak-docs-example" aria-labelledby="visual-guide">
     <div className="ak-docs-example-heading"><div><Badge variant="muted">{t("Example only")}</Badge><h2 id="visual-guide" tabIndex={-1}>{t("Interactive example")}</h2></div>
       <Button size="iconSm" variant="ghost" onClick={() => setRevision(value => value + 1)} title={t("Restart example")} aria-label={t("Restart example")}><RotateCcw /></Button></div>
     <p className="ak-docs-example-intro">{t("Try the controls below. This example does not connect folders or change your files.")}</p>

@@ -1,4 +1,6 @@
-export type TourId = "start" | "board" | "project" | "all" | "detail";
+import type { TourKind } from "./tourSteps";
+
+export type TourId = TourKind | "board";
 export type TourResult = "dismissed" | "completed";
 
 // This version belongs to the tour contract, not a release or service-worker cache.

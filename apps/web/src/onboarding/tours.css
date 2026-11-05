@@ -69,3 +69,10 @@
 }
 
 [data-tour="ticket-order"].driver-active-element { opacity: 1; }
+
+[data-tour-positioned] {
+  left: var(--tour-host-left) !important;
+  top: var(--tour-host-top) !important;
+  transform: none !important;
+  translate: none !important;
+}

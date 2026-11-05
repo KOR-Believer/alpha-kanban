@@ -101,7 +101,7 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
           ) : null}
 
           <section className="grid gap-2">
-            <h4 className="ak-muted-label">{t("Outline")}</h4>
+            <h4 data-tour="document-outline" className="ak-muted-label">{t("Outline")}</h4>
             {document.outline.length > 0 ? (
               <ol className="grid gap-1 text-xs leading-5 text-[var(--ak-ink-muted)]">
                 {document.outline.map((heading) => {
@@ -138,7 +138,7 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
           <h3 ref={titleRef} tabIndex={-1} className="ak-title mt-1 break-words text-lg outline-none">
             {document.outline[0]?.title ?? file.filename}
           </h3>
-          {presentation.fields.length ? <dl className="ak-document-properties" aria-label={t("Document properties")}>
+          {presentation.fields.length ? <dl data-tour="document-properties" className="ak-document-properties" aria-label={t("Document properties")}>
             {presentation.fields.map((field) => <div key={field.name}>
               <dt>{t(field.name === "Owner" ? "Recorded owner" : "Document ID")}</dt>
               <dd>{field.name === "Owner" ? <Badge variant="muted">{field.value}</Badge> : <code>{field.value}</code>}</dd>

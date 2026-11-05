@@ -19,6 +19,7 @@ import { skillRepository, type SkillConnection, type SkillRecovery, type SkillRe
 import { SkillReinstallReview } from "./SkillReinstallReview";
 import { SkillFolderConnection } from "./SkillFolderConnection";
 import { droppedSkillFolder, supportsSkillFolderDrop } from "./folderDrop";
+import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
 import { formatSkillBytes, skillBackupContentBytes } from "./backupSize";
 
 const presentationPreferences: PanelPreferences = {
@@ -34,7 +35,7 @@ export function SkillUpdatesButton({ placement = "panel" }: { placement?: "panel
   const trigger = useRef<HTMLButtonElement>(null);
   const toolbar = placement === "toolbar";
   return <>
-    <Button ref={trigger} data-skill-updates="" size="sm" variant={toolbar ? "ghost" : "outline"} title={toolbar ? t("Skill updates") : undefined} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+    <Button ref={trigger} data-tour="skill-updates" data-skill-updates="" size="sm" variant={toolbar ? "ghost" : "outline"} title={toolbar ? t("Skill updates") : undefined} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       {toolbar ? <PackageCheck aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}<span className={toolbar ? "ak-toolbar-label" : undefined}>{t(toolbar ? "Skill updates" : "Register or manage an installed skill")}</span>
     </Button>
     <SkillUpdates open={open} onOpenChange={setOpen} returnFocus={trigger.current} />
@@ -56,6 +57,8 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
   const [restoreId, setRestoreId] = useState<string>();
   const [reinstallReview, setReinstallReview] = useState<SkillReview>();
   const [reinstallConfirmed, setReinstallConfirmed] = useState(false);
+  const tourContainer = useRef<HTMLDivElement>(null);
+  const tour = useScreenTour("skill", { enabled: open && !busy && !presentation.isResizing, eligible: false, scope: `${connection?.id ?? "none"}:${candidate?.name ?? ""}:${reinstallReview ? "reinstall" : review?.state ?? "connect"}:${restoreId ?? ""}:${presentation.mode}`, container: tourContainer });
   const generation = useRef(0);
   const requestInput = useRef<HTMLTextAreaElement>(null);
   const request = skillAgentRequest(t, "update");
@@ -146,20 +149,21 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
   }
   const pending = backups.some((record) => record.state === "pending");
   return <Dialog open={open} onOpenChange={(value) => { if (!busy) { presentation.stopResize(); onOpenChange(value); } }}>
-    <DialogContent layout="custom" showCloseButton={false} className="ak-resizable-dialog" data-mode={presentation.mode} data-resizing={presentation.isResizing || undefined}
+    <DialogContent ref={tourContainer} layout="custom" showCloseButton={false} className="ak-resizable-dialog" data-mode={presentation.mode} data-resizing={presentation.isResizing || undefined}
       style={{ "--dialog-width": `${presentation.width}px`, "--dialog-height": `${presentation.height}px` } as CSSProperties}
       onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = busy || pending ? "none" : "copy"; } }} onDrop={receiveDrop}
       onEscapeKeyDown={(event) => {
-        if (presentation.isResizing) { event.preventDefault(); presentation.stopResize(); }
+        if (tour.active) event.preventDefault();
+        else if (presentation.isResizing) { event.preventDefault(); presentation.stopResize(); }
         else if (busy) event.preventDefault();
       }}
-      onInteractOutside={(event) => { if (busy || presentation.isResizing) event.preventDefault(); }}
+      onInteractOutside={(event) => { if (busy || presentation.isResizing || tour.active) event.preventDefault(); }}
       onCloseAutoFocus={returnFocus ? (event) => { event.preventDefault(); returnFocus.focus({ preventScroll: true }); } : undefined}>
       <div className="ak-resizable-dialog-frame">
         <DialogHeader>
           <div className="ak-resizable-dialog-heading">
             <div className="ak-channel-title"><DialogTitle>{t("Skill updates")}</DialogTitle><ChannelBadge /></div>
-            <div className="ak-drawer-actions">
+            <div className="ak-drawer-actions"><TourButton tour={tour} labelKey="Tour this dialog" />
               <Button size="iconSm" variant="ghost" disabled={presentation.mode === "full"} aria-label={t("Reset size")} title={t("Reset size")} onClick={presentation.resetSize}><RotateCcw aria-hidden="true" /></Button>
               <Button size="iconSm" variant="ghost" aria-label={t(presentation.mode === "full" ? "Restore dialog size" : "Expand dialog")} title={t(presentation.mode === "full" ? "Restore dialog size" : "Expand dialog")}
                 onClick={() => presentation.mode === "full" ? presentation.restorePeek() : presentation.setMode("full")}>
@@ -181,19 +185,19 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
           {error ? <p role="alert" className="break-words text-sm text-destructive">{t(error, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
           {notice ? <p role="status" className="text-sm">{t(notice)}</p> : null}
           {review && !candidate && !reinstallReview ? <section className="space-y-3">
-            <SkillComparisonSummary review={review} />
+            <div data-tour="skill-comparison"><SkillComparisonSummary review={review} /></div>
             <h3 className="text-sm font-semibold">{t(review.state === "current" ? "Matches this app's skill bundle" : review.state === "update" ? "An update is available for this installation" : review.state === "review" ? "Ask your AI tool to review compatibility before changing your skill or documents." : "This installation differs from known official bundles. Regular updates will not replace it.")}</h3>
             {review.changes.length ? <SkillChanges review={review} /> : null}
             {review.state === "update" ? <>
               <p className="text-sm text-muted-foreground">{t("A full backup stays in this browser, outside the skill folder. Keep this window open until verification finishes. Multiple files cannot be replaced atomically.")}</p>
               <SkillReplacementNotice />
               <label className="flex items-start gap-2 text-sm"><Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(value === true)} /><span>{t("I have finished tasks using this skill in my AI tools and reviewed the files to replace.")}</span></label>
-              <Button disabled={!confirmed || busy} onClick={() => void action(async () => {
+              <Button data-tour="skill-apply" disabled={!confirmed || busy} onClick={() => void action(async () => {
                 if (await review.connection.handle.requestPermission({ mode: "readwrite" }) !== "granted") throw new Error("Allow access to the registered skill folder to continue.");
                 await skillRepository.apply(review);
               }, "Skill files saved and verified. Check that your AI tool recognizes the updated skill.")}><RefreshCw />{t("Back up and update skill")}</Button>
             </> : null}
-            {review.state === "custom" && !pending ? <Button variant="outline" disabled={busy || Boolean(candidate)} onClick={() => {
+            {review.state === "custom" && !pending ? <Button data-tour="skill-reinstall" variant="outline" disabled={busy || Boolean(candidate)} onClick={() => {
               setReinstallReview(review); setReinstallConfirmed(false); setConfirmed(false); setRestoreId(undefined);
             }}><RotateCcw />{t("Review reinstall")}</Button> : null}
           </section> : null}
@@ -207,7 +211,7 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
               }, "Skill files saved and verified. Check that your AI tool recognizes the updated skill.");
             }} /> : null}
           {backups.length ? <section className="space-y-3">
-            <h3 className="text-sm font-semibold">{t("Skill backups")}</h3>
+            <h3 data-tour="skill-backups" className="text-sm font-semibold">{t("Skill backups")}</h3>
             <p className="text-xs text-muted-foreground">{t("Total backup file contents: {{size}}.", { size: formatSkillBytes(backups.reduce((total, record) => total + skillBackupContentBytes(record), 0), i18n.language) })}</p>
             <p className="text-xs text-muted-foreground">{t("Backups stay on this site in this browser and are not automatically deleted, even after restoring or disconnecting.")}</p>
             <p className="text-xs text-muted-foreground">{t("Disconnecting keeps these backups. Export a copy before clearing browser data. Restore will stop if files have changed outside this app.")}</p>
@@ -216,7 +220,7 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
               <p className="text-xs text-muted-foreground">{t("Backup file contents: {{size}} (before and after).", { size: formatSkillBytes(skillBackupContentBytes(record), i18n.language) })}</p>
               <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy || Boolean(candidate)} onClick={() => exportBackup(record)}><Download />{t("Export backup")}</Button>
                 {record.state !== "restored" ? <Button size="sm" variant="outline" disabled={busy || Boolean(candidate) || (pending && record.state !== "pending")} onClick={() => { setRestoreId(record.id); setReinstallReview(undefined); setReinstallConfirmed(false); }}><RotateCcw />{t("Restore backup")}</Button> : null}</div>
-              {restoreId === record.id ? <div className="space-y-2">
+              {restoreId === record.id ? <div data-tour="skill-restore" className="space-y-2">
                 <p className="text-sm">{t("Finish AI tasks using this skill before restoring. Only files matching the recorded copies will be replaced.")}</p>
                 <SkillReplacementNotice />
                 <div className="flex flex-wrap gap-2"><Button size="sm" disabled={busy || Boolean(candidate)} onClick={() => void action(async () => {

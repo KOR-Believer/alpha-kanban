@@ -58,6 +58,22 @@ describe("local link connection UI", () => {
     for (let i = 0; i < 80 && !check(); i++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
     expect(check()).toBe(true);
   }
+  it("tours missing-link selection and its preview without saving or requesting more access", async () => {
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) { return (this.hidden ? [] : [new DOMRect(0, 0, 180, 28)]) as unknown as DOMRectList; });
+    await render(); await follow(); await ready(() => Boolean(document.querySelector('[role="dialog"]')));
+    for (const phase of ["choose", "preview"]) {
+      if (phase === "preview") { await click("Choose folder directly"); await click("Review selected folder"); }
+      const pickerCalls = picker.mock.calls.length;
+      await click("Tour this dialog");
+      expect(document.querySelector(".driver-popover")).not.toBeNull();
+      for (let i = 0; i < 8 && document.querySelector(".driver-popover"); i++) await act(async () => document.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+      expect(picker).toHaveBeenCalledTimes(pickerCalls);
+      expect(browserLinkMappings.save).not.toHaveBeenCalled(); expect(await service.list()).toEqual([]);
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect([...target.children.values()].every(file => "writes" in file && file.writes === 0)).toBe(true);
+    }
+  });
+
   it("keeps file URLs through Markdown, prompts only on click, saves only on Connect and opens a read-only document with its relative links", async () => {
     await render(); expect(picker).not.toHaveBeenCalled(); expect(document.querySelector('[role="dialog"]')).toBeNull();
     await follow(); await ready(() => Boolean(document.querySelector('[role="dialog"]')));

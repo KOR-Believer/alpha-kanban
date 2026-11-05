@@ -423,12 +423,16 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector("[data-tour-offer]")).toBeNull();
   });
 
-  it.each(["start", "project", "all"])("exposes skill updates directly in the %s header without navigating or requesting folder access", async (surface) => {
+  it.each(["start", "project", "all"])("explains feature entry points on %s without opening or applying them, then opens skill updates on request", async (surface) => {
     const picker = vi.fn();
     vi.stubGlobal("showDirectoryPicker", picker);
+    vi.stubGlobal("isSecureContext", true);
+    vi.stubGlobal("indexedDB", {});
+    vi.spyOn(navigator, "locks", "get").mockReturnValue({} as LockManager);
     vi.spyOn(skillRepository, "connection").mockResolvedValue(undefined);
     vi.spyOn(skillRepository, "recoveries").mockResolvedValue([]);
     const apply = vi.spyOn(skillRepository, "apply");
+    const preview = vi.spyOn(browserRepository, "previewMigration");
     const patch = vi.spyOn(browserRepository, "patch");
     const append = vi.spyOn(browserRepository, "append");
     vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
@@ -440,6 +444,21 @@ describe("browser mode UI boundaries", () => {
     const trigger = await waitForElement<HTMLButtonElement>(selector);
     expect(container.querySelectorAll(selector)).toHaveLength(1);
     expect(trigger.textContent).toBe("스킬 업데이트");
+    expect(skillRepository.connection).not.toHaveBeenCalled();
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-tour-help]")!.click());
+    const replay = await waitForElement<HTMLButtonElement>('[role="dialog"] [data-tour-replay]', document);
+    await act(async () => replay.click());
+    const visited: string[] = [];
+    await waitForElement(".driver-popover", document);
+    for (let index = 0; index < 30 && document.querySelector(".driver-popover"); index++) {
+      visited.push(document.querySelector(".driver-active-element")?.getAttribute("data-tour") ?? "");
+      await act(async () => document.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+    }
+    expect(visited).toContain("skill-updates");
+    if (surface === "project") expect(visited).toContain("document-maintenance");
+    expect(document.querySelector(".driver-popover")).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(preview).not.toHaveBeenCalled();
     expect(skillRepository.connection).not.toHaveBeenCalled();
     await act(async () => trigger.click());
     const dialog = await waitForElement('[role="dialog"]', document);

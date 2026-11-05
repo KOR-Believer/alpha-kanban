@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import { act, StrictMode } from "react";
+import { act, StrictMode, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLanguage, t } from "../i18n";
 import { TourButton, tourSteps, useScreenTour, type TourKind } from "./ScreenTour";
+import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { availableTourSteps } from "./tourSteps";
 import { english, korean } from "../i18n/messages";
 import { claimTourOffer, readTourResult, saveTourResult, subscribeToTours, tourStorageKey } from "./tourState";
@@ -20,6 +21,15 @@ function Harness({ enabled = true, eligible = true, scope = "test", kind = "star
       return <button key={name} data-tour={name}>{name}</button>;
     })}
   </>;
+}
+
+function ModalHarness({ open = true }: { open?: boolean }) {
+  const host = useRef<HTMLDivElement>(null);
+  const tour = useScreenTour("maintenance", { enabled: open, eligible: false, container: host });
+  return <Dialog open={open}><DialogContent ref={host} aria-describedby={undefined} style={{ transform: "translate(-50%, -50%)" }} onEscapeKeyDown={event => { if (tour.active) event.preventDefault(); }}>
+    <DialogTitle>Maintenance</DialogTitle><TourButton tour={tour} />
+    <div data-tour="maintenance-purpose">Preview only</div><button data-tour="maintenance-apply">Apply</button>
+  </DialogContent></Dialog>;
 }
 
 describe("screen tours", () => {
@@ -102,7 +112,7 @@ describe("screen tours", () => {
     expect(readTourResult("start")).toBe("dismissed");
   });
 
-  it.each(["scope", "disabled", "dialog", "target", "unmount"])("cleans up on %s without recording completion or restarting", async (reason) => {
+  it.each(["scope", "disabled", "dialog", "target", "hidden", "resize", "unmount"])("cleans up on %s without recording completion or restarting", async (reason) => {
     await render(); await click("[data-tour-help]");
     let dialog: HTMLDivElement | undefined;
     if (reason === "scope") await render({ scope: "other" });
@@ -117,6 +127,11 @@ describe("screen tours", () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       container.append(removed);
     });
+    if (reason === "hidden") await act(async () => {
+      document.querySelector<HTMLElement>('[data-tour="open-project"]')!.hidden = true;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    if (reason === "resize") await act(async () => { window.dispatchEvent(new Event("resize")); });
     if (reason === "unmount") await act(async () => root.render(null));
     expect(document.querySelector(".driver-overlay")).toBeNull();
     expect(document.querySelector(".driver-popover")).toBeNull();
@@ -143,7 +158,7 @@ describe("screen tours", () => {
     const target = document.querySelector('[data-tour="open-project"]')!;
     const hidden = document.querySelector<HTMLElement>('[data-tour="new-project"]')!;
     hidden.hidden = true; target.remove();
-    expect(availableTourSteps("start", t)).toHaveLength(6);
+    expect(availableTourSteps("start", t)).toHaveLength(tourSteps("start", t).length - 2);
     await click("[data-tour-help]");
     expect(document.querySelector(".driver-popover-title")?.textContent).toBe("여러 프로젝트 함께 연결하기");
     await click(".driver-popover-close-btn");
@@ -172,9 +187,56 @@ describe("screen tours", () => {
     expect(container.querySelector("[data-tour-offer]")).toBeNull();
   });
 
+  it("restores nested scrolling and preserves inputs through a language change and dismissal", async () => {
+    await render({ kind: "project", eligible: false });
+    const input = document.createElement("input"); input.value = "keep my search"; container.append(input);
+    const help = container.querySelector<HTMLButtonElement>("[data-tour-help]")!;
+    help.focus();
+    const originalFocus = HTMLElement.prototype.focus;
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, options) {
+      originalFocus.call(this, options);
+      if (this === help && !options?.preventScroll) container.scrollTop = 0;
+    });
+    container.scrollTop = 135; container.scrollLeft = 22;
+    await click("[data-tour-help]");
+    container.scrollTop = 600; container.scrollLeft = 0;
+    await act(async () => { await setLanguage("en"); });
+    container.scrollTop = 900;
+    await click(".driver-popover-close-btn");
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
+    expect(container.scrollTop).toBe(135); expect(container.scrollLeft).toBe(22);
+    expect(input.value).toBe("keep my search");
+  });
+
+  it("keeps a dialog tour inside its focus boundary, ignores hidden parent dialogs and restores its position", async () => {
+    const background = document.createElement("div"); background.setAttribute("role", "dialog"); background.setAttribute("aria-hidden", "true"); document.body.append(background);
+    await act(async () => root.render(<ModalHarness />));
+    expect(document.querySelector("[data-tour-offer]")).toBeNull();
+    expect(localStorage.getItem(`${tourStorageKey("maintenance")}.offered`)).toBeNull();
+    await click("[data-tour-replay]");
+    const host = document.querySelector<HTMLElement>('[role="dialog"][data-tour-positioned]')!;
+    expect(host).not.toBeNull();
+    expect(host.contains(document.querySelector(".driver-overlay"))).toBe(true);
+    expect(host.contains(document.querySelector(".driver-popover"))).toBe(true);
+    for (let i = 0; i < 8; i++) {
+      await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true, shiftKey: i > 3 })); });
+      expect(document.activeElement?.closest(".driver-popover")).not.toBeNull();
+    }
+    await click(".driver-popover-next-btn");
+    expect(document.querySelector(".driver-popover-title")?.textContent).toBe("확인한 뒤 적용하기");
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", code: "Escape" })); });
+    expect(host.isConnected).toBe(true); expect(host.hasAttribute("data-tour-positioned")).toBe(false);
+    expect(document.querySelector(".driver-overlay")).toBeNull();
+    expect(readTourResult("maintenance")).toBe("dismissed");
+    await click("[data-tour-replay]");
+    await act(async () => root.render(<ModalHarness open={false} />));
+    expect(document.querySelector(".driver-overlay")).toBeNull();
+    background.remove();
+  });
+
   it("has localized steps and shared button variants", async () => {
-    for (const kind of ["start", "project", "all", "detail"] as const) {
-      expect(tourSteps(kind, t).length).toBeGreaterThanOrEqual(6);
+    for (const kind of ["start", "project", "all", "detail", "linked", "maintenance", "link", "connections", "skill", "docs", "releases"] as const) {
+      expect(tourSteps(kind, t).length).toBeGreaterThanOrEqual(3);
       expect(tourSteps(kind, t).every((step) => /[가-힣]/.test(step.popover!.title!))).toBe(true);
       tourSteps(kind, ((key: string) => {
         expect(korean[key], key).toBeTruthy(); expect(english[key], key).toBeTruthy(); return key;

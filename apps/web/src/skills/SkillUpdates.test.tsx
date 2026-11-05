@@ -75,6 +75,42 @@ describe("explicit skill reinstall UI", () => {
     return { skill, extra };
   }
 
+  it("explains a known update without checking its consent or applying it", async () => {
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) { return (this.hidden ? [] : [new DOMRect(0, 0, 180, 28)]) as unknown as DOMRectList; });
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
+    await repository.connect(folder.handle()); await render();
+    const permission = vi.spyOn(folder, "requestPermission");
+    await click("Tour this dialog");
+    const titles: string[] = [];
+    for (let i = 0; i < 10 && document.querySelector(".driver-popover"); i++) {
+      titles.push(document.querySelector(".driver-popover-title")!.textContent!);
+      await act(async () => document.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+    }
+    expect(titles).toContain("Approve each update");
+    expect(button("Back up and update skill")!.disabled).toBe(true);
+    expect(permission).not.toHaveBeenCalled(); expect(skillRepository.apply).not.toHaveBeenCalled();
+    expect((folder.children.get("SKILL.md") as FakeFile).writes).toBe(0);
+  });
+
+  it("tours an unrecognized installation and its reinstall review without permission or writes", async () => {
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) { return (this.hidden ? [] : [new DOMRect(0, 0, 180, 28)]) as unknown as DOMRectList; });
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
+    const { skill, extra } = await customInstallation();
+    const before = skill.content;
+    const permission = vi.spyOn(folder, "requestPermission");
+    for (const phase of ["comparison", "reinstall"]) {
+      if (phase === "reinstall") await click("Review reinstall");
+      await click("Tour this dialog");
+      expect(document.querySelector(".driver-popover")).not.toBeNull();
+      for (let i = 0; i < 10 && document.querySelector(".driver-popover"); i++) await act(async () => document.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+      expect(document.querySelector(".driver-overlay")).toBeNull();
+    }
+    expect(permission).not.toHaveBeenCalled(); expect(window.showDirectoryPicker).not.toHaveBeenCalled();
+    expect(skillRepository.apply).not.toHaveBeenCalled(); expect(skillRepository.reinstall).not.toHaveBeenCalled(); expect(skillRepository.restore).not.toHaveBeenCalled();
+    expect(skill.content).toBe(before); expect(skill.writes).toBe(0); expect(extra.writes).toBe(0);
+    expect(button("Back up and reinstall")!.disabled).toBe(true);
+  });
+
   it("shows before/after content without writing, preserves consent across language changes and clears it on cancel/recheck/close", async () => {
     const { skill } = await customInstallation();
     const original = skill.content;

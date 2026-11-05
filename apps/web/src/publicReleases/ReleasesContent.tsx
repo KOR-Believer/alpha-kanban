@@ -29,7 +29,7 @@ export function ReleasesContent({ release, records, record, article, isList, go,
   if (isList) return <>
     <div className="ak-docs-breadcrumb"><span>{t("Releases")}</span><span>/</span><span>{t(channel === "canary" ? "Canary" : "Stable")}</span></div>
     <header className="ak-docs-page-heading"><h1 id="public-docs-title" tabIndex={-1}>{t("What’s new in Alpha Kanban")}</h1><p>{t("Read what changed and what to do next, in date order.")}</p></header>
-    <div className="ak-release-list">{records.map(row => <article key={row.id} className="ak-release-item">
+    <div className="ak-release-list">{records.map(row => <article data-tour="release-list" key={row.id} className="ak-release-item">
       <time dateTime={row.date}>{formatDate(row.date)}</time>
       <div><h2><NavigationLink className="ak-focus-ring" href={releaseHref(row.id)} onNavigate={() => go(releaseHref(row.id))}>{releaseTitle(row, language)}</NavigationLink></h2>
         <p>{row.notes[language][0]}</p>
@@ -43,13 +43,13 @@ export function ReleasesContent({ release, records, record, article, isList, go,
     <NavigationLink href="/releases" onNavigate={() => go("/releases")} className={buttonVariants({ variant: "outline" })}><ArrowLeft />{t("All releases")}</NavigationLink>
   </>;
   return <>
-    <NavigationLink className="ak-release-back ak-focus-ring" href="/releases" onNavigate={() => go("/releases")}><ArrowLeft />{t("All releases")}</NavigationLink>
+    <NavigationLink data-tour="release-back" className="ak-release-back ak-focus-ring" href="/releases" onNavigate={() => go("/releases")}><ArrowLeft />{t("All releases")}</NavigationLink>
     <header className="ak-docs-page-heading">
       <div className="ak-release-date"><time dateTime={record.date}>{formatDate(record.date)}</time><Badge variant="muted">{channel === "canary" ? "CANARY" : t("Stable")}</Badge></div>
       <h1 id="public-docs-title" tabIndex={-1}>{releaseTitle(record, language)}</h1>
     </header>
     {tableOfContents}
-    <section className="ak-docs-section">{heading("changes", t("What changed"))}
+    <section data-tour="release-changes" className="ak-docs-section">{heading("changes", t("What changed"))}
       <ul className="ak-release-notes">{record.notes[language].map((note, i) => <li key={i}>{note}</li>)}</ul>
     </section>
     {article?.sections.map(section => <section className="ak-docs-section" key={section.id}>
@@ -62,7 +62,7 @@ export function ReleasesContent({ release, records, record, article, isList, go,
     </section> : null}
     <section className="ak-docs-section">{heading("related", t("Related guides"))}
       <p className="ak-release-guide-lead">{t("Follow these guides for the current steps and controls.")}</p>
-      <nav className="ak-release-related" aria-label={t("Related guides")}>{guides.map(doc => <NavigationLink className="ak-focus-ring" key={doc.id} href={docHref(doc.id)} onNavigate={() => go(docHref(doc.id))}>{doc.title[language]}<ArrowRight /></NavigationLink>)}</nav>
+      <nav data-tour="release-guides" className="ak-release-related" aria-label={t("Related guides")}>{guides.map(doc => <NavigationLink className="ak-focus-ring" key={doc.id} href={docHref(doc.id)} onNavigate={() => go(docHref(doc.id))}>{doc.title[language]}<ArrowRight /></NavigationLink>)}</nav>
     </section>
   </>;
 }

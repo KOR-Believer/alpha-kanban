@@ -8,11 +8,41 @@ import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTi
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { ProjectGuide } from "../components/ProjectGuide";
 import { claimTourOffer, readTourResult, saveTourResult, subscribeToTours } from "./tourState";
-import { availableTourSteps, type TourKind } from "./tourSteps";
+import { availableTourSteps, isTourTargetVisible, type TourKind } from "./tourSteps";
 export { tourSteps, type TourKind } from "./tourSteps";
 
 const otherDialog = (allowed?: HTMLElement | null) => Array.from(document.querySelectorAll('[role="dialog"]:not(.ak-screen-tour), [role="alertdialog"], [role="listbox"]'))
-  .some((element) => element !== allowed);
+  .some((element) => element !== allowed && !element.closest('[aria-hidden="true"]') && isTourTargetVisible(element as HTMLElement));
+
+function captureScroll(elements: HTMLElement[]) {
+  const url = location.href;
+  const ancestors = new Set<HTMLElement>();
+  for (const target of elements) for (let element: HTMLElement | null = target; element; element = element.parentElement) ancestors.add(element);
+  const positions = Array.from(ancestors).map((element) => ({ element, top: element.scrollTop, left: element.scrollLeft }));
+  return () => {
+    if (location.href !== url) return;
+    for (const { element, top, left } of positions) if (element.isConnected) {
+      element.scrollTop = top; element.scrollLeft = left;
+    }
+  };
+}
+
+// A translated dialog would otherwise become the containing block for Driver's
+// viewport-positioned overlay. Freeze its current position only during the tour.
+function positionTourHost(host?: HTMLElement | null) {
+  if (!host) return () => {};
+  const style = getComputedStyle(host);
+  if (style.transform === "none" && (!style.translate || style.translate === "none")) return () => {};
+  const rect = host.getBoundingClientRect();
+  host.style.setProperty("--tour-host-left", `${rect.left}px`);
+  host.style.setProperty("--tour-host-top", `${rect.top}px`);
+  host.setAttribute("data-tour-positioned", "");
+  return () => {
+    host.removeAttribute("data-tour-positioned");
+    host.style.removeProperty("--tour-host-left");
+    host.style.removeProperty("--tour-host-top");
+  };
+}
 
 export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, scope = kind, container }: {
   enabled: boolean;
@@ -24,7 +54,7 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
   const id = kind;
   const result = useSyncExternalStore(subscribeToTours, () => readTourResult(id), () => null);
   const [invitation, setInvitation] = useState<{ id: TourKind; scope: string } | null>(null);
-  const [run, setRun] = useState<{ scope: string } | null>(null);
+  const [run, setRun] = useState<{ scope: string; restoreScroll: () => void } | null>(null);
   const index = useRef(0);
   const returnFocus = useRef<HTMLElement | null>(null);
   const start = useCallback(() => {
@@ -32,8 +62,9 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
     index.current = 0;
     returnFocus.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     setInvitation(null);
-    setRun({ scope });
-  }, [enabled, scope, container]);
+    const elements = availableTourSteps(kind, t, container?.current ?? document).map((step) => step.element as HTMLElement);
+    setRun({ scope, restoreScroll: captureScroll(elements) });
+  }, [enabled, scope, container, kind, t]);
 
   useEffect(() => {
     const firstVisit = enabled && eligible && claimTourOffer(id);
@@ -47,6 +78,7 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
     const steps = availableTourSteps(kind, t, host ?? document);
     const elements = steps.map((step) => step.element as HTMLElement);
     if (!steps.length) { setRun(null); return; }
+    const restoreHost = positionTourHost(host);
     let disposing = false;
     const tour = driver({
       steps, animate: false, smoothScroll: false, disableActiveInteraction: true,
@@ -80,15 +112,20 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
       },
       onDestroyed(_element, _step, options) {
         if (disposing) return;
+        restoreHost();
+        run.restoreScroll();
         const userEnded = ["done", "close", "escape", "overlay"].includes(options.reason ?? "");
         if (userEnded) saveTourResult(id, options.reason === "done" ? "completed" : "dismissed");
         setRun(null);
         if (userEnded) {
           const previous = returnFocus.current;
-          const fallback = document.querySelector<HTMLElement>("[data-tour-help], [data-tour-replay]");
+          const fallback = (host ?? document).querySelector<HTMLElement>("[data-tour-help], [data-tour-replay]");
           const destination = previous?.isConnected && !previous.closest("[data-tour-offer]") ? previous : fallback;
           requestAnimationFrame(() => {
             if (destination?.isConnected && !otherDialog(host)) destination.focus({ preventScroll: true });
+            // Driver restores focus after onDestroyed, which can scroll the page.
+            // Restore after that focus step, unless another tour has already begun.
+            if (!document.querySelector(".driver-popover")) run.restoreScroll();
           });
         }
       },
@@ -96,13 +133,31 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
     tour.drive(Math.min(index.current, steps.length - 1));
     // Polling can remove a card, and a route/dialog can replace the current surface.
     const observer = new MutationObserver(() => {
-      if (otherDialog(host) || elements.some((element) => !element.isConnected)) tour.destroy();
+      if (otherDialog(host) || elements.some((element) => !element.isConnected || !isTourTargetVisible(element))) tour.destroy();
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class", "aria-hidden"] });
+    const resized = () => tour.destroy();
+    window.addEventListener("resize", resized);
+    // Driver also includes the highlighted controls in its Tab order. Keep
+    // keyboard interaction in the explanation, just like pointer interaction.
+    const tabWithinTour = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".ak-screen-tour button"))
+        .filter((button) => !button.disabled && isTourTargetVisible(button));
+      if (!buttons.length) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      buttons[(current + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]!.focus({ preventScroll: true });
+    };
+    window.addEventListener("keydown", tabWithinTour, true);
     return () => {
       disposing = true;
       observer.disconnect();
+      window.removeEventListener("resize", resized);
+      window.removeEventListener("keydown", tabWithinTour, true);
       tour.destroy();
+      restoreHost();
+      run.restoreScroll();
     };
   }, [enabled, id, kind, run, scope, container, t, i18n.language]);
 

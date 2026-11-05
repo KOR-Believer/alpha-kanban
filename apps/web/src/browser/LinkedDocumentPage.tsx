@@ -67,8 +67,8 @@ export function LinkedDocumentPage() {
   const outline = parseMarkdownOutline(markdown ?? "");
   return <section className="flex h-full min-h-0 min-w-0 flex-col" aria-label={t("Linked document")}>
     <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-5 py-3">
-      <NavigationLink href={sourceHref} className={buttonVariants({ size: "sm", variant: "ghost" })} onNavigate={() => void navigate({ href: sourceHref, resetScroll: false })}><ArrowLeft />{t("Back to source document")}</NavigationLink>
-      <Badge variant="muted">{t("Read-only")}</Badge>
+      <NavigationLink data-tour="linked-source" href={sourceHref} className={buttonVariants({ size: "sm", variant: "ghost" })} onNavigate={() => void navigate({ href: sourceHref, resetScroll: false })}><ArrowLeft />{t("Back to source document")}</NavigationLink>
+      <Badge data-tour="linked-readonly" variant="muted">{t("Read-only")}</Badge>
       {resource ? <Button size="sm" variant="ghost" className="ml-auto" onClick={() => downloadLinkedResource(resource)}><Download />{t("Download file")}</Button> : null}
       {record ? <p className="basis-full break-all text-xs text-muted-foreground">{record.context.label} / {record.context.path}</p> : null}
     </header>

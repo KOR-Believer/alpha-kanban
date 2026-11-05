@@ -91,6 +91,18 @@ describe("automatic document maintenance preview", () => {
     expect(dialog()).toBeNull(); expect(file.content).toBe(source); expect(file.writes).toBe(0);
   });
 
+  it("tours the prepared preview without regenerating it or writing the document", async () => {
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) { return (this.hidden ? [] : [new DOMRect(0, 0, 180, 28)]) as unknown as DOMRectList; });
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
+    await openReady();
+    await click("Tour this dialog");
+    expect(dialog()?.contains(document.querySelector(".driver-popover"))).toBe(true);
+    for (let i = 0; i < 8 && document.querySelector(".driver-popover"); i++) await act(async () => document.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+    expect(document.querySelector(".driver-popover")).toBeNull();
+    expect(preview).toHaveBeenCalledTimes(1); expect(apply).not.toHaveBeenCalled();
+    expect(file.content).toBe(source); expect(file.writes).toBe(0); expect(dialog()).not.toBeNull();
+  });
+
   it("writes only the reviewed result on Apply, preserves actual tickets, and reopens as a noop", async () => {
     await openReady();
     const plan = await preview.mock.results[0]!.value as BrowserMigration;

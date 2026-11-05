@@ -19,6 +19,7 @@ import skillComparisonEn from "./assets/skill-comparison-en.png";
 import { releaseTitle } from "../pwa/releases";
 import { publicReleases, releaseArticle, releasePathId } from "../publicReleases/catalog";
 import { ReleasesContent } from "../publicReleases/ReleasesContent";
+import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
 import "./docs.css";
 
 const RUNNING_RELEASE = __APP_RELEASE__;
@@ -50,6 +51,7 @@ export function PublicReadingPage() {
   const doc = documents.find(item => item.id === id);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const tour = useScreenTour(isReleases ? "releases" : "docs", { enabled: !searchOpen && !menuOpen, eligible: false, scope: `${location.pathname}:${location.hash}` });
   const [activeSection, setActiveSection] = useState("");
   const main = useRef<HTMLElement>(null);
   const { header, headerHeight } = useSiteHeaderSize();
@@ -117,19 +119,20 @@ export function PublicReadingPage() {
   const index = documents.findIndex(item => item.id === id), previous = documents[index - 1], next = documents[index + 1];
   return <div className="ak-public-docs" style={{ "--ak-docs-header-height": `${headerHeight}px` } as CSSProperties}>
     <a className="ak-docs-skip ak-focus-ring" href="#public-docs-title">{t("Skip to content")}</a>
-    <SiteHeader ref={header} page={isReleases ? "/releases" : "/docs"} className="ak-docs-header" onNavigate={go} tools={
-      <Button size="sm" variant="outline" title={t("Search documentation")} aria-label={t("Search documentation")} onClick={event => { focusTarget.current = event.currentTarget; setSearchOpen(true); }}><Search /><span className="ak-toolbar-label">{t("Search documentation")}</span><kbd className="ak-docs-shortcut" aria-hidden="true">{"⌘/Ctrl K"}</kbd></Button>
-    } />
+    <SiteHeader ref={header} page={isReleases ? "/releases" : "/docs"} className="ak-docs-header" onNavigate={go} tools={<>
+      <TourButton tour={tour} />
+      <Button data-tour="docs-search" size="sm" variant="outline" title={t("Search documentation")} aria-label={t("Search documentation")} onClick={event => { focusTarget.current = event.currentTarget; setSearchOpen(true); }}><Search /><span className="ak-toolbar-label">{t("Search documentation")}</span><kbd className="ak-docs-shortcut" aria-hidden="true">{"⌘/Ctrl K"}</kbd></Button>
+    </>} />
     <div className="ak-docs-layout">
-      <aside className="ak-docs-sidebar ak-scroll-area"><nav aria-label={t("Documentation")}>{nav()}</nav></aside>
+      <aside data-tour="docs-navigation" className="ak-docs-sidebar ak-scroll-area"><nav aria-label={t("Documentation")}>{nav()}</nav></aside>
       <main ref={main} className="ak-docs-main">
-        <div className="ak-docs-mobile-nav"><Button ref={menuTrigger} variant="ghost" size="sm" onClick={() => { menuNavigating.current = false; setMenuOpen(true); }}><Menu />{t("Browse documentation")}</Button></div>
+        <div className="ak-docs-mobile-nav"><Button data-tour="docs-navigation" ref={menuTrigger} variant="ghost" size="sm" onClick={() => { menuNavigating.current = false; setMenuOpen(true); }}><Menu />{t("Browse documentation")}</Button></div>
         <article key={id} className="ak-docs-article">
-          {isReleases ? <ReleasesContent release={RUNNING_RELEASE} records={records} record={record} article={article} isList={releaseId === null} go={go} tableOfContents={<details className="ak-docs-mobile-toc"><summary>{t("On this page")}</summary>{toc()}</details>} /> : <>
+          {isReleases ? <ReleasesContent release={RUNNING_RELEASE} records={records} record={record} article={article} isList={releaseId === null} go={go} tableOfContents={<details className="ak-docs-mobile-toc"><summary data-tour="docs-toc">{t("On this page")}</summary>{toc()}</details>} /> : <>
           <div className="ak-docs-breadcrumb"><NavigationLink href="/docs" onNavigate={() => go("/docs")}>{t("Documentation")}</NavigationLink><span>/</span><span>{doc ? groups[doc.group]![language] : t("Guide not found")}</span></div>
           <header className="ak-docs-page-heading"><h1 id="public-docs-title" tabIndex={-1}>{title}</h1><p>{doc?.lead[language] ?? t("Check the address or choose a guide from the navigation.")}</p></header>
           {doc ? <>
-            <details className="ak-docs-mobile-toc"><summary>{t("On this page")}</summary>{toc()}</details>
+            <details className="ak-docs-mobile-toc"><summary data-tour="docs-toc">{t("On this page")}</summary>{toc()}</details>
             {doc.sections.map(section => <div key={section.id}>
               <section className="ak-docs-section" aria-labelledby={section.id}><h2 id={section.id} tabIndex={-1}>
                 {section.title[language]}<NavigationLink href={docHref(id, section.id)} onNavigate={() => go(docHref(id, section.id))} aria-label={t("Link to {{heading}}", { heading: section.title[language] })} className="ak-focus-ring"><LinkIcon /></NavigationLink>
@@ -146,7 +149,7 @@ export function PublicReadingPage() {
               </section>
               {exampleAfter[id] === section.id ? <DocExample id={id} /> : null}
             </div>)}
-            <nav className="ak-docs-next" aria-label={t("Previous and next guides")}>
+            <nav data-tour="docs-next" className="ak-docs-next" aria-label={t("Previous and next guides")}>
               {previous ? <NavigationLink href={docHref(previous.id)} onNavigate={() => go(docHref(previous.id))}><ArrowLeft /><span><small>{t("Previous guide")}</small><strong>{previous.title[language]}</strong></span></NavigationLink> : <span />}
               {next ? <NavigationLink href={docHref(next.id)} onNavigate={() => go(docHref(next.id))}><span><small>{t("Next guide")}</small><strong>{next.title[language]}</strong></span><ArrowRight /></NavigationLink> : null}
             </nav>
@@ -155,7 +158,7 @@ export function PublicReadingPage() {
           <SiteFooter className="ak-docs-footer" />
         </article>
       </main>
-      <aside className="ak-docs-toc ak-scroll-area">{headings.length ? <><h2>{t("On this page")}</h2>{toc()}</> : null}</aside>
+      <aside data-tour={headings.length ? "docs-toc" : undefined} className="ak-docs-toc ak-scroll-area">{headings.length ? <><h2>{t("On this page")}</h2>{toc()}</> : null}</aside>
     </div>
     <DocsSearch open={searchOpen} onOpenChange={setSearchOpen} returnFocus={() => focusTarget.current?.focus({ preventScroll: true })} documents={documents} onNavigate={go} />
     <Dialog open={menuOpen} onOpenChange={setMenuOpen}><DialogContent className="ak-docs-menu" aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (!menuNavigating.current) menuTrigger.current?.focus({ preventScroll: true }); }}>

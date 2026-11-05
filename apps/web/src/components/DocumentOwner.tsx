@@ -12,12 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import type { OwnerFilter } from "../ownerFilters";
 import type { BoardOwnerSelection } from "../allBoardOwnerFilters";
 
-export function DocumentOwnerBadge({ file }: { file?: MarkdownFileSummary }) {
+export function DocumentOwnerBadge({ file, tourAnchor }: { file?: MarkdownFileSummary; tourAnchor?: string }) {
   const { t } = useTranslation();
   const owner = file && documentPathOwner(file).value;
   if (!owner) return null;
   return <Badge variant="muted" className="min-w-0 max-w-full" title={t("Document owner: {{owner}}", { owner })}>
-    <span data-document-owner={owner} className="truncate">{owner}</span>
+    <span data-tour={tourAnchor} data-document-owner={owner} className="truncate">{owner}</span>
   </Badge>;
 }
 
@@ -58,7 +58,7 @@ export function BoardOwnerFilter({ owners, selected, onChange }: {
   if (!owners.length && !selected.length) return null;
   return <Popover onOpenChange={(open) => { if (!open) setSearch(""); }}>
     <PopoverTrigger asChild>
-      <Button size="sm" variant={selected.length ? "secondary" : "outline"} aria-label={t("Owner filters ({{count}} selected)", { count: selected.length })}>
+      <Button data-tour="board-owners" size="sm" variant={selected.length ? "secondary" : "outline"} aria-label={t("Owner filters ({{count}} selected)", { count: selected.length })}>
         <Users aria-hidden="true" />{t("Document owner")}{selected.length ? <span className="tabular-nums">{selected.length}</span> : null}
       </Button>
     </PopoverTrigger>

@@ -8,6 +8,7 @@ import { useTranslation } from "../i18n";
 import { errorSummary } from "../i18n/errors";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { browserRepository, type BrowserMigration } from "./repository";
+import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
 import { CodeDiff } from "../components/CodeDiff";
 
 export function DocumentMaintenance({ file }: { file: MarkdownFileSummary }) {
@@ -18,6 +19,8 @@ function DocumentMaintenanceForFile({ file }: { file: MarkdownFileSummary }) {
   const { t } = useTranslation(), queryClient = useQueryClient();
   const [open, setOpen] = useState(false), [plan, setPlan] = useState<BrowserMigration>();
   const [busy, setBusy] = useState<"preview" | "apply">(), [error, setError] = useState<Error>();
+  const tourContainer = useRef<HTMLDivElement>(null);
+  const tour = useScreenTour("maintenance", { enabled: open && !busy, eligible: false, scope: `${file.id}:${plan?.preview.decision ?? "error"}`, container: tourContainer });
   const request = useRef(0), inFlight = useRef<typeof busy>(undefined);
   const previewAbort = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => { request.current++; previewAbort.current?.abort(); }, []);
@@ -57,22 +60,24 @@ function DocumentMaintenanceForFile({ file }: { file: MarkdownFileSummary }) {
     }
   };
   return <>
-    <Button size="sm" variant="outline" onClick={() => void preview()}><FileCog />{t("Document maintenance")}</Button>
+    <Button data-tour="document-maintenance" size="sm" variant="outline" onClick={() => void preview()}><FileCog />{t("Document maintenance")}</Button>
     <Dialog open={open} onOpenChange={(value) => { if (!value) close(); }}>
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]" showCloseButton={false} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (busy === "apply") event.preventDefault(); }}>
+      <DialogContent ref={tourContainer} className="grid-rows-[auto_minmax(0,1fr)_auto]" showCloseButton={false} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (busy === "apply" || tour.active) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle>{t("Document maintenance")}</DialogTitle>
-          <DialogDescription>{t("Keep documents you continue to use aligned with the current document format. Review the changes, then apply them to save only this document. Maintenance is optional; existing documents remain readable.")}</DialogDescription>
+          <div className="flex flex-wrap items-center justify-between gap-2"><DialogTitle>{t("Document maintenance")}</DialogTitle><TourButton tour={tour} labelKey="Tour this dialog" /></div>
+          <DialogDescription data-tour="maintenance-purpose">{t("Keep documents you continue to use aligned with the current document format. Review the changes, then apply them to save only this document. Maintenance is optional; existing documents remain readable.")}</DialogDescription>
           <p className="break-all text-xs text-muted-foreground">{file.relativePath}</p>
         </DialogHeader>
         <DialogBody className="grid gap-4">
           <p className="text-sm text-muted-foreground">{t("Available changes include missing document IDs, folder-based Owner correction, and removal of obsolete guidance and templates.")}</p>
           {busy === "preview" ? <p className="flex items-center gap-2 text-sm" role="status"><Loader2 className="size-4 animate-spin" aria-hidden="true" />{t("Preparing document preview…")}</p> : null}
           {plan ? <div className="grid gap-3 text-sm" aria-live="polite">
+            <div className="grid gap-3" data-tour={plan.preview.retained.length || plan.preview.issues.length || plan.preview.decision === "noop" ? "maintenance-result" : undefined}>
             {plan.preview.decision === "noop" ? <p>{t("No document changes are needed.")}</p> : null}
             {plan.preview.retained.map((item, index) => <p key={index}>{t(item.code === "OWNER_PATH_UNRESOLVED" ? "Owner is kept because the document has no confirmed owner folder." : item.code === "LEGACY_REFERENCED_SECTION" ? "{{section}} will be kept to preserve an existing link." : item.code === "LEGACY_NOTES_PRESERVED" ? "Additional content in {{section}} will be kept." : "No recognized legacy content was found in {{section}}. This section will be kept.", { section: item.section })}</p>)}
             {plan.preview.issues.map((issue, index) => <div key={index} className="text-destructive"><p>{issue.path}</p><p>{t(migrationIssueMessage(issue.code))}</p><code className="text-xs">{issue.code}</code></div>)}
-            {plan.preview.changes.map((change) => <section key={change.path} className="grid min-w-0 gap-2">
+            </div>
+            {plan.preview.changes.map((change) => <section data-tour="maintenance-diff" key={change.path} className="grid min-w-0 gap-2">
                 <h3 className="break-all font-semibold">{change.path}</h3>
                 <CodeDiff before={change.before} after={change.after} />
               </section>)}
@@ -83,7 +88,7 @@ function DocumentMaintenanceForFile({ file }: { file: MarkdownFileSummary }) {
         <DialogFooter>
           <Button variant="outline" disabled={busy === "apply"} onClick={close}>{t("Cancel")}</Button>
           {error || plan?.preview.decision === "blocked" ? <Button variant="outline" disabled={Boolean(busy)} onClick={() => void preview()}>{t("Refresh preview")}</Button> : null}
-          <Button disabled={Boolean(busy) || plan?.preview.decision !== "ready" || Boolean(error)} onClick={() => void apply()}>{t("Apply reviewed changes")}</Button>
+          <Button data-tour="maintenance-apply" disabled={Boolean(busy) || plan?.preview.decision !== "ready" || Boolean(error)} onClick={() => void apply()}>{t("Apply reviewed changes")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

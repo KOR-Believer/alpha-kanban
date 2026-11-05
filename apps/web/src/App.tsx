@@ -717,10 +717,10 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     );
   }
 
-  const boardTour = useScreenTour("project", {
-    enabled: !linked.id && canLoadWorkspace && !isTicketDetailOpen,
-    eligible: !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
-    scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}`,
+  const boardTour = useScreenTour(linked.id ? "linked" : "project", {
+    enabled: canLoadWorkspace && (!isTicketDetailOpen || Boolean(linked.id)),
+    eligible: !linked.id && !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
+    scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}:${linked.id ?? ""}`,
   });
   const tourFile = allFiles.find((file) => file.id === lastBoardFile.current?.id && file.type === "tickets") ?? allFiles.find((file) => file.type === "tickets");
   useEffect(() => {
@@ -877,7 +877,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {selectedFile ? (
                   <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
                     <DocumentTypeBadge type={selectedFile.type} />
-                    <DocumentOwnerBadge file={selectedFile} />
+                    <DocumentOwnerBadge file={selectedFile} tourAnchor="document-owner" />
                     <p className="ak-body-muted min-w-0 truncate text-xs">
                       {selectedFile.workspaceRelativePath}
                     </p>
@@ -1208,7 +1208,7 @@ function DocumentSetNavigator({
 }) {
   const { t } = useTranslation();
   return (
-    <nav className="grid gap-1" aria-label={t("Documents")} aria-busy={busy} data-project-search={search}>
+    <nav data-tour={search && documentSets.length ? "document-results" : undefined} className="grid gap-1" aria-label={t("Documents")} aria-busy={busy} data-project-search={search}>
       {documentSets.map(({ documentSet, documents }) => (
         <DocumentSetRow
           documentSet={documentSet}
