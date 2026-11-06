@@ -4,7 +4,7 @@ import { resolveDocumentContext } from "./lib/document-context.mjs";
 
 const usage = `Read-only document context (JSON; no settings, folders or Markdown are written).
 
-node <skill>/scripts/document-context.mjs new [--cwd PROJECT] [--base-dir DIRECTORY] [--with-id]
+node <skill>/scripts/document-context.mjs new [--cwd PROJECT] [--base-dir DIRECTORY]
 node <skill>/scripts/document-context.mjs new --target DIRECTORY [--cwd PROJECT]
 node <skill>/scripts/document-context.mjs edit --target FILE [--cwd PROJECT]
 node <skill>/scripts/document-context.mjs actor [--cwd PROJECT]
@@ -14,8 +14,9 @@ node <skill>/scripts/document-context.mjs check-new --target FILE [--cwd PROJECT
 Targets and base-dir are relative to the resolved project/worktree root (or absolute within it).
 new without target uses documents.root (default: docs); base-dir preserves an explicit basic location.
 An explicit target bypasses the default policy and user lookup. edit always preserves metadata.
-actor is only for requests that need the current user. check-new checks a newly written Owner header.
---with-id allocates one optional UUID header for one new file. Run separately for each file; never reuse it.
+actor is only for requests that need the current user. check-new requires a valid Document-ID and checks Owner.
+new always allocates one UUID header for one new file. Run separately for each file; never reuse it.
+--with-id is still accepted with new for older callers, but is no longer needed.
 --home DIRECTORY selects an isolated home for tests/isolated environments; normally the OS home is used.
 Exit codes: 0 success; 2 invalid request; 3 context/settings/read/validation failure. Consult diagnostics.code.
 `;

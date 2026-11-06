@@ -7,7 +7,7 @@ import { scanDocumentHeader } from "../../skills/implementation-ledger/scripts/l
 import { previewDocumentMigrations } from "../../packages/shared/src/documentMigration.mjs";
 import { resolveDocumentContext } from "../../skills/implementation-ledger/scripts/lib/document-context.mjs";
 import { withinDocumentRoot } from "../../skills/implementation-ledger/scripts/lib/document-root.mjs";
-import { fail, hashObject, sha, portable, maybeStat, git, worktreeContext, normalizeRemote, safePath, snapshot, scanWorktree } from "./document-fs.mjs";
+import { fail, hashObject, sha, portable, maybeStat, git, worktreeContext, normalizeRemote, safePath, snapshot, scanWorktree, DOCUMENT_SCAN_POLICY } from "./document-fs.mjs";
 
 const selected = (scopes, file) => scopes.some((scope) => file === scope || file.startsWith(scope + "/"));
 const exactKeys = (input, names, label) => {
@@ -77,7 +77,8 @@ function formatCheck(relative, markdown, headerOnly = false) {
 }
 
 /** Reads only. The caller controls where to save the returned reviewable JSON plan. */
-export async function createDocumentPlan(request, { cwd = process.cwd(), home, generatedIds } = {}) {
+export async function createDocumentPlan(request, { cwd = process.cwd(), home, generatedIds, scanPolicy = DOCUMENT_SCAN_POLICY } = {}) {
+  if (scanPolicy !== null && scanPolicy !== DOCUMENT_SCAN_POLICY) fail("INVALID_PLAN", "Unknown document scan policy.");
   validateRequest(request, null);
   const context = await worktreeContext(cwd), root = context.root;
   const settings = await resolveDocumentContext({ operation: "root", cwd: root });
@@ -88,16 +89,16 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
   const actor = request.actor === "current" ? await resolveDocumentContext({ operation: "actor", cwd: root, ...(home ? { home } : {}) }) : null;
   if (actor && !actor.ok) fail(actor.diagnostics[0]?.code ?? "USER_REQUIRED", actor.diagnostics[0]?.message ?? "Current user could not be resolved.");
   const actorIdentity = actor ? { user: actor.user, context: actor.context } : null;
-  const scan = await scanWorktree(root, documentRoot), issues = [];
+  for (const scope of request.scope) await safePath(root, scope, { missing: true });
+  const scan = await scanWorktree(root, documentRoot, scanPolicy ? request.scope : undefined), issues = [];
   const writePath = async (relative, missing = false) => {
     if (!selected(request.scope, projectPath(relative))) fail("WRITE_SCOPE", "A source or destination lies outside the selected docs scope.", { path: relative });
     return safePath(root, relative, { missing });
   };
-  for (const scope of request.scope) await safePath(root, scope, { missing: true });
   for (const skipped of scan.skipped) {
     if (request.operation === "migrate") continue; // Cleanup does not require complete move/backlink coverage.
     const insideScope = selected(request.scope, skipped.path);
-    issues.push({ severity: insideScope ? "blocked" : "review", code: skipped.code, path: skipped.path, message: insideScope ? "The selected write scope contains an uninspected boundary." : "This worktree path was not inspected for backlinks." });
+    issues.push({ severity: insideScope ? "blocked" : "review", code: skipped.code, path: skipped.path, message: insideScope ? "The selected write scope contains an uninspected boundary." : skipped.message ?? "This worktree path was not inspected for backlinks." });
   }
   const documents = scan.documents.map((document) => ({ ...document, writable: selected(request.scope, document.path) }));
   const byPath = new Map(documents.map((document) => [document.path, document]));
@@ -214,8 +215,10 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
     }
   }
   if (changes.reduce((sum, change) => sum + Number(change.before.size), 0) > 256 * 1024 * 1024) fail("BACKUP_LIMIT", "One operation may back up at most 256 MiB; select a smaller docs scope.");
-  if ((changes.length || directories.length) && !migration) issues.push({ severity: "review", code: "UNSCANNED_BACKLINKS", path: "", message: "Backlinks in other worktrees, unregistered repos, chats and arbitrary prose are not checked. Confirm that this scope is sufficient." });
-  const guard = { paths: scan.paths, documents: scan.documents.map((document) => ({ path: document.path, ...document.guard })), skipped: scan.skipped };
+  if ((changes.length || directories.length) && !migration) issues.push({ severity: "review", code: "UNSCANNED_BACKLINKS", path: "", message: scanPolicy
+    ? "Backlinks in Git-ignored untracked files outside the selected scope, excluded or nested repositories, other worktrees, chats and arbitrary prose are not checked. Confirm that this scope is sufficient."
+    : "Backlinks in other worktrees, unregistered repos, chats and arbitrary prose are not checked. Confirm that this scope is sufficient." });
+  const guard = { ...(scanPolicy ? { policy: scanPolicy } : {}), paths: scan.paths, documents: scan.documents.map((document) => ({ path: document.path, ...document.guard })), skipped: scan.skipped };
   const baseRequest = { ...request }; delete baseRequest.acknowledgements;
   // Omit the unchanged default from legacy plans; nondefault values/sources are
   // pinned in the reviewed plan and re-resolved before application/resumption.
@@ -232,6 +235,7 @@ export async function createDocumentPlan(request, { cwd = process.cwd(), home, g
 
 export function assertPlan(plan) {
   if (!plan || plan.schema !== 1 || plan.engine !== "document-operations-1") fail("INVALID_PLAN", "Unknown operation plan.");
+  if (plan.scan?.policy !== undefined && plan.scan.policy !== DOCUMENT_SCAN_POLICY) fail("INVALID_PLAN", "Unknown document scan policy.");
   const { id, ...body } = plan;
   if (id !== hashObject(body)) fail("PLAN_CHANGED", "The reviewed plan was changed.");
   if (!["ready", "noop"].includes(plan.decision)) fail("PLAN_NOT_READY", "Resolve blocked findings and explicitly acknowledge reviewed limits by reanalysis.");

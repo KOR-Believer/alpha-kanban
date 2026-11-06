@@ -77,6 +77,7 @@
 
 - 파일 내부의 지속적 ID, 브라우저 로컬 ID, 티켓 ID, 문서 형식 개정, 스킬 개정, 앱 릴리즈는 서로 구분한다. ID는 경로·소유자·제목에서 파생하지 않고 이동·이름 변경 시 유지한다.
 - 소유자는 AKD-01의 문서 상단 `Owner:` 한 줄을 사용한다. AKD-12에서 같은 문서 헤더의 선택적 `Document-ID: <UUID v4>`를 확정했다. 필드 범위·기존 front matter·UUID 유효성·충돌·재개는 [ID·분석 계약](team_document_identity_contract.md)을 따른다. 필수 YAML front matter나 문서별 sidecar YAML·추가 title을 만들지 않고 사용자 설정용 `.ak.user`와도 구분한다. 스킬 개정과 문서 형식 지원 선언은 AKL-10의 호환 계약을 따르며 공개 배포와 구분한다.
+- 새 plan/tickets/inventory 작성에는 설정·Owner 유무와 무관하게 파일별 UUID를 자동 발급한다. 공통 도구의 `new`를 파일마다 호출해 `documentIdHeader`를 사용하고 `check-new`에서 누락·무효 ID를 거부한다. 기존 ID 없는 문서의 열람·일반 수정은 그대로 허용하며 ID 추가는 선택적 문서 정리에서만 한다. 새 문서 작성 규칙이며 문서 형식이나 일반 검증기의 하위 호환을 바꾸지 않는다.
 - AKD-03의 공용 파서는 기록된 owner·경로 소유자·ID를 각각 읽고 레거시 편입·이동/인수 정합화·소유자 일치·미지정/메타데이터 오류를 분석 결과로 반환한다. 일반 폴더의 owner 부재는 정상적인 미지정이며 레거시 편입 분류는 `@사용자` 안에서만 적용한다. owner 등록과 UUID 발급은 별도 선택이며 기본 사용도 `.ak.config`·`.ak.user`·owner 없이 ID를 사용할 수 있다. 판정만으로 원본을 바꾸거나 일반 Markdown에 메타데이터를 일괄 추가하지 않는다.
 - ID는 이동 추적을 보조하며 일반 상대 Markdown 링크를 대체하지 않는다. GitHub나 외부 편집기에서도 문서가 읽히고 링크를 따라갈 수 있게 한다.
 - 기본 레거시 마이그레이션 대상은 발견한 plan/tickets/inventory 문서다. 일반 Markdown에 대한 ID 발급은 사용자가 추가 선택한 파일만 포함한다. 프로젝트의 모든 Markdown을 자동으로 ledger 형식으로 바꾸지 않는다.

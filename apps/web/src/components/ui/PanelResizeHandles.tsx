@@ -2,9 +2,10 @@ import { MoveDiagonal2 } from "lucide-react";
 import { useTranslation } from "@/i18n";
 import type { PanelPresentation, ResizeEdge } from "./usePanelPresentation";
 
-export function PanelResizeHandles({ presentation, label }: {
+export function PanelResizeHandles({ presentation, label, tourLayout = false }: {
   presentation: PanelPresentation;
   label: (edge: ResizeEdge) => string;
+  tourLayout?: boolean;
 }) {
   const { t } = useTranslation();
   if (presentation.mode === "full") return null;
@@ -12,7 +13,7 @@ export function PanelResizeHandles({ presentation, label }: {
   return edges.map((edge) => {
     const vertical = edge === "top" || edge === "bottom";
     const corner = edge === "bottom-right";
-    return <button key={edge} type="button" className="ak-focus-ring ak-panel-resize-handle" data-edge={edge}
+    return <button key={edge} type="button" className="ak-focus-ring ak-panel-resize-handle" data-edge={edge} data-tour-layout={tourLayout || undefined}
       role={corner ? undefined : "separator"} aria-label={label(edge)}
       aria-orientation={corner ? undefined : vertical ? "horizontal" : "vertical"}
       aria-valuemin={corner ? undefined : vertical ? presentation.limits.minHeight : presentation.limits.minWidth}
@@ -26,6 +27,9 @@ export function PanelResizeHandles({ presentation, label }: {
         presentation.startResize(edge, event.clientX, event.clientY, event.pointerId);
       }}
       onDoubleClick={presentation.resetSize}
+      onKeyUp={(event) => {
+        if (tourLayout && event.key.startsWith("Arrow")) event.stopPropagation();
+      }}
       onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "Enter", " "].includes(event.key)) return;
         event.preventDefault();

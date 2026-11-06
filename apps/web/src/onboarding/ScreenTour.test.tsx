@@ -112,7 +112,7 @@ describe("screen tours", () => {
     expect(readTourResult("start")).toBe("dismissed");
   });
 
-  it.each(["scope", "disabled", "dialog", "target", "hidden", "resize", "unmount"])("cleans up on %s without recording completion or restarting", async (reason) => {
+  it.each(["scope", "disabled", "dialog", "target", "hidden", "unmount"])("cleans up on %s without recording completion or restarting", async (reason) => {
     await render(); await click("[data-tour-help]");
     let dialog: HTMLDivElement | undefined;
     if (reason === "scope") await render({ scope: "other" });
@@ -131,13 +131,24 @@ describe("screen tours", () => {
       document.querySelector<HTMLElement>('[data-tour="open-project"]')!.hidden = true;
       await new Promise(resolve => setTimeout(resolve, 10));
     });
-    if (reason === "resize") await act(async () => { window.dispatchEvent(new Event("resize")); });
     if (reason === "unmount") await act(async () => root.render(null));
     expect(document.querySelector(".driver-overlay")).toBeNull();
     expect(document.querySelector(".driver-popover")).toBeNull();
     expect(document.body.classList.contains("driver-active")).toBe(false);
     expect(readTourResult("start")).toBeNull();
     dialog?.remove();
+  });
+
+  it("keeps the current step and result unchanged when the viewport resizes", async () => {
+    await render(); await click("[data-tour-help]"); await click(".driver-popover-next-btn");
+    const popover = document.querySelector(".driver-popover");
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    });
+    expect(document.querySelector(".driver-popover")).toBe(popover);
+    expect(document.querySelector(".driver-popover-title")?.textContent).toBe("여러 프로젝트 함께 연결하기");
+    expect(readTourResult("start")).toBeNull();
   });
 
   it("keeps a separate first-use record for each surface and always exposes replay", async () => {
@@ -216,6 +227,9 @@ describe("screen tours", () => {
     await click("[data-tour-replay]");
     const host = document.querySelector<HTMLElement>('[role="dialog"][data-tour-positioned]')!;
     expect(host).not.toBeNull();
+    expect(host.style.transform).toBe("none");
+    expect(host.style.translate).toBe("none");
+    expect(host.style.getPropertyPriority("transform")).toBe("important");
     expect(host.contains(document.querySelector(".driver-overlay"))).toBe(true);
     expect(host.contains(document.querySelector(".driver-popover"))).toBe(true);
     for (let i = 0; i < 8; i++) {
@@ -224,8 +238,20 @@ describe("screen tours", () => {
     }
     await click(".driver-popover-next-btn");
     expect(document.querySelector(".driver-popover-title")?.textContent).toBe("확인한 뒤 적용하기");
+    vi.spyOn(host, "getBoundingClientRect").mockReturnValue(new DOMRect(80, 50, 640, 480));
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    });
+    expect(host.style.getPropertyValue("--tour-host-left")).toBe("80px");
+    expect(host.style.getPropertyValue("--tour-host-top")).toBe("50px");
+    expect(document.querySelector(".driver-popover-title")?.textContent).toBe("확인한 뒤 적용하기");
+    expect(readTourResult("maintenance")).toBeNull();
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", code: "Escape" })); });
     expect(host.isConnected).toBe(true); expect(host.hasAttribute("data-tour-positioned")).toBe(false);
+    expect(host.style.transform).toBe("translate(-50%, -50%)");
+    expect(host.style.translate).toBe("");
+    expect(host.style.getPropertyPriority("transform")).toBe("");
     expect(document.querySelector(".driver-overlay")).toBeNull();
     expect(readTourResult("maintenance")).toBe("dismissed");
     await click("[data-tour-replay]");

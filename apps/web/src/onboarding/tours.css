@@ -10,6 +10,8 @@
   width: 340px;
   min-width: 0;
   max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   padding: var(--ak-space-md);
   border: 1px solid var(--border);
   border-radius: var(--ak-radius-sm);
@@ -61,18 +63,16 @@
 .ak-screen-tour .driver-popover-navigation-btns button + button { margin-left: 0; }
 .ak-screen-tour .driver-popover-arrow { display: none; }
 
-/* Fixed tour elements must use viewport coordinates even inside a center peek. */
-.ak-ticket-detail-shell[data-mode="modal"][data-tour-active] {
-  left: max(0px, calc((100dvw - var(--ticket-detail-width)) / 2));
-  top: max(0px, calc((100dvh - var(--ticket-detail-height)) / 2));
-  transform: none;
-}
-
 [data-tour="ticket-order"].driver-active-element { opacity: 1; }
 
 [data-tour-positioned] {
   left: var(--tour-host-left) !important;
   top: var(--tour-host-top) !important;
-  transform: none !important;
-  translate: none !important;
 }
+
+/* Only size controls remain interactive; file/permission actions stay blocked. */
+[data-tour-positioned] [data-tour-layout] {
+  pointer-events: auto;
+  z-index: 1000000000;
+}
+[data-tour-positioned] [data-tour-layout]:not(.ak-panel-resize-handle) { position: relative; }

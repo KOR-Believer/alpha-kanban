@@ -2,7 +2,7 @@
 
 ## Sources of truth
 
-`scripts/lib/ledger-contract.mjs` declares skill revision **2**, readable/writable document formats **unversioned and 1**, and the new-document default **unversioned**. SKILL.md metadata and packaged manifest must agree with it. Revision 1 is the first declared revision, not a version retroactively assigned to older bundles. No previous semantic versions are inferred from bundle hashes.
+`scripts/lib/ledger-contract.mjs` declares skill revision **3**, readable/writable document formats **unversioned and 1**, and the new-document default **unversioned**. SKILL.md metadata and packaged manifest must agree with it. Revision 1 is the first declared revision, not a version retroactively assigned to older bundles. No previous semantic versions are inferred from bundle hashes.
 
 | Identifier | Meaning |
 | --- | --- |
@@ -12,7 +12,7 @@
 | App release / build | Viewer delivery and assets. Does not substitute for document format or skill revision. |
 | `Document-ID` / local `d_` / ticket ID | File identity / browser-local handle identity / ticket identifier; separate from all version numbers. |
 
-Keep basic templates unversioned. A document does not need a format declaration, Owner, UUID or settings to be created or edited. Do not insert version fields into existing documents during ordinary edits or an app/skill update.
+Keep basic templates unversioned. New plan/tickets/inventory files receive a UUID automatically, without requiring a format declaration, Owner or settings. This is a creation rule enforced by `document-context.mjs check-new`, not a new document grammar: existing documents without IDs remain readable and editable. Do not insert ID/version fields into existing documents during ordinary edits or an app/skill update.
 
 ## Header and support decisions
 
@@ -43,6 +43,7 @@ A release record identifies its revision, supported read/write formats, new-docu
 
 | Revision | Change / affected earlier installations | Recommendation / document migration |
 | --- | --- | --- |
+| 3 (local, not yet published) | Each new plan/tickets/inventory file receives its own UUID by default; `check-new` requires it. Revisions 2 and earlier allowed omission. Existing document grammar, rendering and ordinary edits remain unchanged. | Recommended for automatic new-document identity; no existing document migration required by an update. |
 | 2 (local, not yet published) | Optional ID assignment, legacy Progress Board cleanup, standalone guarded document CLI and explicit installation provenance. Affects revisions 1 and undeclared installations only when these capabilities are wanted. | Recommended for these optional operations; no document migration required by an update. |
 | 1 (local, not yet published) | First explicit contract; preserves undeclared legacy documents and optional Owner. Previous undeclared bundles have unknown capabilities until compared. Adds shared format guards and read-only identity analysis. | Use when format checks/identity analysis are needed; no automatic document migration. Installation replacement still requires separate verification and consent. |
 
@@ -50,7 +51,7 @@ A release record identifies its revision, supported read/write formats, new-docu
 
 `scripts/lib/document-metadata.mjs` exposes pure `readDocumentMetadata`, `analyzeDocumentMetadata`, `previewDocumentMetadata`, `resumeMetadataPreview` and `indexDocumentIds`. They perform no filesystem discovery or writes. Call a preview only for an explicitly selected project-relative Markdown path and operation: `assignId`, `clone` or `reconcileOwner`. Ordinary Markdown also needs `allowPlainMarkdown: true`.
 
-`Document-ID: <UUID v4>` is optional in the Owner header. Preserve existing valid IDs; only an explicit clone receives a replacement. Invalid/duplicate fields and unsupported formats are refused. UUID assignment does not also add Owner, a format declaration, title or dates. Owner reconciliation records the current valid `docs/@name` path; it cannot establish past paths, safe links or permission to implement a ticket.
+`Document-ID: <UUID v4>` remains optional when reading or editing existing documents; new skill-created files require it. Preserve existing valid IDs; only an explicit clone receives a replacement. Invalid/duplicate fields and unsupported formats are refused. UUID assignment does not also add Owner, a format declaration, title or dates. Owner reconciliation records the current valid `docs/@name` path; it cannot establish past paths, safe links or permission to implement a ticket.
 
 A preview returns the source, intended text, generated ID and exact edits. Keep that same preview for resumption: `resumeMetadataPreview(preview, currentMarkdown, currentPath)` accepts only the original or already-intended bytes at that path. It returns text, not an applied result or a safe-file transaction. Changed input needs new analysis. Index UUIDs by project; duplicate local files remain a collision, and another checkout is not an automatic match. For explicitly requested ID assignment or legacy cleanup, use the guarded `migrate` command in [document operations](document-operations.md); it uses the same shared transformation as browser previews. Owner reconciliation is a separate explicit CLI operation. Do not apply a raw pure preview by directly overwriting a file.
 

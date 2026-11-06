@@ -9,19 +9,20 @@ import { appActivity } from "./activity";
 import { openReleaseNotes, ReleaseCenter } from "./ReleaseCenter";
 import { observeRelease, unreadReleases, wasNotified } from "./releases";
 import type { PreparedSkillUpdate } from "../skills/useAppSkillUpdate";
-import type { SkillReview } from "../skills/repository";
+import type { AppSkillUpdate, SkillReview } from "../skills/repository";
 
 const mock = vi.hoisted(() => ({ path: "/", state: { status: "current", offlineReady: true } as PwaState, listeners: new Set<() => void>(), apply: vi.fn() }));
-const skills = vi.hoisted(() => ({ state: "none" as PreparedSkillUpdate["state"], approve: vi.fn(), cancel: vi.fn(), error: "", review: undefined as SkillReview | undefined }));
+const skills = vi.hoisted(() => ({ state: "none" as PreparedSkillUpdate["state"], approve: vi.fn(), cancel: vi.fn(), dismiss: vi.fn(), error: "", review: undefined as SkillReview | undefined, result: undefined as AppSkillUpdate | undefined }));
 vi.mock("@tanstack/react-router", () => ({ useLocation: () => mock.path }));
 vi.mock("./client", () => ({ pwaClient: { getSnapshot: () => mock.state, subscribe: (listener: () => void) => { mock.listeners.add(listener); return () => mock.listeners.delete(listener); }, apply: mock.apply } }));
 vi.mock("../skills/repository", async (original) => ({ ...await original<typeof import("../skills/repository")>(), skillRepository: { connection: async () => undefined, recoveries: async () => [] } }));
 vi.mock("../skills/useAppSkillUpdate", () => ({ useAppSkillUpdate: (_: ReleaseInfo, target?: ReleaseInfo) => ({
+  result: skills.result, dismissResult: skills.dismiss,
   prepared: target ? { buildId: target.buildId, state: skills.state, review: skills.review, error: skills.error, repository: { approveAppUpdate: skills.approve, cancelAppUpdate: skills.cancel } } : undefined,
 }) }));
 function release(n: number): ReleaseInfo {
   const history = Array.from({ length: n }, (_, index) => ({ id: `notes-${index + 1}`, sequence: index + 1, date: "2026-10-26", notify: true, notes: { ko: [`릴리즈 ${index + 1}`], en: [`Release ${index + 1}`] } }));
-  return { app: "alpha-kanban", mode: "app", protocol: 1, storageSchema: 1, buildId: String(n).repeat(16), skillBundle: "1234567890ab", skillVersion: null, documentFormat: null, releaseId: history.at(-1)!.id, history, notes: history.at(-1)!.notes };
+  return { app: "alpha-kanban", mode: "app", channel: "stable", protocol: 1, storageSchema: 1, buildId: String(n).repeat(16), skillBundle: "1234567890ab", skillVersion: null, documentFormat: null, releaseId: history.at(-1)!.id, history, notes: history.at(-1)!.notes };
 }
 let root: Root, container: HTMLDivElement;
 let marker: HTMLDivElement;
@@ -32,7 +33,8 @@ async function click(text: string) { await act(async () => { [...document.queryS
 beforeEach(async () => {
   vi.useFakeTimers(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear(); mock.path = "/"; mock.state = { status: "current", offlineReady: true }; mock.apply.mockReset().mockResolvedValue(true);
-  skills.state = "none"; skills.error = ""; skills.review = undefined;
+  skills.state = "none"; skills.error = ""; skills.review = undefined; skills.result = undefined;
+  skills.dismiss.mockReset().mockImplementation(async () => { skills.result = undefined; });
   skills.approve.mockReset().mockResolvedValue("approval"); skills.cancel.mockReset().mockResolvedValue(undefined);
   await setLanguage("ko"); appActivity.resume();
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
@@ -49,6 +51,15 @@ afterEach(async () => {
   vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks();
 });
 describe("release reading timing", () => {
+  it("acknowledges the completion notice when opening skill management instead of showing it again on close", async () => {
+    skills.result = { id: "completed", state: "applied" } as AppSkillUpdate;
+    await render();
+    expect(container.textContent).toContain("등록된 스킬을 백업하고 업데이트했습니다.");
+    await click("스킬 업데이트");
+    expect(skills.dismiss).toHaveBeenCalledTimes(1);
+    await click("닫기"); await tick();
+    expect(container.textContent).not.toContain("등록된 스킬을 백업하고 업데이트했습니다.");
+  });
   it("does not show retrospective notes on a first visit", async () => {
     await render(); await tick(); expect(dialog()).toBeNull();
   });

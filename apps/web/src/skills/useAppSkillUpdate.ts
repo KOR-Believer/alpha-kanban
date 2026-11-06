@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pwaClient } from "../pwa/client";
 import type { ReleaseInfo } from "../pwa/releases";
 import { loadSkillBundle } from "./bundle";
 import { SkillRepository, skillError, type AppSkillUpdate, type SkillReview } from "./repository";
+import { subscribeAppUpdateAcknowledged } from "./appUpdateNotice";
 
 function repositoryFor(release: ReleaseInfo) {
   return new SkillRepository(undefined, undefined, {
@@ -20,20 +21,39 @@ export function useAppSkillUpdate(release: ReleaseInfo, target: ReleaseInfo | un
   const [result, setResult] = useState<AppSkillUpdate>();
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
+  const acknowledged = useRef(new Set<string>());
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     const repository = repositoryFor(release);
+    const clearAcknowledged = (id: string) => {
+      if (cancelled) return;
+      acknowledged.current.add(id);
+      setResult(current => current?.id === id ? undefined : current);
+    };
+    const unsubscribe = subscribeAppUpdateAcknowledged(clearAcknowledged);
+    const refreshAcknowledgement = () => {
+      if (document.visibilityState !== "visible") return;
+      void repository.appUpdate().then(current => {
+        if (current?.acknowledged) clearAcknowledged(current.id);
+      }).catch(() => undefined);
+    };
+    window.addEventListener("focus", refreshAcknowledgement);
+    document.addEventListener("visibilitychange", refreshAcknowledgement);
     void (async () => {
       const approval = await repository.appUpdate();
       if (!approval || approval.fromBuild === release.buildId || approval.acknowledged) return;
       if (!cancelled) setFinishing(true);
       return repository.completeAppUpdate(release.buildId, () => loadSkillBundle(release.skillBundle, release.skillPayload));
     })()
-      .then((value) => { if (!cancelled) setResult(value); })
+      .then((value) => { if (!cancelled) setResult(value && !acknowledged.current.has(value.id) && !value.acknowledged ? value : undefined); })
       .catch((reason) => { if (!cancelled) setError(skillError(reason)); })
       .finally(() => { if (!cancelled) setFinishing(false); });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true; unsubscribe();
+      window.removeEventListener("focus", refreshAcknowledgement);
+      document.removeEventListener("visibilitychange", refreshAcknowledgement);
+    };
   }, [enabled, release]);
 
   useEffect(() => {
@@ -61,7 +81,7 @@ export function useAppSkillUpdate(release: ReleaseInfo, target: ReleaseInfo | un
   async function dismissResult() {
     try {
       if (result) await repositoryFor(release).acknowledgeAppUpdate(result.id);
-      setResult(undefined); setError("");
+      setResult(current => current?.id === result?.id ? undefined : current); setError("");
     } catch (reason) { setError(skillError(reason)); }
   }
   return { prepared, result, error, finishing, dismissResult };

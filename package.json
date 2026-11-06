@@ -13,6 +13,8 @@
     "test:pwa": "node scripts/pwa-smoke.mjs",
     "test:skill-release": "node scripts/skill-release-smoke.mjs",
     "test:tours": "node scripts/tours-smoke.mjs",
+    "test:skill-tour": "node scripts/skill-tour-smoke.mjs",
+    "test:skill-notice": "node scripts/skill-notice-smoke.mjs",
     "dev": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/web dev",
     "build": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/web build && node scripts/check-browser-release.mjs",
     "check:release": "node scripts/check-browser-release.mjs",
@@ -27,7 +29,7 @@
     "test:ledger": "node --test scripts/test/document-context.test.mjs scripts/test/document-owner.test.mjs",
     "build:document-cli": "node scripts/build-document-cli.mjs",
     "test:skill-distribution": "node --test --test-concurrency=1 scripts/test/skill-distribution.test.mjs",
-    "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-journal.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs scripts/test/document-migration.test.mjs scripts/test/document-root.test.mjs",
+    "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-scan.test.mjs scripts/test/document-journal.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs scripts/test/document-migration.test.mjs scripts/test/document-root.test.mjs",
     "test": "pnpm test:channels && pnpm test:ledger && pnpm test:documents && pnpm test:maintenance-worker && pnpm test:skill-distribution && pnpm -r --if-present test"
   },
   "devDependencies": {

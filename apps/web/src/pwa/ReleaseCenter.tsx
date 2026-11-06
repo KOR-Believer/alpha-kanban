@@ -127,7 +127,7 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
       <div className="flex items-start justify-between gap-3"><p>{t(skill.finishing ? "Checking the approved skill update…" : skill.result?.state === "applied" ? "Your registered skill was backed up and updated." : skill.result ? "The app is up to date. Your skill update needs attention." : "Skill updates")}</p>
         {!skill.finishing ? <Button size="iconSm" variant="ghost" aria-label={t("Close")} onClick={() => void skill.dismissResult()}><X /></Button> : null}</div>
       {skill.result?.error || skill.error ? <p>{t(skill.result?.error || skill.error, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
-      {!skill.finishing ? <Button size="sm" variant="outline" onClick={() => setSkillOpen(true)}>{t("Skill updates")}</Button> : null}
+      {!skill.finishing ? <Button size="sm" variant="outline" onClick={() => { void skill.dismissResult(); setSkillOpen(true); }}>{t("Skill updates")}</Button> : null}
     </aside> : null}
     {notice && !reading && !skill.result && !skill.error && !skill.finishing && waiting?.buildId === notice.buildId ? <aside role="status" className="fixed bottom-4 right-4 z-40 grid max-w-[calc(100vw-2rem)] gap-2 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-[var(--ak-shadow-soft)]">
       <div className="flex items-center justify-between gap-4"><p className="text-sm font-medium">{t("An update is ready")}</p><Button size="iconSm" variant="ghost" aria-label={t("Close")} onClick={() => setNotice(null)}><X /></Button></div>

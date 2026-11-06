@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorkspaceSummary } from "@alpha-kanban/shared";
-import { Download, Folder, FolderOpen, FolderPlus, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Download, Folder, FolderOpen, FolderPlus, Link2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { ProjectLists, StartPageNavigation } from "../components/ProjectLauncher";
 import { SkillGuide } from "../components/SkillGuide";
@@ -112,19 +112,28 @@ function ProjectList({ workspaces, onSelect, selectedWorkspaceId }: { workspaces
 }
 
 export function BrowserProjectSwitcher({ onSelect, selectedWorkspaceId, workspaces }: { onSelect: SelectProject; selectedWorkspaceId: string; workspaces: WorkspaceSummary[] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const actions = useBrowserActions();
-  const select: SelectProject = async (id) => { await onSelect(id); setOpen(false); };
+  const normalized = query.trim().normalize("NFC").toLocaleLowerCase(i18n.language);
+  const visible = workspaces.filter((workspace) => `${workspace.label} ${workspace.root}`.normalize("NFC").toLocaleLowerCase(i18n.language).includes(normalized));
+  const changeOpen = (value: boolean) => { setOpen(value); if (!value) setQuery(""); };
+  const select: SelectProject = async (id) => { await onSelect(id); changeOpen(false); };
   return <div className="min-w-0 flex-1" aria-label={t("Projects")}>
-    <WorkspaceSwitcherTrigger workspace={workspaces.find((workspace) => workspace.id === selectedWorkspaceId)} onClick={() => setOpen(true)} />
-    <Dialog open={open} onOpenChange={setOpen}>
+    <WorkspaceSwitcherTrigger workspace={workspaces.find((workspace) => workspace.id === selectedWorkspaceId)} onClick={() => changeOpen(true)} />
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="grid-rows-[auto_minmax(0,1fr)]">
-        <DialogHeader><DialogTitle>{t("Switch project")}</DialogTitle><DialogDescription>{t("Connected folders in this browser")}</DialogDescription></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t("Switch project")}</DialogTitle>
+          <DialogDescription>{t("Connected folders in this browser")}</DialogDescription>
+          <div className="ak-project-search mt-2"><Search aria-hidden="true" /><Input className="pl-8" type="search" aria-label={t("Search name or path")} placeholder={t("Search name or path")} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
+        </DialogHeader>
         <DialogBody className="pb-5">
           <div className="grid gap-3">
             <Button variant="outline" disabled={!browserSupported() || actions.busy} onClick={() => void actions.pick("project", select)}><FolderOpen />{t("Open project")}</Button>
-            <ErrorText message={actions.error} /><ProjectList workspaces={workspaces} onSelect={select} selectedWorkspaceId={selectedWorkspaceId} />
+            <ErrorText message={actions.error} /><ProjectList workspaces={visible} onSelect={select} selectedWorkspaceId={selectedWorkspaceId} />
+            {!visible.length ? <p role="status" className="py-4 text-center text-sm text-muted-foreground">{t(normalized ? "No matching projects" : "No connected projects")}</p> : null}
           </div>
         </DialogBody>
       </DialogContent>

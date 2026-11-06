@@ -2,6 +2,7 @@ import { BROWSER_DATABASE_NAME, IndexedDbStorage, type BrowserStorage } from "..
 import { appActivity } from "../pwa/activity";
 import { isLedgerSkill, MAX_BYTES, MAX_FILE_BYTES, MAX_FILES, safeSkillPath, skillHash, validateBundle, type SkillBundle, type SkillFile } from "./bundle";
 import { sameSkillFiles as same } from "./installation";
+import { notifyAppUpdateAcknowledged } from "./appUpdateNotice";
 
 type SnapshotFile = SkillFile & { mtime: number };
 export type SkillConnection = { id: string; name: string; handle: FileSystemDirectoryHandle };
@@ -206,7 +207,10 @@ export class SkillRepository {
   async acknowledgeAppUpdate(id: string) {
     await this.lock(LOCK, async () => {
       const approval = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
-      if (approval?.id === id && ["applied", "blocked"].includes(approval.state)) await this.storage.set(APP_UPDATE, { ...approval, acknowledged: true });
+      if (approval?.id === id && ["applied", "blocked"].includes(approval.state)) {
+        await this.storage.set(APP_UPDATE, { ...approval, acknowledged: true });
+        notifyAppUpdateAcknowledged(id);
+      }
     });
   }
   async completeAppUpdate(buildId: string, load: () => Promise<SkillBundle>): Promise<AppSkillUpdate | undefined> {

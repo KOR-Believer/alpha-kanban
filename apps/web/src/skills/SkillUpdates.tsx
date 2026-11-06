@@ -58,7 +58,8 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
   const [reinstallReview, setReinstallReview] = useState<SkillReview>();
   const [reinstallConfirmed, setReinstallConfirmed] = useState(false);
   const tourContainer = useRef<HTMLDivElement>(null);
-  const tour = useScreenTour("skill", { enabled: open && !busy && !presentation.isResizing, eligible: false, scope: `${connection?.id ?? "none"}:${candidate?.name ?? ""}:${reinstallReview ? "reinstall" : review?.state ?? "connect"}:${restoreId ?? ""}:${presentation.mode}`, container: tourContainer });
+  const resizeEscaped = useRef(false);
+  const tour = useScreenTour("skill", { enabled: open && !busy, eligible: false, scope: `${connection?.id ?? "none"}:${candidate?.name ?? ""}:${reinstallReview ? "reinstall" : review?.state ?? "connect"}:${restoreId ?? ""}`, container: tourContainer });
   const generation = useRef(0);
   const requestInput = useRef<HTMLTextAreaElement>(null);
   const request = skillAgentRequest(t, "update");
@@ -153,9 +154,12 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
       style={{ "--dialog-width": `${presentation.width}px`, "--dialog-height": `${presentation.height}px` } as CSSProperties}
       onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = busy || pending ? "none" : "copy"; } }} onDrop={receiveDrop}
       onEscapeKeyDown={(event) => {
-        if (tour.active) event.preventDefault();
-        else if (presentation.isResizing) { event.preventDefault(); presentation.stopResize(); }
+        if (presentation.isResizing) { event.preventDefault(); resizeEscaped.current = tour.active; presentation.stopResize(); }
+        else if (tour.active) event.preventDefault();
         else if (busy) event.preventDefault();
+      }}
+      onKeyUpCapture={(event) => {
+        if (event.key === "Escape" && resizeEscaped.current) { resizeEscaped.current = false; event.stopPropagation(); }
       }}
       onInteractOutside={(event) => { if (busy || presentation.isResizing || tour.active) event.preventDefault(); }}
       onCloseAutoFocus={returnFocus ? (event) => { event.preventDefault(); returnFocus.focus({ preventScroll: true }); } : undefined}>
@@ -164,8 +168,8 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
           <div className="ak-resizable-dialog-heading">
             <div className="ak-channel-title"><DialogTitle>{t("Skill updates")}</DialogTitle><ChannelBadge /></div>
             <div className="ak-drawer-actions"><TourButton tour={tour} labelKey="Tour this dialog" />
-              <Button size="iconSm" variant="ghost" disabled={presentation.mode === "full"} aria-label={t("Reset size")} title={t("Reset size")} onClick={presentation.resetSize}><RotateCcw aria-hidden="true" /></Button>
-              <Button size="iconSm" variant="ghost" aria-label={t(presentation.mode === "full" ? "Restore dialog size" : "Expand dialog")} title={t(presentation.mode === "full" ? "Restore dialog size" : "Expand dialog")}
+              <Button data-tour-layout size="iconSm" variant="ghost" disabled={presentation.mode === "full"} aria-label={t("Reset size")} title={t("Reset size")} onClick={presentation.resetSize}><RotateCcw aria-hidden="true" /></Button>
+              <Button data-tour-layout size="iconSm" variant="ghost" aria-label={t(presentation.mode === "full" ? "Restore dialog size" : "Expand dialog")} title={t(presentation.mode === "full" ? "Restore dialog size" : "Expand dialog")}
                 onClick={() => presentation.mode === "full" ? presentation.restorePeek() : presentation.setMode("full")}>
                 {presentation.mode === "full" ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
               </Button>
@@ -248,7 +252,7 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
         </DialogBody>
         <DialogFooter><Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>{t("Close")}</Button></DialogFooter>
       </div>
-      <PanelResizeHandles presentation={presentation} label={(edge) => t("Resize dialog {{edge}}", { edge: t(edge) })} />
+      <PanelResizeHandles presentation={presentation} tourLayout label={(edge) => t("Resize dialog {{edge}}", { edge: t(edge) })} />
     </DialogContent>
   </Dialog>;
 }

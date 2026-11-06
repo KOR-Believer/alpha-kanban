@@ -13,6 +13,10 @@ The complete installed skill contains `scripts/document-cli.mjs` and its depende
 
 The command infers this worktree's root, Git directory, HEAD and branch from the current directory. There is no checkout selection. Writes are restricted to the explicitly supplied `docs` paths in that worktree. Other registered repos supply exact read-only reference targets, never additional write roots. Another worktree is independent until the user merges its changes.
 
+Scan the explicit `scope` completely, including Git-ignored files, non-Markdown assets and empty directories. Outside that scope, backlink candidates are Git-tracked Markdown and nonignored untracked Markdown; unrelated logs/cache files are not inventoried. Tracked Markdown remains a candidate even under an ignore pattern. Direct link targets are still checked independently, including ignored/non-Markdown targets. Preserve the existing dependency/build/cache exclusions and symlink/nested-repository boundaries; an uninspected boundary inside scope blocks moves. Git warnings, including unreadable directories despite a successful exit, require review as `GIT_SCAN_WARNING`. `UNSCANNED_BACKLINKS` includes ignored untracked documents outside scope. Do not hide relevant files with ignore rules to bypass a finding.
+
+Plans pin this scan policy through fresh analysis before apply, source removal, resume, recovery and verification. Runtime churn outside the inspected set does not invalidate a plan; new reference Markdown, scope assets and changed reference targets still do. The 20,000-entry cap applies to inspected scope entries and reference Markdown, with the stopping path/scope reported. Old plans and journals retain their original coverage; reanalyze an unapplied plan to use the new policy, but preserve interrupted journals and use their explicit resume/recover flow.
+
 ## Analyze, review, apply, verify
 
 1. Build a JSON request for the user's authorized operation and exact paths. Store requests/plans **outside the worktree**, with private permissions: the plan contains preimages of changed documents.

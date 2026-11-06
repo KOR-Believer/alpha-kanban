@@ -28,20 +28,34 @@ function captureScroll(elements: HTMLElement[]) {
 }
 
 // A translated dialog would otherwise become the containing block for Driver's
-// viewport-positioned overlay. Freeze its current position only during the tour.
+// viewport-positioned overlay. Read its natural layout again after resizing.
 function positionTourHost(host?: HTMLElement | null) {
-  if (!host) return () => {};
-  const style = getComputedStyle(host);
-  if (style.transform === "none" && (!style.translate || style.translate === "none")) return () => {};
-  const rect = host.getBoundingClientRect();
-  host.style.setProperty("--tour-host-left", `${rect.left}px`);
-  host.style.setProperty("--tour-host-top", `${rect.top}px`);
-  host.setAttribute("data-tour-positioned", "");
-  return () => {
+  if (!host) return { refresh() {}, restore() {} };
+  const properties = ["transform", "translate"];
+  const original = properties.map((property) => ({ property, value: host.style.getPropertyValue(property), priority: host.style.getPropertyPriority(property) }));
+  const reset = () => {
     host.removeAttribute("data-tour-positioned");
+    for (const { property, value, priority } of original) {
+      if (value) host.style.setProperty(property, value, priority);
+      else host.style.removeProperty(property);
+    }
+  };
+  const refresh = () => {
+    reset();
+    const rect = host.getBoundingClientRect();
+    host.style.setProperty("--tour-host-left", `${rect.left}px`);
+    host.style.setProperty("--tour-host-top", `${rect.top}px`);
+    host.setAttribute("data-tour-positioned", "");
+    // Keep these inline: CSS compilation can combine transform:none and
+    // translate:none into translate(0), which still creates a containing block.
+    for (const property of properties) host.style.setProperty(property, "none", "important");
+  };
+  refresh();
+  return { refresh, restore() {
+    reset();
     host.style.removeProperty("--tour-host-left");
     host.style.removeProperty("--tour-host-top");
-  };
+  } };
 }
 
 export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, scope = kind, container }: {
@@ -78,7 +92,7 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
     const steps = availableTourSteps(kind, t, host ?? document);
     const elements = steps.map((step) => step.element as HTMLElement);
     if (!steps.length) { setRun(null); return; }
-    const restoreHost = positionTourHost(host);
+    const positioning = positionTourHost(host);
     let disposing = false;
     const tour = driver({
       steps, animate: false, smoothScroll: false, disableActiveInteraction: true,
@@ -112,7 +126,7 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
       },
       onDestroyed(_element, _step, options) {
         if (disposing) return;
-        restoreHost();
+        positioning.restore();
         run.restoreScroll();
         const userEnded = ["done", "close", "escape", "overlay"].includes(options.reason ?? "");
         if (userEnded) saveTourResult(id, options.reason === "done" ? "completed" : "dismissed");
@@ -131,13 +145,39 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
       },
     });
     tour.drive(Math.min(index.current, steps.length - 1));
+    let frame = 0;
+    let revealTarget = false;
+    const scheduleGeometry = (reveal: boolean) => {
+      revealTarget ||= reveal;
+      if (disposing || frame || !tour.isActive()) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (disposing || !tour.isActive()) return;
+        positioning.refresh();
+        if (revealTarget) tour.getActiveElement()?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+        revealTarget = false;
+        tour.refresh();
+      });
+    };
+    const refreshGeometry = () => scheduleGeometry(true);
+    const followScroll = () => scheduleGeometry(false);
     // Polling can remove a card, and a route/dialog can replace the current surface.
     const observer = new MutationObserver(() => {
       if (otherDialog(host) || elements.some((element) => !element.isConnected || !isTourTargetVisible(element))) tour.destroy();
     });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class", "aria-hidden"] });
-    const resized = () => tour.destroy();
-    window.addEventListener("resize", resized);
+    // Host size, wrapped controls, expanded content and viewport changes can all
+    // move a target. Refresh the current step without restarting or recording it.
+    const geometryObserver = new ResizeObserver(refreshGeometry);
+    const observed = new Set<HTMLElement>();
+    for (const target of elements) for (let element: HTMLElement | null = target; element; element = element.parentElement) {
+      observed.add(element);
+      if (element === host) break;
+    }
+    observed.forEach((element) => geometryObserver.observe(element));
+    window.addEventListener("resize", refreshGeometry);
+    window.addEventListener("scroll", followScroll, true);
+    window.visualViewport?.addEventListener("resize", refreshGeometry);
     // Driver also includes the highlighted controls in its Tab order. Keep
     // keyboard interaction in the explanation, just like pointer interaction.
     const tabWithinTour = (event: KeyboardEvent) => {
@@ -153,10 +193,14 @@ export function useScreenTour(kind: TourKind, { enabled, eligible = enabled, sco
     return () => {
       disposing = true;
       observer.disconnect();
-      window.removeEventListener("resize", resized);
+      geometryObserver.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", refreshGeometry);
+      window.removeEventListener("scroll", followScroll, true);
+      window.visualViewport?.removeEventListener("resize", refreshGeometry);
       window.removeEventListener("keydown", tabWithinTour, true);
       tour.destroy();
-      restoreHost();
+      positioning.restore();
       run.restoreScroll();
     };
   }, [enabled, id, kind, run, scope, container, t, i18n.language]);

@@ -18,10 +18,13 @@ export const portable = (value) => value.split(path.sep).join("/");
 export const contained = (root, file) => { const rel = path.relative(root, file); return rel === "" || (!path.isAbsolute(rel) && rel.split(path.sep)[0] !== ".."); };
 export async function maybeStat(file) { try { return await lstat(file, { bigint: true }); } catch (error) { if (error.code === "ENOENT") return null; throw error; } }
 
-export async function git(cwd, args) {
+export async function git(cwd, args, { diagnostics = false } = {}) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
   Object.assign(env, { GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null" });
-  try { return (await exec("git", ["-C", cwd, ...args], { env, encoding: "utf8", timeout: 10_000, maxBuffer: 8 * 1024 * 1024 })).stdout.replace(/\r?\n$/, ""); }
+  try {
+    const { stdout, stderr } = await exec("git", ["-C", cwd, ...args], { env, encoding: "utf8", timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
+    return diagnostics ? { stdout, stderr } : stdout.replace(/\r?\n$/, "");
+  }
   catch { fail("GIT_UNAVAILABLE", "Read-only Git identity could not be established."); }
 }
 export async function worktreeContext(cwd) {
@@ -116,7 +119,90 @@ export function decodeMarkdown(record) {
 }
 
 export const EXCLUDED = new Set([".git", "node_modules", ".pnpm", ".cache", ".next", "dist", "dist-browser", "build", "coverage", ".playwright-cli", "output"]);
-export async function scanWorktree(root, documentRoot = "docs") {
+export const DOCUMENT_SCAN_POLICY = "git-markdown-and-scope-v1";
+
+/** Explicit write scopes retain their complete physical inventory. Outside them,
+ * Git supplies only tracked/nonignored Markdown candidates for backlink checks.
+ * Omitting scopes preserves the scan contract of previously reviewed journals. */
+export async function scanWorktree(root, documentRoot = "docs", scopes) {
+  if (scopes === undefined) return scanLegacyWorktree(root, documentRoot);
+  const paths = new Map(), documents = new Map(), skipped = new Map(), inspected = new Map();
+  const selected = relative => scopes.some(scope => relative === scope || relative.startsWith(scope + "/"));
+  const skip = (relative, code) => skipped.set(relative, { path: relative, code });
+  const addPath = (relative, kind) => {
+    paths.set(relative, { path: relative, kind });
+    if (paths.size > 20_000) fail("SCAN_LIMIT", "The selected scope and Markdown references exceed 20,000 entries; no complete plan was produced.", { path: relative, scope: scopes, policy: DOCUMENT_SCAN_POLICY });
+  };
+  // Check each ancestor before reading a Git candidate; Git's index may name a
+  // deleted file, a symlink, or a path now occupied by a nested checkout.
+  const inspect = async (relative, includeParents = false) => {
+    projectPath(relative);
+    const parts = relative.split("/");
+    let prefix = "", info;
+    for (let i = 0; i < parts.length; i++) {
+      prefix = prefix ? prefix + "/" + parts[i] : parts[i];
+      if (EXCLUDED.has(parts[i]) && !(prefix === documentRoot || documentRoot.startsWith(prefix + "/"))) {
+        if (parts[i] !== ".git") skip(prefix, "EXCLUDED_DIRECTORY");
+        return null;
+      }
+      if (!inspected.has(prefix)) {
+        let record = null;
+        try {
+          record = await maybeStat(path.join(root, prefix));
+          if (record?.isSymbolicLink()) { skip(prefix, "SYMLINK"); record = null; }
+          else if (record?.isDirectory() && await maybeStat(path.join(root, prefix, ".git"))) { skip(prefix, "NESTED_REPOSITORY"); record = null; }
+          else if (record && !record.isDirectory() && !record.isFile()) { skip(prefix, "SPECIAL_FILE"); record = null; }
+        } catch { skip(prefix, "UNREADABLE_PATH"); record = null; }
+        inspected.set(prefix, record);
+      }
+      info = inspected.get(prefix);
+      if (!info) return null;
+      if (i < parts.length - 1 && !info.isDirectory()) { skip(prefix, "NOT_DIRECTORY"); return null; }
+      if (includeParents && info.isDirectory()) addPath(prefix, "directory");
+    }
+    return info;
+  };
+  const readMarkdown = async relative => {
+    if (documents.has(relative)) return;
+    try {
+      const record = await snapshot(path.join(root, relative));
+      documents.set(relative, { path: relative, markdown: decodeMarkdown(record), guard: { ...record, bytes: undefined } });
+    } catch (error) { skip(relative, error.code ?? "UNREADABLE_MARKDOWN"); }
+  };
+  const walk = async relative => {
+    if (paths.has(relative) && paths.get(relative).kind === "file") return;
+    const info = await inspect(relative);
+    if (!info) return;
+    addPath(relative, info.isDirectory() ? "directory" : "file");
+    if (info.isFile()) { if (/\.md$/i.test(relative)) await readMarkdown(relative); return; }
+    let entries;
+    try { entries = await readdir(path.join(root, relative)); }
+    catch { skip(relative, "UNREADABLE_DIRECTORY"); return; }
+    for (const name of entries.sort((a, b) => a.localeCompare(b))) await walk(relative + "/" + name);
+  };
+  const roots = [...new Set(scopes)].sort().filter((scope, index, all) => !all.slice(0, index).some(parent => scope.startsWith(parent + "/")));
+  for (const scope of roots) {
+    // Existing ancestors matter when a file-level scope requires new directories.
+    if (await inspect(scope, true)) await walk(scope);
+  }
+  const listing = await git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "--deduplicate", "-z", "--", ":(icase,glob)**/*.md"], { diagnostics: true });
+  // Git can exit successfully after skipping an unreadable directory. Keep that
+  // coverage gap visible and bound to the plan instead of claiming a clean scan.
+  if (listing.stderr.trim()) skipped.set("", { path: "", code: "GIT_SCAN_WARNING", message: listing.stderr.trim() });
+  const candidates = listing.stdout.split("\0").filter(Boolean);
+  for (const relative of [...new Set(candidates)].sort((a, b) => a.localeCompare(b))) {
+    if (selected(relative)) continue;
+    const info = await inspect(relative);
+    if (!info) continue;
+    if (!info.isFile()) { skip(relative, "NOT_REGULAR_MARKDOWN"); continue; }
+    addPath(relative, "file"); await readMarkdown(relative);
+  }
+  const ordered = values => [...values].sort((a, b) => a.path.localeCompare(b.path));
+  return { documents: ordered(documents.values()), paths: ordered(paths.values()), skipped: ordered(skipped.values()) };
+}
+
+// Old plans/journals keep their original coverage through apply/resume/recover.
+async function scanLegacyWorktree(root, documentRoot) {
   const documents = [], paths = [], skipped = [];
   const walk = async (directory, relative = "") => {
     let entries;

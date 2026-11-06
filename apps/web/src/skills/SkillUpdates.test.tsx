@@ -111,6 +111,39 @@ describe("explicit skill reinstall UI", () => {
     expect(button("Back up and reinstall")!.disabled).toBe(true);
   });
 
+  it("keeps a skill tour and reviewed consent through dragging, maximize and viewport resize without file actions", async () => {
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() => [new DOMRect(0, 0, 180, 28)] as unknown as DOMRectList);
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
+    await repository.connect(folder.handle()); await render();
+    const consent = document.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
+    await act(async () => consent.click());
+    await click("Tour this dialog");
+    await act(async () => document.querySelector<HTMLButtonElement>(".driver-popover-next-btn")!.click());
+    const title = document.querySelector(".driver-popover-title")!.textContent;
+    const popover = document.querySelector(".driver-popover");
+    const permission = vi.spyOn(folder, "requestPermission");
+    const control = (name: string) => document.querySelector<HTMLButtonElement>(`[aria-label="${name}"]`)!;
+    const corner = control("Resize dialog bottom-right");
+    await act(async () => corner.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1, clientX: 500, clientY: 400 })));
+    expect(document.querySelector("[data-resizing]")).not.toBeNull();
+    await act(async () => window.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientX: 450, clientY: 350 })));
+    await act(async () => window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 })));
+    await act(async () => control("Expand dialog").click());
+    await act(async () => control("Restore dialog size").click());
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    });
+    expect(document.querySelector(".driver-popover")).toBe(popover);
+    expect(document.querySelector(".driver-popover-title")!.textContent).toBe(title);
+    expect(consent.isConnected).toBe(true);
+    expect(consent.getAttribute("aria-checked")).toBe("true");
+    expect(localStorage.getItem("alpha-kanban.tours.v1.skill")).toBeNull();
+    expect(permission).not.toHaveBeenCalled(); expect(window.showDirectoryPicker).not.toHaveBeenCalled();
+    expect(skillRepository.apply).not.toHaveBeenCalled(); expect(skillRepository.reinstall).not.toHaveBeenCalled(); expect(skillRepository.restore).not.toHaveBeenCalled();
+    expect((folder.children.get("SKILL.md") as FakeFile).writes).toBe(0);
+  });
+
   it("shows before/after content without writing, preserves consent across language changes and clears it on cancel/recheck/close", async () => {
     const { skill } = await customInstallation();
     const original = skill.content;

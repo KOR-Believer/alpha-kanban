@@ -4,7 +4,7 @@
 
 ## 적용 기준
 
-AKD-12의 계약이며 [Owner 규약](team_documents_contract.md#5-문서-상단-owner-한-줄)과 [AKL-10 형식 계약](../skills/implementation-ledger/references/compatibility.md)을 재사용한다. UUID 없는 기본 사용·새 소유자 작성·브라우저 경로 필터는 그대로 유효하다. ID·Owner·형식 정리는 각각 선택하며 이번 페이즈의 변환 결과는 메모리의 원문/예정문/diff다. 실제 파일 적용은 AKD-05/06/07의 책임이다.
+AKD-12의 계약이며 [Owner 규약](team_documents_contract.md#5-문서-상단-owner-한-줄)과 [AKL-10 형식 계약](../skills/implementation-ledger/references/compatibility.md)을 재사용한다. UUID 없는 기존 문서의 열람·수정과 브라우저 경로 필터는 그대로 유효하다. 기존 문서의 ID·Owner·형식 정리는 각각 선택하며 변환 결과는 메모리의 원문/예정문/diff다. 실제 파일 적용은 AKD-05/06/07의 책임이다. 새 문서 작성은 아래 파일별 ID 발급 규칙을 따른다.
 
 ## 필드와 유효성
 
@@ -18,9 +18,10 @@ Owner: @alice
 ## 목표
 ```
 
-세 필드는 모두 선택이다. H1 뒤의 동일한 헤더만 읽으며, front matter·본문 예제·티켓 안의 동일한 문자열을 필드로 채택하지 않는다. front matter의 title·id·owner·version도 변경하지 않는다.
+기존 문서의 읽기·일반 수정에서는 세 필드 모두 선택이다. 새 plan/tickets/inventory에는 `Document-ID`를 필수로 기록하고 `Owner`는 소유자 폴더에 작성할 때만 기록한다. `Ledger-Format`은 계속 선택이다. H1 뒤의 동일한 헤더만 읽으며, front matter·본문 예제·티켓 안의 동일한 문자열을 필드로 채택하지 않는다. front matter의 title·id·owner·version도 변경하지 않는다.
 
 - `Document-ID`는 하이픈을 포함한 UUID v4이며 임의 생성은 암호학적 `randomUUID`를 사용한다. 경로·번호·소유자·제목·내용 해시로 만들지 않는다. 대소문자 UUID는 같은 ID로 비교하지만 기존 표기를 자동 정규화하지 않는다. nil, 잘못된 variant/version, 중복 필드와 비표준 키는 오류다.
+- 새 문서는 `document-context.mjs new`를 파일마다 호출해 생성된 `documentIdHeader`를 사용한다. 설정·Owner가 없는 기본 사용도 동일하며 관련 plan/tickets/inventory에 ID를 공유하지 않는다. 작성 후 `check-new`는 ID 누락을 `DOCUMENT_ID_REQUIRED`, 잘못된/중복 필드를 `INVALID_METADATA`로 거부하고 파일은 고치지 않는다. 이 검사는 지정 파일만 확인하며 프로젝트 전체 중복 검사를 추가하지 않는다. 기존 문서는 `edit`·일반 검증기로 계속 사용하며 무요청 ID 발급이나 전수 탐색을 하지 않는다.
 - 유효한 기존 ID는 일반 수정·이동·이름 변경·owner 등록 때 유지한다. 명시적인 복제 요청만 새 UUID로 교체할 수 있다. 잘못된 ID를 누락으로 간주하거나 ID 충돌을 새 번호 자동 발급으로 해소하지 않는다.
 - `Ledger-Format`의 지원/거부 판정은 공통 도구를 재사용한다. 선언이 없는 문서는 기존 구조 확인 후 처리하며 ID 추가만으로 형식 선언·Owner·날짜·title을 추가하지 않는다.
 
