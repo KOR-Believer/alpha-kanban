@@ -73,6 +73,18 @@ When a release offers skill replacement, run `pnpm test:skill-release` against t
 
 Local previews establish application behavior, not production DNS, edge routing, headers, or OS installation behavior. Record deployment checks separately from local test results.
 
+## 2026-11-06 canary document-workflow release receipt
+
+The owner approved pushing the accumulated fixes and republishing canary. `8076b9f` on `release/canary` includes implementation commit `2c84df7`, bilingual release notes and the exact previous public canary skill snapshot. Cloudflare Pages successfully published build `bd9f9599404fd095`, release `2026-11-06-canary-document-workflow` and skill bundle `2c35099980e9` (skill revision 3).
+
+- The previous public bundle `54911d5cedca` was compared file-for-file against its full source commit `351dd148a43d94055a7bdffd455d24062848d1ff` before adding it to the reviewed registry. Existing canary installations can use the normal confirmed update path; custom files still require separate reinstall consent.
+- Local and hosted `test:skill-release` passed for both older stable snapshots, the previous canary snapshot and a modified installation. Comparison without writes, fresh confirmation, exact replacement, full exported backup, explicit restore and backup retention all passed in isolated Chrome OPFS folders. This does not establish native folder attributes or AI recognition.
+- The custom origin's 115 offline assets, complete 26-file skill payload and ZIP, source commit, worker, manifest, repair channel, HTTPS routes and response headers matched. The hosted build was checked by its own identity; its payload and every extracted skill file match the local build exactly.
+- A Chrome session opened before deployment updated from public build `5e13c5cf6eb18155` to `bd9f9599404fd095`. The real combined app/skill confirmation updated both test windows, preserved the test project document and theme, and created one complete backup before applying the exact new skill. Acknowledging the completion notice synchronized across windows and survived reload without creating another backup. A separate focused offline check reopened the retained test project and rendered its unchanged Markdown from this deployed build.
+- Stable remained on build `ea940dda1a4191bc` and skill bundle `3adcbdb5a017`. No personal installation or existing user connection was used for the write tests. Native dual-install and OS-folder checks remain separately tracked in AKC-04/05.
+
+Receipt-only commits may use the [`[CF-Pages-Skip]` commit prefix](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/#skipping-a-specific-build-via-a-commit-message) to retain the verified deployment rather than rebuild it solely to publish its verification record. The deployed source commit above remains the artifact's provenance.
+
 ## 2026-11-06 canary skill-update correction receipt
 
 The owner approved correcting the canary skill classification and republishing canary. The first corrected deployment came from `065328b` on `release/canary`, served as build `1a205effd49ccb9d` with release `2026-11-06-canary-skill-update` and unchanged skill-content bundle `54911d5cedca`. Later documentation-only rebuilds retain this logical release and bundle; their build and provenance hashes can differ.
