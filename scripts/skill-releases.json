@@ -72,5 +72,114 @@
         "sha256": "c6894014a86798724b684df9bc411563df37a9a382264f44ea1d0b9b2e1ae8dc"
       }
     ]
+  },
+  {
+    "source": "351dd148a43d94055a7bdffd455d24062848d1ff",
+    "files": [
+      {
+        "path": "agents/openai.yaml",
+        "sha256": "d33d7319302d47e0188d8bd903ce32e38bf2c1fff317f2ed7f7eafdb271d7da9"
+      },
+      {
+        "path": "assets/inventory-template.md",
+        "sha256": "6694a016825f105e3a20baa12ab7500bf6c5f04f9a8e25c9a2d8aca8b0d6b963"
+      },
+      {
+        "path": "assets/plan-template.md",
+        "sha256": "35524f6a07d19a7547f6dec0f88b7c1c8a6f3a5168381e7f8a95dda7d1942542"
+      },
+      {
+        "path": "assets/tickets-template.md",
+        "sha256": "b29bbaaa43de059c5eb0fd599af605cea112580885c3fb7387b13f09163abd94"
+      },
+      {
+        "path": "licenses/document-cli.txt",
+        "sha256": "4df6227a5fef943c44966911003d31978de7d7528ef1e5ea5f2cb87f0d58622d"
+      },
+      {
+        "path": "references/compatibility.md",
+        "sha256": "c6a37c5bcad5124e03002fd751e8abd17a1ebe42186428f6ad33d14bf1339223"
+      },
+      {
+        "path": "references/document-context.md",
+        "sha256": "59755712c747775f3daae2397bca46809f20a67ae1cecc6819352e610cf32d1d"
+      },
+      {
+        "path": "references/document-operations.md",
+        "sha256": "8cdff2ce1fae65896763d0c1216e1c026773b92614770d4872d5f9523bd23519"
+      },
+      {
+        "path": "references/ledger-format.md",
+        "sha256": "22701212beca63ba7f482245425778d42b1ecbaf44f8bf3f610247100786fef6"
+      },
+      {
+        "path": "scripts/check-ledger.mjs",
+        "sha256": "aa8161e5ce71dec062da2877a22d28a72c6f78caeb6cad198ea2ff03b0dac7f1"
+      },
+      {
+        "path": "scripts/document-cli.mjs",
+        "sha256": "bf4a130a117707556dfe3cca197f4325343c7e085e9aee50daf3698091f285d1"
+      },
+      {
+        "path": "scripts/document-context.mjs",
+        "sha256": "c9526ec62f41536443894b2baacbb003e256796aaa7f15ded41e700bc8004237"
+      },
+      {
+        "path": "scripts/lib/context-error.mjs",
+        "sha256": "fd9a2d5675b5d1784404b8e67c9c8e9b9ed98a4f2a0d46b1e6193f5a8f2f9fe3"
+      },
+      {
+        "path": "scripts/lib/document-context.mjs",
+        "sha256": "e338d6315dbc2f7f6c18c73507a1694496d69a4968d29fe856247bd11c50b39e"
+      },
+      {
+        "path": "scripts/lib/document-header.mjs",
+        "sha256": "94495a0e0cf3707d67cdf6bc7b0990df58bcd3f9352cbb2a2de2104e9258eaf8"
+      },
+      {
+        "path": "scripts/lib/document-metadata.d.mts",
+        "sha256": "d4ab85ce781e0ee52dd3dbddeefd5b25db444f842ba2b44035489503e9898ca4"
+      },
+      {
+        "path": "scripts/lib/document-metadata.mjs",
+        "sha256": "087f0594f7f9396f4fc4b327e320ca461a35cba98ab0bbdab6db54c6bf355c06"
+      },
+      {
+        "path": "scripts/lib/document-owner.d.mts",
+        "sha256": "b413b8ba87bb51dd4121b1664c676c45033e8a13f58f896edd95cda69e9590ed"
+      },
+      {
+        "path": "scripts/lib/document-owner.mjs",
+        "sha256": "2dc88e2af50b9b1dd4b167b41c0f6930a63c4aa1b5218abfbfb3b77ad0c84677"
+      },
+      {
+        "path": "scripts/lib/document-root.mjs",
+        "sha256": "04dceddf60642402740f76f8581f3bb535c1cb81b28fec76eb3f161a25556b5f"
+      },
+      {
+        "path": "scripts/lib/document-settings.mjs",
+        "sha256": "6e393aa753678ba6305a93ce5fe90b12a5a2b1171512fe643c867c3b35c23a8f"
+      },
+      {
+        "path": "scripts/lib/ledger-contract.mjs",
+        "sha256": "49023bc7fff4a0b705bd4e75d74f456ad9ee091335ebd1427882c3a1491ca7f3"
+      },
+      {
+        "path": "scripts/lib/ledger-format.d.mts",
+        "sha256": "c054c2e3fe20d98d2cbb34cf44f4770baac458cd33e9e4df697cf2d3ce68524e"
+      },
+      {
+        "path": "scripts/lib/ledger-format.mjs",
+        "sha256": "8215855c3cf34bb6cd0ea75841e1ba33af2ff45962c06fb79751c5114d3274f8"
+      },
+      {
+        "path": "scripts/ticket-md.mjs",
+        "sha256": "03695076571df776e4617447cbda40d8c1ea5e14e978ed23c1a0b99ebed3e6c0"
+      },
+      {
+        "path": "SKILL.md",
+        "sha256": "76b775ee3ec2326e4a12793e04bc4978057e4edd68cd41ef713c51961cc98e9f"
+      }
+    ]
   }
 ]

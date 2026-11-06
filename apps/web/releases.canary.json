@@ -95,5 +95,42 @@
         ]
       }
     }
+  },
+  {
+    "id": "2026-11-06-canary-document-workflow",
+    "sequence": 4,
+    "date": "2026-11-06",
+    "notify": true,
+    "title": {
+      "ko": "문서 작성과 스킬 업데이트 개선",
+      "en": "Document creation and skill update improvements"
+    },
+    "notes": {
+      "ko": [
+        "프로젝트 전환 창에서 이름이나 경로로 프로젝트를 검색할 수 있습니다.",
+        "스킬 업데이트 둘러보기의 강조 위치가 창 크기와 확대·축소에 맞춰 움직입니다.",
+        "확인한 스킬 업데이트 완료 알림이 다시 나타나지 않습니다.",
+        "문서 이동 도구가 무관한 런타임 파일까지 탐색해 중단되는 문제를 줄였습니다. 이동과 참조 보정의 재검사·백업·복구는 유지됩니다."
+      ],
+      "en": [
+        "Search projects by name or path in the project switcher.",
+        "Skill update tour highlights follow dialog resizing and maximize or restore actions.",
+        "Dismissed skill update completion notices no longer reappear.",
+        "Document moves avoid scanning unrelated runtime files, while retaining reference checks, backups and recovery."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "새 플랜·티켓·인벤토리에는 문서별 ID를 발급하고 누락 여부를 검사합니다. 기존 ID 없는 문서도 계속 읽고 수정할 수 있습니다.",
+          "문서 CLI의 탐색 범위와 적용 직전 재검사를 함께 개선했습니다. 스킬 업데이트만으로 기존 문서를 변경하지 않습니다."
+        ],
+        "en": [
+          "New plans, ticket documents and inventories receive individual document IDs, with missing IDs detected by validation. Existing documents without IDs remain readable and editable.",
+          "The document CLI uses the same focused scan for planning and pre-apply checks. Updating the skill does not modify existing documents."
+        ]
+      }
+    }
   }
 ]
