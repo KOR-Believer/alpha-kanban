@@ -64,5 +64,36 @@
         ]
       }
     }
+  },
+  {
+    "id": "2026-11-06-canary-skill-update",
+    "sequence": 3,
+    "date": "2026-11-06",
+    "notify": true,
+    "title": {
+      "ko": "카나리 스킬 업데이트",
+      "en": "Canary skill updates"
+    },
+    "notes": {
+      "ko": [
+        "스킬 업데이트에서 변경 내용을 확인한 뒤 ‘백업 후 스킬 업데이트’로 카나리 스킬을 적용할 수 있습니다.",
+        "폴더 연결만으로 파일을 변경하지 않으며, 개인 수정본은 별도의 재설치 확인을 거칩니다. 기존 백업과 복원 보호는 유지됩니다."
+      ],
+      "en": [
+        "Review the changes in Skill updates, then choose ‘Back up and update skill’ to apply the Canary skill.",
+        "Connecting a folder does not change its files. Modified installations require a separate reinstall confirmation, with existing backup and restore safeguards preserved."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "기존 버전 표기 없는 플랜·티켓·인벤토리와 Ledger-Format: 1 문서를 계속 사용할 수 있습니다. 스킬 업데이트만으로 문서를 변환하지 않습니다."
+        ],
+        "en": [
+          "Existing unversioned plans, tickets and inventories, and Ledger-Format: 1 documents remain supported. Updating the skill does not convert documents."
+        ]
+      }
+    }
   }
 ]

@@ -59,6 +59,10 @@ Serve the app over HTTPS with SPA routing for `/`, `/about`, legacy `/intro`, `/
 3. Verify installation and offline readiness in desktop Chrome. Test an update with multiple windows, drafts, and a dedicated local test folder; confirm connections, preferences, and recovery records survive.
 4. Check that the skill installation guide points to the intended official source. A web deployment does not update users' installed personal skills.
 
+When a release offers skill replacement, run `pnpm test:skill-release` against the complete build, then `pnpm test:skill-release --origin https://kanban-canary.giveit2.me` after an authorized canary deployment (use the stable origin for an authorized stable release). This checks the actual release history, pinned JSON/ZIP and compiled update UI without changing compatibility metadata. Known official snapshots must expose a consent-gated update; modified installations must require separate reinstall consent. It verifies exact file contents, full backup, explicit restore and backup retention in isolated Chrome OPFS folders. Reports and screenshots stay under `output/playwright/`; this does not touch personal installations or replace native picker/OS tests.
+
+`test:pwa` uses controlled release notes to exercise lifecycle transitions, including a deliberately compatible fixture. Its success is not evidence that the authored release allows skill replacement. Keep the actual-release check separate, and do not change `unknown` to `compatible` without reviewing the skill/document contract and its regression results.
+
 ## Release records
 
 - Before authorizing a release, review `apps/web/releases.json`: bilingual user-facing notes, stable logical ID, increasing sequence, actual release date and automatic-notice policy. Do not rewrite published records to describe a different release. The pending local record is not a deployment receipt.

@@ -11,6 +11,7 @@
     "build:browser:recovery": "node scripts/build-browser-rescue.mjs recovery",
     "build:browser:retired": "node scripts/build-browser-rescue.mjs retired",
     "test:pwa": "node scripts/pwa-smoke.mjs",
+    "test:skill-release": "node scripts/skill-release-smoke.mjs",
     "test:tours": "node scripts/tours-smoke.mjs",
     "dev": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/web dev",
     "build": "node scripts/package-browser-assets.mjs && pnpm --filter @alpha-kanban/shared build && pnpm --filter @alpha-kanban/web build && node scripts/check-browser-release.mjs",
