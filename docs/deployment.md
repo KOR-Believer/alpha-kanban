@@ -73,6 +73,15 @@ When a release offers skill replacement, run `pnpm test:skill-release` against t
 
 Local previews establish application behavior, not production DNS, edge routing, headers, or OS installation behavior. Record deployment checks separately from local test results.
 
+## 2026-11-06 canary skill-update correction receipt
+
+The owner approved correcting the canary skill classification and republishing canary. The first corrected deployment came from `065328b` on `release/canary`, served as build `1a205effd49ccb9d` with release `2026-11-06-canary-skill-update` and unchanged skill-content bundle `54911d5cedca`. Later documentation-only rebuilds retain this logical release and bundle; their build and provenance hashes can differ.
+
+- Cloudflare Pages reported success for `alpha-kanban-canary`. The custom origin served the authored `compatible` classification, matching source commit, worker, manifest, pinned JSON/ZIP and all 115 offline asset hashes. Every one of the 26 bundled skill files matched the reviewed source. Public workspace, About, docs and release routes returned the app with the expected headers.
+- `test:skill-release --origin https://kanban-canary.giveit2.me` passed against the delivered app without intercepting release or skill responses. Both known official snapshots exposed a fresh-confirmation update, and an installation with an extra file required explicit reinstall review. Exact replacement, full exported backup, explicit restore and backup retention passed in isolated Chrome OPFS folders. The user's skill and existing browser connections were not used.
+- Local and hosted JSON payloads matched. ZIP container timestamps differ between local KST and hosted UTC packaging; all extracted bytes matched and each served archive matched its own pinned digest. Build IDs were checked against the corresponding served worker and offline inventory, not assumed identical across these environments.
+- Stable remained on build `ea940dda1a4191bc`, release `2026-11-05-stable-skill-reinstall` and bundle `3adcbdb5a017`. This correction did not publish to stable. The separate native dual-install and subsequent-update checks remain open in AKC-04/05.
+
 ## 2026-11-05 deployment receipt
 
 The owner approved the canary deployment and a separate stable backport containing only skill comparison, complete backup and explicit reinstall. The team-document changes have not been promoted to master.
