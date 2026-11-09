@@ -3,7 +3,7 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLanguage } from "../../i18n";
-import { DEFAULT_PANEL, COLUMN_STORAGE_KEY, dockLimits, fitFloating, normalizePanelPreferences, useDocumentColumnFilters } from "./documentPanelState";
+import { DEFAULT_PANEL, PANEL_STORAGE_KEY, COLUMN_STORAGE_KEY, dockLimits, fitFloating, normalizePanelPreferences, useDocumentColumnFilters } from "./documentPanelState";
 import { DocumentPanelShell } from "./DocumentPanelShell";
 
 describe("document panel bounds and preferences", () => {
@@ -18,7 +18,8 @@ describe("document panel bounds and preferences", () => {
     expect(normalizePanelPreferences(null)).toEqual(DEFAULT_PANEL);
     expect(normalizePanelPreferences({}, 400).leftWidth).toBe(400);
     expect(normalizePanelPreferences({ pinned: "true", view: "evil", floating: { width: NaN, height: -2 } }).floating).toEqual(DEFAULT_PANEL.floating);
-    expect(normalizePanelPreferences({ pinned: "true" }).pinned).toBe(false);
+    expect(normalizePanelPreferences({ pinned: "true" }).pinned).toBe(true);
+    expect(normalizePanelPreferences({ pinned: false, placement: "bottom", view: "details" })).toMatchObject({ pinned: false, expanded: false, placement: "bottom", view: "details" });
   });
   it("leaves a usable board and constrains the dock on short screens", () => {
     const normal = dockLimits({ width: 1000, height: 800 }, "bottom", 128);
@@ -47,15 +48,16 @@ describe("document panel interaction", () => {
   async function mount() {
     await act(async () => root.render(<DocumentPanelShell contextKey="example" count={12} total={12} ownerControl={null} currentDocument="Current document" toolbar={(controls) => controls} navigation={(view) => <p>{view}</p>}><Draft /></DocumentPanelShell>));
   }
-  it("starts collapsed and keeps the same board DOM and draft through pin, view and placement changes", async () => {
+  it("starts as left-pinned Cards and keeps the same board DOM and draft through pin, view and placement changes", async () => {
     await mount();
     const panel = container.querySelector("aside")!;
     const draft = container.querySelector("textarea")!;
     draft.value = "unfinished input";
-    expect(panel.hidden).toBe(true);
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-tour="document-panel-toggle"]')!.click());
     expect(panel.hidden).toBe(false);
-    await click("Details"); await click("Pin document panel");
+    expect(panel.dataset.view).toBe("cards");
+    expect(container.querySelector('[data-panel-mode="left"]')).not.toBeNull();
+    await click("Details");
+    await click("Panel position"); await click("Dock at the bottom");
     expect(container.querySelector('[data-panel-mode="bottom"]')).not.toBeNull();
     await click("Panel position"); await click("Dock on the left");
     expect(container.querySelector('[data-panel-mode="left"]')).not.toBeNull();
@@ -64,7 +66,7 @@ describe("document panel interaction", () => {
     expect(container.querySelector("textarea")).toBe(draft); expect(draft.value).toBe("unfinished input");
   });
   it("handles minimum, keyboard growth, viewport shrink/restore and reset without persisting the clamp", async () => {
-    await mount(); await act(async () => container.querySelector<HTMLButtonElement>('[data-tour="document-panel-toggle"]')!.click());
+    await mount(); await click("Unpin document panel");
     const handle = container.querySelector<HTMLElement>('[aria-label="Resize document panel"]')!;
     const body = container.querySelector<HTMLElement>('.ak-document-workspace-body')!;
     const key = async (key: string, shiftKey = false) => act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey, bubbles: true })); });
@@ -80,7 +82,7 @@ describe("document panel interaction", () => {
   });
   it("closes on outside pointer without blocking the action, and returns focus on Escape", async () => {
     await mount(); const launcher = container.querySelector<HTMLButtonElement>('[data-tour="document-panel-toggle"]')!;
-    await act(async () => launcher.click());
+    await click("Unpin document panel");
     await act(async () => container.querySelector("textarea")!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
     expect(container.querySelector("aside")!.hidden).toBe(true);
     await act(async () => launcher.click());
@@ -90,7 +92,7 @@ describe("document panel interaction", () => {
     expect(container.querySelector("aside")!.hidden).toBe(true); expect(document.activeElement).toBe(launcher);
   });
   it("captures a corner drag and stops on cancellation, retaining the bottom-left anchor", async () => {
-    await mount(); await act(async () => container.querySelector<HTMLButtonElement>('[data-tour="document-panel-toggle"]')!.click());
+    await mount(); await click("Unpin document panel");
     const handle = container.querySelector<HTMLElement>('[aria-label="Resize document panel"]')!;
     handle.setPointerCapture = vi.fn(); handle.hasPointerCapture = vi.fn(() => true); handle.releasePointerCapture = vi.fn();
     const pointer = async (type: string, x: number, y: number) => act(async () => { handle.dispatchEvent(new PointerEvent(type, { pointerId: 3, clientX: x, clientY: y, button: 0, bubbles: true })); });
@@ -103,6 +105,28 @@ describe("document panel interaction", () => {
     expect(handle.releasePointerCapture).toHaveBeenCalledWith(3);
     expect(body.style.getPropertyValue("--ak-document-float-width")).toBe("668px");
     expect(document.body.style.userSelect).toBe("");
+  });
+  it.each(["left", "bottom", "floating"] as const)("toggles %s without changing the layout, view or size and remembers a closed panel", async (mode) => {
+    const saved = { ...DEFAULT_PANEL, pinned: mode !== "floating", placement: mode === "bottom" ? "bottom" : "left", view: "details", floating: { width: 600, height: 620 }, leftWidth: 380, bottomHeight: 300 };
+    localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(saved));
+    await mount();
+    const panel = container.querySelector("aside")!, body = container.querySelector<HTMLElement>(".ak-document-workspace-body")!;
+    const draft = container.querySelector("textarea")!; draft.value = "keep draft";
+    await click("Documents");
+    expect(panel.hidden).toBe(true); expect(body.dataset.panelOpen).toBe("false");
+    expect(body.dataset.panelMode).toBe(mode);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 180)); });
+    expect(JSON.parse(localStorage.getItem(PANEL_STORAGE_KEY)!)).toEqual({ ...saved, expanded: false });
+    await click("Documents");
+    expect(panel.hidden).toBe(false); expect(panel.dataset.view).toBe("details"); expect(body.dataset.panelMode).toBe(mode);
+    expect(body.style.getPropertyValue("--ak-document-float-width")).toBe("600px");
+    expect(container.querySelector("textarea")).toBe(draft); expect(draft.value).toBe("keep draft");
+    await click("Documents");
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 180)); });
+    await act(async () => root.unmount()); root = createRoot(container); await mount();
+    expect(container.querySelector("aside")!.hidden).toBe(true);
+    await click("Documents"); expect(container.querySelector("aside")!.hidden).toBe(false);
+    expect(container.querySelector<HTMLElement>(".ak-document-workspace-body")!.dataset.panelMode).toBe(mode);
   });
   it("keeps column filters project-specific without modifying owner preferences", async () => {
     localStorage.setItem("alpha-kanban.ownerFilters.v1", '{"a":"@alice"}');

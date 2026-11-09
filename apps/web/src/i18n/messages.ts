@@ -1,5 +1,8 @@
 // English source strings are translation keys. Keep complete sentences together.
 export const korean: Record<string, string> = {
+  "Check for an app update": "앱 업데이트를 확인해 주세요",
+  "This page and your saved app use different versions. Open Kanban, check for an app update, then reopen this page.": "이 페이지와 저장된 앱의 버전이 다릅니다. 칸반에서 앱 업데이트를 확인한 뒤 이 페이지를 다시 열어 주세요.",
+  "Reopen this page": "페이지 다시 열기",
   "Panel position": "패널 위치",
   "Dock on the left": "왼쪽에 고정",
   "Dock at the bottom": "하단에 고정",

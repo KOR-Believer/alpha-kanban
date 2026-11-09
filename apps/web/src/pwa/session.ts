@@ -37,11 +37,10 @@ async function resume() {
 
 export async function startPwaSession() {
   await acquireLease();
-  if (!await matchingWorker()) {
-    // No UI or repository writes have mounted yet.
-    location.reload();
-    return false;
-  }
+  const compatible = await matchingWorker();
+  // A legacy worker may pass a new route through to the network. Reloading that
+  // route then returns the same newer page forever. Keep it write-free instead,
+  // but still participate in a confirmed update from another app window.
   navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data?.protocol !== PWA_PROTOCOL || !sameReleaseChannel(event.data.channel, RUNNING_CHANNEL) || !event.source || !("scriptURL" in event.source) || new URL(event.source.scriptURL).href !== location.origin + "/sw.js") return;
     const { type, transaction } = event.data;
@@ -70,5 +69,5 @@ export async function startPwaSession() {
     releaseLease?.(); releaseLease = undefined; acquiring = undefined;
   });
   window.addEventListener("pageshow", (event) => { if (event.persisted) void resume().catch(() => location.reload()); });
-  return true;
+  return compatible;
 }

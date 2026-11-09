@@ -174,6 +174,7 @@ describe("browser mode UI boundaries", () => {
   });
 
   it("keeps folder reconnection visible in the board when the document panel starts collapsed", async () => {
+    localStorage.setItem("alpha-kanban.documentPanel.v1", JSON.stringify({ expanded: false }));
     vi.mocked(browserRepository.workspaces).mockResolvedValue({ workspaces: [{ ...workspace, isAvailable: false }] });
     const handle = new FakeDirectory("panel-reconnect") as unknown as FileSystemDirectoryHandle;
     const request = vi.spyOn(handle, "requestPermission");
@@ -663,6 +664,7 @@ describe("browser mode UI boundaries", () => {
     const panel = container.querySelector<HTMLElement>(".ak-document-panel")!;
     const status = container.querySelector<HTMLElement>(".ak-document-statusbar")!;
     const panelSearch = panel.querySelector<HTMLInputElement>('[role="searchbox"]')!;
+    await act(async () => status.querySelector<HTMLButtonElement>('[data-tour="document-panel-toggle"]')!.click());
     expect(panel.hidden).toBe(true); expect(status.querySelector("input")).toBeNull();
     await act(async () => status.querySelector<HTMLButtonElement>('[aria-label="문서·티켓 검색"]')!.click());
     const search = status.querySelector<HTMLInputElement>("input")!;

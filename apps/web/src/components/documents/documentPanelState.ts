@@ -5,13 +5,13 @@ export type PanelView = "cards" | "details";
 export type PanelPlacement = "left" | "bottom";
 export type PanelSize = { width: number; height: number };
 export type PanelPreferences = {
-  pinned: boolean; placement: PanelPlacement; view: PanelView;
+  pinned: boolean; expanded: boolean; placement: PanelPlacement; view: PanelView;
   floating: PanelSize; leftWidth: number; bottomHeight: number;
 };
 export const PANEL_STORAGE_KEY = "alpha-kanban.documentPanel.v1";
 export const COLUMN_STORAGE_KEY = "alpha-kanban.documentColumnFilters.v1";
 export const DEFAULT_PANEL: PanelPreferences = {
-  pinned: false, placement: "bottom", view: "cards",
+  pinned: true, expanded: true, placement: "left", view: "cards",
   floating: { width: 368, height: 540 }, leftWidth: 312, bottomHeight: 240,
 };
 const validNumber = (value: unknown, fallback: number, min: number, max: number) =>
@@ -20,9 +20,11 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 export function normalizePanelPreferences(value: unknown, legacyWidth?: number): PanelPreferences {
   const saved = record(value) ? value : {};
   const floating = record(saved.floating) ? saved.floating : {};
+  const pinned = typeof saved.pinned === "boolean" ? saved.pinned : DEFAULT_PANEL.pinned;
   return {
-    pinned: saved.pinned === true,
-    placement: saved.placement === "left" ? "left" : "bottom",
+    pinned,
+    expanded: typeof saved.expanded === "boolean" ? saved.expanded : pinned,
+    placement: saved.placement === "left" || saved.placement === "bottom" ? saved.placement : DEFAULT_PANEL.placement,
     view: saved.view === "details" ? "details" : "cards",
     floating: { width: validNumber(floating.width, 368, 368, 10000), height: validNumber(floating.height, 540, 540, 10000) },
     leftWidth: validNumber(saved.leftWidth ?? legacyWidth, DEFAULT_PANEL.leftWidth, 280, 560),

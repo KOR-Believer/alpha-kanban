@@ -8,6 +8,7 @@ import "./styles.css";
 import { appInstaller } from "./pwa/install";
 import { pwaClient } from "./pwa/client";
 import { startPwaSession } from "./pwa/session";
+import { PwaStartupNotice } from "./pwa/PwaStartupNotice";
 import { initializeTheme } from "./theme";
 import { initializeBrand } from "./brand";
 
@@ -34,7 +35,10 @@ async function mount() {
   if (__PWA_ENABLED__ && "serviceWorker" in navigator && navigator.locks) {
     appInstaller.start();
     try {
-      if (!await startPwaSession()) return;
+      if (!await startPwaSession()) {
+        createRoot(rootElement!).render(<PwaStartupNotice />);
+        return;
+      }
       void pwaClient.start();
     } catch {
       // Fail closed before mounting anything that can write local files.

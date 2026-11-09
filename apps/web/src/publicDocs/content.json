@@ -212,8 +212,8 @@
             "en": "More room for the board, documents within reach"
           },
           "body": {
-            "ko": "프로젝트 하단의 **문서**를 누르면 문서 패널이 보드 위에 펼쳐집니다. 패널을 닫아 두면 칸반을 화면 전체 폭으로 볼 수 있습니다.\n\n패널 안의 **패널 위치**에서 왼쪽 또는 하단을 선택하세요. **고정 해제**로 보드 위에 띄우고 **고정**으로 다시 붙일 수 있습니다. 플로팅 패널의 위·오른쪽 가장자리와 모서리를 드래그하면 크기를 바꿀 수 있습니다.\n\n어느 배치에서도 **카드**와 **자세히** 보기를 선택할 수 있습니다. 자세히 보기에서는 열 제목으로 정렬하고 열의 필터로 문서를 좁힙니다. 배치·보기·크기는 브라우저에 기억됩니다.",
-            "en": "Select **Documents** in the project’s bottom bar to float the document panel over the board. Close it when you want the full width for your Kanban.\n\nChoose left or bottom in **Panel position** inside the panel. Use **Unpin** to float it over the board and **Pin** to dock it again. Drag the floating panel’s top edge, right edge or corner to resize it.\n\nChoose **Cards** or **Details** in any position. In Details, sort using column headings and narrow the list with column filters. The browser remembers the layout, view and size."
+            "ko": "처음에는 문서 패널이 **왼쪽 고정·카드 보기**로 열립니다. 프로젝트 하단의 **문서**를 누르면 현재 배치·보기·크기를 그대로 두고 패널을 접거나 다시 펼칩니다. 접힌 상태도 브라우저에 기억됩니다.\n\n패널 안의 **패널 위치**에서 왼쪽 또는 하단을 선택하세요. **고정 해제**로 보드 위에 띄우고 **고정**으로 다시 붙일 수 있습니다. 플로팅 패널의 위·오른쪽 가장자리와 모서리를 드래그하면 크기를 바꿀 수 있습니다.\n\n어느 배치에서도 **카드**와 **자세히** 보기를 선택할 수 있습니다. 자세히 보기에서는 열 제목으로 정렬하고 열의 필터로 문서를 좁힙니다. 배치·보기·크기는 브라우저에 기억됩니다.",
+            "en": "The document panel initially opens **pinned on the left in Cards view**. Select **Documents** in the bottom bar to close or reopen it without changing its position, view or size. The browser remembers the collapsed state too.\n\nChoose left or bottom in **Panel position** inside the panel. Use **Unpin** to float it over the board and **Pin** to dock it again. Drag the floating panel’s top edge, right edge or corner to resize it.\n\nChoose **Cards** or **Details** in any position. In Details, sort using column headings and narrow the list with column filters. The browser remembers the layout, view and size."
           }
         },
         {

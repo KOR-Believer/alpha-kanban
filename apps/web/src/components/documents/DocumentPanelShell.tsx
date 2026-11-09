@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { ArrowUpRight, ChevronDown, Columns2, FolderClosed, LayoutGrid, List, PanelBottom, Pin, PinOff } from "lucide-react";
 import { useTranslation } from "@/i18n";
 import { Button } from "../ui/button";
@@ -20,7 +20,10 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
 }) {
   const { t } = useTranslation();
   const [preferences, setPreferences] = useState(readPanelPreferences);
-  const [open, setOpen] = useState(false);
+  const open = preferences.expanded;
+  const setOpen = useCallback((value: boolean | ((previous: boolean) => boolean)) => {
+    setPreferences((previous) => ({ ...previous, expanded: typeof value === "function" ? value(previous.expanded) : value }));
+  }, []);
   const [area, setArea] = useState<PanelSize>({ width: 1024, height: 700 });
   const [toolbarHeight, setToolbarHeight] = useState(128);
   const [dragging, setDragging] = useState<ResizeAxis | null>(null);
@@ -30,12 +33,13 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
   const toolbarRef = useRef<HTMLDivElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
   const status = useRef<HTMLElement>(null);
+  const previousContext = useRef(contextKey);
   const gesture = useRef<{ id: number; x: number; y: number; size: PanelSize; dock: number; target: HTMLElement } | null>(null);
   const id = useId();
   // A left dock needs room for both panes. The saved choice survives a narrow viewport.
   const placement = preferences.placement === "left" && area.width >= 640 ? "left" : "bottom";
   const floating = !preferences.pinned;
-  const visible = preferences.pinned || open;
+  const visible = open;
   const size = fitFloating(preferences.floating, area);
   const limits = floatingLimits(area);
   const dockRange = dockLimits(area, placement, toolbarHeight);
@@ -58,11 +62,15 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
     const timer = setTimeout(() => { try { localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(preferences)); } catch { /* Keep session settings. */ } }, 150);
     return () => clearTimeout(timer);
   }, [preferences]);
-  useEffect(() => { setOpen(false); }, [contextKey]);
+  useEffect(() => {
+    if (previousContext.current !== contextKey && !preferences.pinned) setOpen(false);
+    previousContext.current = contextKey;
+  }, [contextKey, preferences.pinned, setOpen]);
   const close = useMemo(() => () => {
+    if (preferences.pinned) return;
     setOpen(false);
     if (panel.current?.contains(document.activeElement)) launcher.current?.focus();
-  }, []);
+  }, [preferences.pinned, setOpen]);
   const content = useMemo(() => navigation(preferences.view, close), [navigation, preferences.view, close]);
   useEffect(() => {
     if (!floating || !open) return;
@@ -174,7 +182,7 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
   </div>;
 
   return <div className="ak-document-workspace">
-    <div ref={body} className="ak-document-workspace-body" data-panel-mode={floating ? "floating" : placement}
+    <div ref={body} className="ak-document-workspace-body" data-panel-mode={floating ? "floating" : placement} data-panel-open={visible}
       style={{ "--ak-document-dock-size": `${dockSize}px`, "--ak-document-float-width": `${size.width}px`, "--ak-document-float-height": `${size.height}px` } as CSSProperties}>
       <aside ref={panel} id={id} hidden={!visible} aria-label={t("Workspace files")} className="ak-document-panel" data-view={preferences.view}>
         <div ref={toolbarRef} className="ak-document-panel-toolbar">{toolbar(controls, close)}</div>
@@ -185,7 +193,7 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
     </div>
     <footer ref={status} className="ak-document-statusbar" aria-label={t("Document navigation")}>
       <Button ref={launcher} data-tour="document-panel-toggle" variant={visible ? "secondary" : "ghost"} size="sm" aria-controls={id} aria-expanded={visible} aria-label={t("Documents")} title={t("Documents")}
-        onClick={() => { if (preferences.pinned) { setPreferences((previous) => ({ ...previous, pinned: false })); setOpen(false); } else setOpen((previous) => !previous); }}>
+        onClick={() => setOpen((previous) => !previous)}>
         <FolderClosed aria-hidden="true" /><span>{t("Documents")}</span><span className="ak-document-count">{count === total ? total : `${count}/${total}`}</span><ChevronDown className={visible ? "rotate-180" : ""} aria-hidden="true" />
       </Button>
       {ownerControl}
