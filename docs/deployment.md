@@ -110,7 +110,7 @@ The owner approved the canary deployment and a separate stable backport containi
 - Reinstall remains an explicit operation in Skill updates: register the dedicated folder, inspect changes, confirm replacement, then back up and apply the stable app's pinned bundle. Ordinary and PWA-bound updates retain their existing guards. Each origin retains its own backups; deployment does not replace anyone's installed skill.
 - Local channel builds and the two 30-scenario PWA runs passed separately, including isolated Chrome restart, offline download, draft/write guards, update, restore, repair and retirement. These use OPFS and CDP installation, not native OS folder/install prompts. See [release and skill validation](release_skill_validation.md#2026-11-05-channel-release-verification-akc-0405) for the actual native-folder evidence and remaining checks.
 
-The stable backport published sequence 3. Its exact logical record is retained in the canary branch's stable history, and the unpublished team-document records follow it as sequences 4–6. Before a future approved master promotion, retain that published record and review the dates and compatibility of the still-unpublished stable records. Rebuild for stable; do not copy canary output.
+The stable backport published sequence 3. Its published fields remain unchanged. The unpublished team-document drafts formerly numbered 4–6 were consolidated into `2026-11-09-document-workspace`, sequence 4, for the owner-approved promotion. Published IDs, dates, sequence, notification policy and notes were preserved; the new record describes the full stable update. Rebuild for stable; do not copy canary output.
 
 ## Recovery and retirement
 

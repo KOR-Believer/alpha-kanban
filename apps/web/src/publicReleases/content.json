@@ -4,7 +4,10 @@
       "sections": [
         {
           "id": "together",
-          "title": { "ko": "변경 내용을 보고 함께 적용", "en": "Review the changes and apply them together" },
+          "title": {
+            "ko": "변경 내용을 보고 함께 적용",
+            "en": "Review the changes and apply them together"
+          },
           "body": {
             "ko": "앱 업데이트를 적용할 때 등록한 스킬도 함께 업데이트할 수 있게 되었습니다.\n\n1. 업데이트 안내에서 앱의 변경 내용을 읽습니다.\n2. 함께 업데이트할 수 있는 스킬이면 변경 파일을 확인합니다.\n3. 해당 스킬을 쓰는 AI 작업을 마친 뒤 적용을 승인합니다. 새 앱이 열린 다음 스킬을 백업하고 업데이트합니다.\n\n개인 수정이나 폴더 권한 때문에 스킬을 업데이트할 수 없으면 앱만 업데이트할 수 있습니다.",
             "en": "A registered skill can now be updated along with the app.\n\n1. Read the app changes in the update notice.\n2. If the skill is eligible for the combined update, review its changed files.\n3. Finish AI tasks using the skill, then confirm. After the new app opens, the skill is backed up and updated.\n\nIf personal changes or folder permissions prevent a skill update, you can update just the app."
@@ -12,25 +15,99 @@
         },
         {
           "id": "backup",
-          "title": { "ko": "적용 전 백업, 필요하면 복원", "en": "Back up before applying, restore when needed" },
+          "title": {
+            "ko": "적용 전 백업, 필요하면 복원",
+            "en": "Back up before applying, restore when needed"
+          },
           "body": {
             "ko": "교체 전 스킬 파일은 같은 브라우저의 백업에 남습니다. 스킬 업데이트에서 변경 내용을 확인하고 복원을 선택할 수 있습니다. 복원하기 전에도 현재 파일이 바뀌었는지 확인합니다.\n\n현재 화면에서 폴더를 연결하고 변경 내용을 확인하는 방법은 아래 가이드에서 따라갈 수 있습니다.",
             "en": "The previous skill files remain in a backup in the same browser. In Skill updates, review the changes and choose to restore when needed. The files are checked again for external changes before restoration.\n\nThe guides below walk through connecting a folder and reviewing changes in the current interface."
           }
         }
       ],
-      "guides": ["updates", "backup", "folder-access"]
+      "guides": [
+        "updates",
+        "backup",
+        "folder-access"
+      ]
     },
-    "2026-11-01-document-owner-context": { "sections": [], "guides": ["owners", "config", "user-config", "worktree"] },
-    "2026-11-01-document-owner-filters": { "sections": [], "guides": ["owner-filter"] },
-    "2026-11-01-document-compatibility": { "sections": [], "guides": ["organize"] }
+    "2026-11-09-document-workspace": {
+      "sections": [
+        {
+          "id": "panel",
+          "title": {
+            "ko": "보드는 넓게, 문서는 가까이",
+            "en": "More room for the board, documents within reach"
+          },
+          "body": {
+            "ko": "프로젝트 하단의 **문서**를 누르면 문서 패널이 보드 위에 펼쳐집니다. 패널을 닫아 두면 칸반을 화면 전체 폭으로 볼 수 있습니다.\n\n패널 안의 **패널 위치**에서 왼쪽 또는 하단을 선택하세요. **고정 해제**로 보드 위에 띄우고 **고정**으로 다시 붙일 수 있습니다. 플로팅 패널의 위·오른쪽 가장자리와 모서리를 드래그하면 크기를 바꿀 수 있습니다.\n\n어느 배치에서도 **카드**와 **자세히** 보기를 선택할 수 있습니다. 자세히 보기에서는 열 제목으로 정렬하고 열의 필터로 문서를 좁힙니다. 배치·보기·크기는 브라우저에 기억됩니다.",
+            "en": "Select **Documents** in the project’s bottom bar to float the document panel over the board. Close it when you want the full width for your Kanban.\n\nChoose left or bottom in **Panel position** inside the panel. Use **Unpin** to float it over the board and **Pin** to dock it again. Drag the floating panel’s top edge, right edge or corner to resize it.\n\nChoose **Cards** or **Details** in any position. In Details, sort using column headings and narrow the list with column filters. The browser remembers the layout, view and size."
+          }
+        },
+        {
+          "id": "search",
+          "title": {
+            "ko": "검색과 묶음 전환을 하단에서",
+            "en": "Search and switch documents from the bottom bar"
+          },
+          "body": {
+            "ko": "하단 **돋보기**를 누르면 검색 입력란과 문서 패널이 열립니다. 패널 안의 검색과 같은 검색어를 사용하며 제목·파일 이름·경로·티켓 번호와 본문을 함께 찾습니다. 검색어가 있으면 하단 입력란은 펼쳐진 채 유지되고, 비운 뒤 다른 곳을 누르면 돋보기로 접힙니다.\n\n현재 문서 옆의 **계획·티켓·인벤토리** 표시를 누르면 같은 묶음의 다른 문서로 이동할 수 있습니다. 목록 필터에 가려진 문서도 이 메뉴에는 표시됩니다. 링크를 휠 클릭하거나 수정키와 함께 클릭해 새 탭에서 열 수도 있습니다.\n\n[문서와 진행 확인](/docs/progress#search)에서 검색 결과를 보드와 본문으로 여는 방법을 확인하세요.",
+            "en": "Select the bottom **magnifier** to open the search input and document panel. It shares the panel’s query and searches titles, filenames, paths, ticket IDs and document bodies. The input stays expanded while a query exists; clear it and move focus away to return to the magnifier.\n\nSelect the current **Plan, Tickets or Inventory** label to open another document in the same set. This menu includes documents hidden by list filters. Middle-click or use your browser’s modified-click shortcut to open a link in a new tab.\n\nSee [Documents and progress](/docs/progress#search) for opening search results in the board or Markdown reader."
+          }
+        },
+        {
+          "id": "owners",
+          "title": {
+            "ko": "설정 없이 시작하고, 필요할 때 소유자 구분",
+            "en": "Start without settings, add owners when needed"
+          },
+          "body": {
+            "ko": "혼자 쓰는 프로젝트는 설정 파일 없이 계속 사용할 수 있습니다. 여러 사람의 문서를 함께 관리하려면 공유 `.ak.config`에서 `ownerFolders`를 켜고 개인 `.ak.user`에 사용할 이름을 적습니다. 문서 보관 폴더는 `docs`가 기본이며 공유 설정의 `root`로 바꿀 수 있습니다.\n\n문서 경로의 `@이름`은 소유자 필터의 기준입니다. 전체 티켓에서는 여러 이름을 선택해 함께 볼 수 있습니다. 소유자 표시는 업무를 구분하며 다른 사람의 티켓을 자동으로 실행하지 않습니다.",
+            "en": "A solo project can keep working without configuration files. To organize shared documents by owner, enable `ownerFolders` in the shared `.ak.config` and set your name in the private `.ak.user`. The document folder defaults to `docs` and can be changed with the shared `root` setting.\n\nAn `@name` folder in a document’s path determines its owner filter. All tickets lets you combine several names. Ownership identifies work; it does not automatically execute someone else’s tickets."
+          }
+        },
+        {
+          "id": "maintenance",
+          "title": {
+            "ko": "문서는 필요할 때 정리하고, 링크는 내 PC에 연결",
+            "en": "Maintain documents when needed, connect links locally"
+          },
+          "body": {
+            "ko": "기존 문서는 그대로 읽을 수 있습니다. 계속 관리할 문서에서 **문서 정리**를 열면 누락된 문서 ID, 폴더와 맞지 않는 Owner, 예전 안내·템플릿의 정리 내용을 변경 전후로 확인할 수 있습니다. **적용**을 눌렀을 때만 선택한 문서를 저장합니다.\n\n다른 PC 경로로 된 링크는 발견한 저장소나 직접 고른 폴더에 연결해 엽니다. 같은 앞 경로를 사용하는 링크에는 연결을 재사용하며 원본 Markdown 주소는 바꾸지 않습니다. 문서를 실제로 옮기며 참조까지 고칠 때는 [이동과 인수인계](/docs/handoff)를 참고하세요.",
+            "en": "Existing documents remain readable as they are. Open **Document maintenance** for a document you want to keep maintaining to compare missing IDs, folder-based Owner corrections and obsolete guidance or templates. Only **Apply** saves the selected document.\n\nOpen another PC’s links through a discovered repository or a folder you select. The connection is reused for the same path prefix without rewriting the source Markdown. To move files and repair references together, see [Move and hand off documents](/docs/handoff)."
+          }
+        },
+        {
+          "id": "updates",
+          "title": {
+            "ko": "스킬 업데이트도 변경 내용부터",
+            "en": "Review skill changes before updating"
+          },
+          "body": {
+            "ko": "사용 중인 `implementation-ledger` 폴더를 스킬 업데이트 창에 드롭하거나 폴더 선택으로 연결하세요. 연결만으로 파일을 바꾸지 않습니다. 변경 내용을 비교하고 동의하면 현재 파일 전체를 백업한 뒤 업데이트합니다. 개인 수정본은 별도의 재설치 확인이 필요합니다.\n\n상단 도움말과 각 기능의 **둘러보기**, [공식 문서](/docs)에서 사용법을 확인할 수 있습니다. 앱 업데이트와 스킬 교체는 각각의 확인 절차를 유지합니다.",
+            "en": "Drop your installed `implementation-ledger` folder into Skill updates or connect it with the folder picker. Connecting alone does not change files. Review and confirm the changes to back up all current files before updating. Customized installations require a separate reinstall confirmation.\n\nUse Help, contextual **tours**, and the [documentation](/docs) for instructions. App updates and skill replacement retain their own confirmation steps."
+          }
+        }
+      ],
+      "guides": [
+        "progress",
+        "owners",
+        "config",
+        "organize",
+        "local-links",
+        "updates"
+      ]
+    }
   },
   "canary": {
     "2026-11-03-canary-baseline": {
       "sections": [
         {
           "id": "owners",
-          "title": { "ko": "각자의 문서를 한 보드에서", "en": "Everyone’s documents on one board" },
+          "title": {
+            "ko": "각자의 문서를 한 보드에서",
+            "en": "Everyone’s documents on one board"
+          },
           "body": {
             "ko": "문서 보관 폴더 아래의 `@alice`, `@bob`처럼 소유자 폴더를 구분할 수 있습니다. 문서 목록과 티켓에서 소유자를 확인하고, 전체 티켓에서는 여러 이름을 함께 선택할 수 있습니다.\n\n기존 문서는 그대로 사용할 수 있습니다. 소유자 폴더는 작업을 구분하는 표시이며 다른 사람의 작업을 대신 실행하라는 허가는 아닙니다.",
             "en": "Owner folders such as `@alice` and `@bob` under your document folder distinguish each person’s work. Owners appear in document lists and tickets, and All tickets lets you select several names together.\n\nExisting documents still work as they are. Owner folders identify work; they do not authorize an agent to take over someone else’s tasks."
@@ -38,7 +115,10 @@
         },
         {
           "id": "local-links",
-          "title": { "ko": "다른 PC의 경로를 내 폴더에 연결", "en": "Connect another PC’s paths to your folders" },
+          "title": {
+            "ko": "다른 PC의 경로를 내 폴더에 연결",
+            "en": "Connect another PC’s paths to your folders"
+          },
           "body": {
             "ko": "문서 링크가 다른 PC의 경로를 가리켜도 내 로컬 폴더를 연결해 열 수 있습니다. Git 정보로 찾은 저장소를 확인하거나 직접 폴더를 선택합니다. 저장한 연결은 같은 앞 경로를 쓰는 링크에도 재사용합니다.\n\n원본 Markdown은 바꾸지 않습니다. 연결한 Markdown은 문서 페이지에서 읽으며, 연결 변경과 해제는 로컬 폴더에서 관리합니다. 아래 예시에서 연결과 재사용 흐름을 눌러볼 수 있습니다.",
             "en": "A document link pointing to another PC can open through a connection to your local folder. Confirm a repository found through Git information or choose a folder yourself. The saved connection is reused for links with the same path prefix.\n\nThe original Markdown stays unchanged. Connected Markdown opens as a document page, and Local folders manages connection changes and removal. Try the connection and reuse flow in the example below."
@@ -46,7 +126,79 @@
         }
       ],
       "example": "local-links",
-      "guides": ["owners", "owner-filter", "local-links", "connections"]
+      "guides": [
+        "owners",
+        "owner-filter",
+        "local-links",
+        "connections"
+      ]
+    },
+    "2026-11-09-canary-document-workspace": {
+      "sections": [
+        {
+          "id": "panel",
+          "title": {
+            "ko": "보드는 넓게, 문서는 가까이",
+            "en": "More room for the board, documents within reach"
+          },
+          "body": {
+            "ko": "프로젝트 하단의 **문서**를 누르면 문서 패널이 보드 위에 펼쳐집니다. 패널을 닫아 두면 칸반을 화면 전체 폭으로 볼 수 있습니다.\n\n패널 안의 **패널 위치**에서 왼쪽 또는 하단을 선택하세요. **고정 해제**로 보드 위에 띄우고 **고정**으로 다시 붙일 수 있습니다. 플로팅 패널의 위·오른쪽 가장자리와 모서리를 드래그하면 크기를 바꿀 수 있습니다.\n\n어느 배치에서도 **카드**와 **자세히** 보기를 선택할 수 있습니다. 자세히 보기에서는 열 제목으로 정렬하고 열의 필터로 문서를 좁힙니다. 배치·보기·크기는 브라우저에 기억됩니다.",
+            "en": "Select **Documents** in the project’s bottom bar to float the document panel over the board. Close it when you want the full width for your Kanban.\n\nChoose left or bottom in **Panel position** inside the panel. Use **Unpin** to float it over the board and **Pin** to dock it again. Drag the floating panel’s top edge, right edge or corner to resize it.\n\nChoose **Cards** or **Details** in any position. In Details, sort using column headings and narrow the list with column filters. The browser remembers the layout, view and size."
+          }
+        },
+        {
+          "id": "search",
+          "title": {
+            "ko": "검색과 묶음 전환을 하단에서",
+            "en": "Search and switch documents from the bottom bar"
+          },
+          "body": {
+            "ko": "하단 **돋보기**를 누르면 검색 입력란과 문서 패널이 열립니다. 패널 안의 검색과 같은 검색어를 사용하며 제목·파일 이름·경로·티켓 번호와 본문을 함께 찾습니다. 검색어가 있으면 하단 입력란은 펼쳐진 채 유지되고, 비운 뒤 다른 곳을 누르면 돋보기로 접힙니다.\n\n현재 문서 옆의 **계획·티켓·인벤토리** 표시를 누르면 같은 묶음의 다른 문서로 이동할 수 있습니다. 목록 필터에 가려진 문서도 이 메뉴에는 표시됩니다. 링크를 휠 클릭하거나 수정키와 함께 클릭해 새 탭에서 열 수도 있습니다.\n\n[문서와 진행 확인](/docs/progress#search)에서 검색 결과를 보드와 본문으로 여는 방법을 확인하세요.",
+            "en": "Select the bottom **magnifier** to open the search input and document panel. It shares the panel’s query and searches titles, filenames, paths, ticket IDs and document bodies. The input stays expanded while a query exists; clear it and move focus away to return to the magnifier.\n\nSelect the current **Plan, Tickets or Inventory** label to open another document in the same set. This menu includes documents hidden by list filters. Middle-click or use your browser’s modified-click shortcut to open a link in a new tab.\n\nSee [Documents and progress](/docs/progress#search) for opening search results in the board or Markdown reader."
+          }
+        },
+        {
+          "id": "owners",
+          "title": {
+            "ko": "설정 없이 시작하고, 필요할 때 소유자 구분",
+            "en": "Start without settings, add owners when needed"
+          },
+          "body": {
+            "ko": "혼자 쓰는 프로젝트는 설정 파일 없이 계속 사용할 수 있습니다. 여러 사람의 문서를 함께 관리하려면 공유 `.ak.config`에서 `ownerFolders`를 켜고 개인 `.ak.user`에 사용할 이름을 적습니다. 문서 보관 폴더는 `docs`가 기본이며 공유 설정의 `root`로 바꿀 수 있습니다.\n\n문서 경로의 `@이름`은 소유자 필터의 기준입니다. 전체 티켓에서는 여러 이름을 선택해 함께 볼 수 있습니다. 소유자 표시는 업무를 구분하며 다른 사람의 티켓을 자동으로 실행하지 않습니다.",
+            "en": "A solo project can keep working without configuration files. To organize shared documents by owner, enable `ownerFolders` in the shared `.ak.config` and set your name in the private `.ak.user`. The document folder defaults to `docs` and can be changed with the shared `root` setting.\n\nAn `@name` folder in a document’s path determines its owner filter. All tickets lets you combine several names. Ownership identifies work; it does not automatically execute someone else’s tickets."
+          }
+        },
+        {
+          "id": "maintenance",
+          "title": {
+            "ko": "문서는 필요할 때 정리하고, 링크는 내 PC에 연결",
+            "en": "Maintain documents when needed, connect links locally"
+          },
+          "body": {
+            "ko": "기존 문서는 그대로 읽을 수 있습니다. 계속 관리할 문서에서 **문서 정리**를 열면 누락된 문서 ID, 폴더와 맞지 않는 Owner, 예전 안내·템플릿의 정리 내용을 변경 전후로 확인할 수 있습니다. **적용**을 눌렀을 때만 선택한 문서를 저장합니다.\n\n다른 PC 경로로 된 링크는 발견한 저장소나 직접 고른 폴더에 연결해 엽니다. 같은 앞 경로를 사용하는 링크에는 연결을 재사용하며 원본 Markdown 주소는 바꾸지 않습니다. 문서를 실제로 옮기며 참조까지 고칠 때는 [이동과 인수인계](/docs/handoff)를 참고하세요.",
+            "en": "Existing documents remain readable as they are. Open **Document maintenance** for a document you want to keep maintaining to compare missing IDs, folder-based Owner corrections and obsolete guidance or templates. Only **Apply** saves the selected document.\n\nOpen another PC’s links through a discovered repository or a folder you select. The connection is reused for the same path prefix without rewriting the source Markdown. To move files and repair references together, see [Move and hand off documents](/docs/handoff)."
+          }
+        },
+        {
+          "id": "updates",
+          "title": {
+            "ko": "스킬 업데이트도 변경 내용부터",
+            "en": "Review skill changes before updating"
+          },
+          "body": {
+            "ko": "사용 중인 `implementation-ledger` 폴더를 스킬 업데이트 창에 드롭하거나 폴더 선택으로 연결하세요. 연결만으로 파일을 바꾸지 않습니다. 변경 내용을 비교하고 동의하면 현재 파일 전체를 백업한 뒤 업데이트합니다. 개인 수정본은 별도의 재설치 확인이 필요합니다.\n\n상단 도움말과 각 기능의 **둘러보기**, [공식 문서](/docs)에서 사용법을 확인할 수 있습니다. 앱 업데이트와 스킬 교체는 각각의 확인 절차를 유지합니다.",
+            "en": "Drop your installed `implementation-ledger` folder into Skill updates or connect it with the folder picker. Connecting alone does not change files. Review and confirm the changes to back up all current files before updating. Customized installations require a separate reinstall confirmation.\n\nUse Help, contextual **tours**, and the [documentation](/docs) for instructions. App updates and skill replacement retain their own confirmation steps."
+          }
+        }
+      ],
+      "guides": [
+        "progress",
+        "owners",
+        "config",
+        "organize",
+        "local-links",
+        "updates"
+      ]
     }
   }
 }

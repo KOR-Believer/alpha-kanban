@@ -103,96 +103,44 @@
     }
   },
   {
-    "id": "2026-11-01-document-owner-context",
+    "id": "2026-11-09-document-workspace",
     "sequence": 4,
-    "date": "2026-11-01",
+    "date": "2026-11-09",
     "notify": true,
+    "title": {
+      "ko": "문서 패널과 함께 쓰는 작업 공간",
+      "en": "A flexible workspace for your documents"
+    },
     "notes": {
       "ko": [
-        "implementation-ledger에서 선택적으로 소유자별 문서를 작성할 수 있습니다. 공유 .ak.config에서 ownerFolders를 켜고 개인 .ak.user를 지정하면 새 문서를 docs/@사용자에 작성하고 문서 상단에 Owner를 기록합니다.",
-        "설정 없이 기존 문서 작성 방식을 계속 사용할 수 있습니다. linked worktree는 현재 위치의 공유 정책과 원래 저장소의 개인 사용자 설정을 사용합니다."
+        "하단 상태바에서 문서 패널을 열고 왼쪽·하단에 고정하거나 보드 위에 띄울 수 있습니다. 패널 안에서 고정과 크기를 조절하고 카드·자세히 보기를 선택하세요.",
+        "자세히 보기에서 열 제목으로 정렬하고 이름·경로, 완료 상태, 문서 종류를 필터링할 수 있습니다. 소유자 필터는 하단 상태바에서도 바로 열립니다.",
+        "하단 돋보기로 통합검색을 시작하고 현재 문서 유형을 눌러 같은 묶음의 계획·티켓·인벤토리로 전환할 수 있습니다. 검색어가 있으면 입력란이 펼쳐진 채 유지됩니다.",
+        "플랜·티켓·인벤토리·일반 Markdown 본문을 함께 검색하고, 소유자별로 문서와 티켓을 모아 볼 수 있습니다. 설정 없는 기본 사용도 그대로 지원합니다.",
+        "문서 정리에서 누락 ID 발급, 폴더 기준 Owner 보정, 예전 안내·템플릿 제거를 미리 보고 적용할 수 있습니다. 다른 PC 경로의 링크는 로컬 폴더에 연결해 원문을 바꾸지 않고 엽니다.",
+        "스킬 폴더를 드롭하거나 선택해 변경 내용을 비교하고 백업 후 업데이트할 수 있습니다. 공식 문서, 릴리즈 페이지와 화면별 둘러보기도 제공합니다."
       ],
       "en": [
-        "implementation-ledger supports optional owner-based document creation. Enable ownerFolders in the shared .ak.config and set a private .ak.user to create new documents in docs/@user with an Owner header.",
-        "Keep using the existing workflow without settings. Linked worktrees use their current shared policy and the original repository's private user settings."
+        "Open the document panel from the bottom status bar, pin it to the left or bottom, or float it over the board. Pin, resize and choose Cards or Details inside the panel.",
+        "In Details, sort by column headings and filter names or paths, completion and document types. Open the owner filter directly from the status bar.",
+        "Start unified search with the bottom magnifier and select the current document type to switch between the set’s plan, tickets and inventory. The search input stays expanded while a query is entered.",
+        "Search the bodies of plans, tickets, inventories and ordinary Markdown, and filter documents and tickets by owner. The default workflow still works without configuration.",
+        "Preview missing document IDs, folder-based Owner corrections and obsolete guidance or template removal in Document maintenance. Connect links from another PC to local folders without changing the source.",
+        "Drop or choose a skill folder, compare the changes and confirm a backed-up update. Documentation, release pages and contextual screen tours are also available."
       ]
     },
     "skill": {
-      "compatibility": "unknown",
+      "compatibility": "compatible",
       "notes": {
         "ko": [
-          "문서 컨텍스트 도구와 선택적 Owner 템플릿이 추가되었습니다. 기존 설치본은 Codex로 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."
+          "새 플랜·티켓·인벤토리는 문서별 ID를 발급받으며, 설정을 켠 경우에만 소유자 폴더와 Owner를 사용합니다. 기존 문서는 변환 없이 계속 읽고 수정할 수 있습니다.",
+          "문서 이동·인수인계·PC 경로 보정 CLI와 적용 전 재검사를 제공합니다. 스킬 업데이트는 기존 문서를 자동으로 이동하거나 정리하지 않으며, 개인 수정본은 별도의 재설치 확인을 거칩니다."
         ],
         "en": [
-          "Adds the document context tool and optional Owner templates. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."
+          "New plans, ticket documents and inventories receive individual document IDs. Owner folders and Owner headers are used only when enabled; existing documents remain readable and editable without conversion.",
+          "The skill includes guarded document moves, handoffs and PC-path rebasing with pre-apply checks. Updating the skill does not move or clean existing documents, and customized installations require separate reinstall confirmation."
         ]
       }
-    },
-    "title": {
-      "ko": "소유자별 문서 작성",
-      "en": "Create documents by owner"
-    }
-  },
-  {
-    "id": "2026-11-01-document-owner-filters",
-    "sequence": 5,
-    "date": "2026-11-01",
-    "notify": true,
-    "notes": {
-      "ko": [
-        "docs/@사용자 폴더의 소유자를 문서 목록·티켓 카드·상세에서 확인할 수 있습니다. 전체 티켓에서는 소유자를 검색해 여러 이름의 작업을 함께 볼 수 있고, 선택 목록은 프로젝트별 사이드바 필터와 독립적으로 기억합니다.",
-        "소유자 설정 없이 기존 문서를 계속 사용할 수 있습니다. 필터를 바꿔도 열어 둔 문서와 작성 중인 입력은 유지됩니다."
-      ],
-      "en": [
-        "View owners from docs/@user folders in the document list, ticket cards and details. In All tickets, search and select multiple owner names to see their work together, with selections remembered independently of project sidebar filters.",
-        "Continue using ordinary documents without owner settings. Changing a filter preserves the open document and unsaved input."
-      ]
-    },
-    "skill": {
-      "compatibility": "unknown",
-      "notes": {
-        "ko": [
-          "동봉 스킬은 직전 릴리즈와 동일합니다. 기존 설치본을 변경하려면 Codex로 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."
-        ],
-        "en": [
-          "The bundled skill is unchanged from the previous release. Ask Codex to compare an existing installation, preserve customizations, and back it up before updating."
-        ]
-      }
-    },
-    "title": {
-      "ko": "소유자로 문서와 티켓 모아 보기",
-      "en": "Filter documents and tickets by owner"
-    }
-  },
-  {
-    "id": "2026-11-01-document-compatibility",
-    "sequence": 6,
-    "date": "2026-11-01",
-    "notify": true,
-    "notes": {
-      "ko": [
-        "문서 형식과 소유자·문서 ID를 확인하는 도구를 추가했습니다. 기존 문서는 형식이나 메타데이터를 바꾸지 않아도 보드와 Markdown으로 계속 읽을 수 있습니다.",
-        "기존 문서는 형식을 바꾸지 않고 계속 사용할 수 있습니다. 같은 프로젝트에 중복된 문서 ID가 있으면 저장 전에 알려줍니다."
-      ],
-      "en": [
-        "Adds tools to check document formats, owners and document IDs. Existing documents remain readable in the board and Markdown views without changing their format or metadata.",
-        "Keep using existing documents without converting their format. Duplicate document IDs in the same project are reported before saving."
-      ]
-    },
-    "skill": {
-      "compatibility": "unknown",
-      "notes": {
-        "ko": [
-          "스킬 개정과 문서 형식 지원 범위를 구분하고, 형식 검증과 소유자·UUID 분석 도구를 제공합니다. 기존 문서를 자동 변환하지 않습니다. 설치본을 비교하고 개인 수정을 보존해 백업 후 업데이트하세요."
-        ],
-        "en": [
-          "Separates the skill revision from supported document formats and adds format checks and owner/UUID analysis helpers. Existing documents are not converted automatically. Compare the installation, preserve personal changes, and back up before updating."
-        ]
-      }
-    },
-    "title": {
-      "ko": "문서 형식과 메타데이터 확인",
-      "en": "Document format and metadata checks"
     }
   }
 ]

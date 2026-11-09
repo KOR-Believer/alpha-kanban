@@ -206,6 +206,17 @@
           }
         },
         {
+          "id": "panel",
+          "title": {
+            "ko": "보드는 넓게, 문서는 가까이",
+            "en": "More room for the board, documents within reach"
+          },
+          "body": {
+            "ko": "프로젝트 하단의 **문서**를 누르면 문서 패널이 보드 위에 펼쳐집니다. 패널을 닫아 두면 칸반을 화면 전체 폭으로 볼 수 있습니다.\n\n패널 안의 **패널 위치**에서 왼쪽 또는 하단을 선택하세요. **고정 해제**로 보드 위에 띄우고 **고정**으로 다시 붙일 수 있습니다. 플로팅 패널의 위·오른쪽 가장자리와 모서리를 드래그하면 크기를 바꿀 수 있습니다.\n\n어느 배치에서도 **카드**와 **자세히** 보기를 선택할 수 있습니다. 자세히 보기에서는 열 제목으로 정렬하고 열의 필터로 문서를 좁힙니다. 배치·보기·크기는 브라우저에 기억됩니다.",
+            "en": "Select **Documents** in the project’s bottom bar to float the document panel over the board. Close it when you want the full width for your Kanban.\n\nChoose left or bottom in **Panel position** inside the panel. Use **Unpin** to float it over the board and **Pin** to dock it again. Drag the floating panel’s top edge, right edge or corner to resize it.\n\nChoose **Cards** or **Details** in any position. In Details, sort using column headings and narrow the list with column filters. The browser remembers the layout, view and size."
+          }
+        },
+        {
           "id": "board",
           "title": {
             "ko": "칸반에서 살펴보기",
@@ -223,8 +234,8 @@
             "en": "Search document and ticket contents"
           },
           "body": {
-            "ko": "프로젝트 왼쪽 위 **문서·티켓 검색**은 제목·파일 이름·티켓 번호뿐 아니라 플랜, 인벤토리, 일반 Markdown, 티켓 본문을 함께 찾습니다. 일치하는 문서 묶음이 왼쪽에 나타납니다.\n\n묶음에서 티켓 결과를 열면 일치한 티켓만 보드에 남습니다. 플랜·인벤토리·일반 Markdown 결과는 해당 문서의 일치 위치로 이동합니다. **이 문서 전체 보기**로 전체 내용을 보거나 검색어를 지워 검색을 끝낼 수 있습니다. 본문을 읽는 중이면 검색 진행 상태가 표시되며, 읽지 못한 문서가 있으면 일부 결과임을 알립니다.\n\n보드 안의 **번호·제목·본문 검색**은 티켓만 대상으로 합니다. 전체 티켓 화면에서는 연결한 프로젝트들의 티켓을 함께 검색합니다. 화면 밖에 있는 카드도 검색할 수 있습니다.\n\n사용법을 찾으려면 상단 **가이드 검색**에 기능명이나 설정 이름을 입력하세요.",
-            "en": "The project sidebar’s **Search documents and tickets** searches titles, filenames, ticket numbers, and the bodies of plans, inventories, ordinary Markdown, and tickets. Matching document groups appear in the sidebar.\n\nOpening ticket results filters the board to matching tickets. A plan, inventory, or Markdown result takes you to the match in that document. Choose **View whole document** to read the full document, or clear the query to end the search. A progress message appears while contents are being read; unreadable documents produce an incomplete-results notice.\n\nThe board’s **Search ID, title, and body** field searches tickets only. All tickets searches tickets across connected projects, including cards outside the visible screen.\n\nTo find instructions, enter a feature or setting name in **Search documentation** in the header."
+            "ko": "문서 패널의 **문서·티켓 검색**과 하단 상태바의 **돋보기**는 같은 검색어를 사용합니다. 제목·파일 이름·티켓 번호뿐 아니라 플랜, 인벤토리, 일반 Markdown, 티켓 본문을 함께 찾습니다. 일치하는 문서 묶음이 패널에 나타납니다.\n\n묶음에서 티켓 결과를 열면 일치한 티켓만 보드에 남습니다. 플랜·인벤토리·일반 Markdown 결과는 해당 문서의 일치 위치로 이동합니다. **이 문서 전체 보기**로 전체 내용을 보거나 검색어를 지워 검색을 끝낼 수 있습니다. 본문을 읽는 중이면 검색 진행 상태가 표시되며, 읽지 못한 문서가 있으면 일부 결과임을 알립니다.\n\n보드 안의 **번호·제목·본문 검색**은 티켓만 대상으로 합니다. 전체 티켓 화면에서는 연결한 프로젝트들의 티켓을 함께 검색합니다. 화면 밖에 있는 카드도 검색할 수 있습니다.\n\n사용법을 찾으려면 상단 **가이드 검색**에 기능명이나 설정 이름을 입력하세요.",
+            "en": "The document panel’s **Search documents and tickets** and the bottom **magnifier** share a query. They search titles, filenames, ticket numbers, and the bodies of plans, inventories, ordinary Markdown, and tickets. Matching document groups appear in the document panel.\n\nOpening ticket results filters the board to matching tickets. A plan, inventory, or Markdown result takes you to the match in that document. Choose **View whole document** to read the full document, or clear the query to end the search. A progress message appears while contents are being read; unreadable documents produce an incomplete-results notice.\n\nThe board’s **Search ID, title, and body** field searches tickets only. All tickets searches tickets across connected projects, including cards outside the visible screen.\n\nTo find instructions, enter a feature or setting name in **Search documentation** in the header."
           }
         }
       ]
