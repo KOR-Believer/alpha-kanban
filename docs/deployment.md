@@ -63,6 +63,8 @@ When a release offers skill replacement, run `pnpm test:skill-release` against t
 
 `test:pwa` uses controlled release notes to exercise lifecycle transitions, including a deliberately compatible fixture. Its success is not evidence that the authored release allows skill replacement. Keep the actual-release check separate, and do not change `unknown` to `compatible` without reviewing the skill/document contract and its regression results.
 
+For startup or worker-version changes, run `pnpm test:pwa-entry --dir <built-output>` for both channels. This uses an isolated synthetic legacy worker that passes a new public route through to the network. A mismatched page must stay on its themed update notice without mounting workspace operations or reloading, then participate in a separately confirmed worker update. Navigation requests are counted separately from router history events. This is a controlled browser check, not an OS installation test.
+
 ## Release records
 
 - Before authorizing a release, review `apps/web/releases.json`: bilingual user-facing notes, stable logical ID, increasing sequence, actual release date and automatic-notice policy. Do not rewrite published records to describe a different release. The pending local record is not a deployment receipt.
@@ -72,6 +74,23 @@ When a release offers skill replacement, run `pnpm test:skill-release` against t
 - Verify the notes for the actual waiting build before applying it, then the one-time project-selector modal and manual history. Preserve folder connections, preferences, release-read markers, skill connections and recovery journals through update, repair and retirement. Browser updates never imply approval to replace a user's skill.
 
 Local previews establish application behavior, not production DNS, edge routing, headers, or OS installation behavior. Record deployment checks separately from local test results.
+
+## 2026-11-09 stable and canary promotion receipt
+
+The owner approved releasing the accumulated document-workspace features to both channels. `master` and `release/canary` were advanced to the same source. The first publication, `39e06b1`, added the bilingual release overview and document-panel guide; the follow-up below includes the requested left-pinned Cards default, visibility-only panel toggle, and startup reload-loop correction.
+
+| Public service | Deployed source | Served build | Release | Skill bundle |
+| --- | --- | --- | --- | --- |
+| [Stable](https://kanban.giveit2.me/) | `ea7276ed09d1df0f97d69260d7bd097f333193ff` | `595180ca26d0d9e4` | `2026-11-09-panel-and-startup` (sequence 5) | `2c35099980e9` |
+| [Canary](https://kanban-canary.giveit2.me/) | `ea7276ed09d1df0f97d69260d7bd097f333193ff` | `4c9e440a788b4cf3` | `2026-11-09-canary-panel-and-startup` (sequence 6) | `2c35099980e9` |
+
+- Cloudflare Pages reported success for both production branches. The two custom origins delivered the same source and exact skill payload, while retaining separate channel branding, manifest identities, origins and release histories. All 114 stable and 115 canary offline assets matched their inventories. Pinned JSON/ZIP contents, all 26 installed skill files, worker, repair assets, MIME/cache/CSP headers and direct entry routes passed the hosted release checks.
+- Previously published release records were preserved. The unpublished stable drafts were consolidated into the initial `2026-11-09-document-workspace` release, followed by a separate correction record. The connected Chrome session rendered the final stable and canary release pages from their actual Pages deployment URLs. Custom-domain responses were verified separately against the same deployed artifacts.
+- The full promotion regression suite passed, followed by 710 web tests, type checking and fresh builds for both channels after the panel/startup correction. A 30-scenario isolated stable PWA run covered multi-window update coordination, draft/write barriers, offline restart, skill backup/restore, repair and retirement. Both channels passed the new legacy-entry smoke: the update notice stayed still and retained its theme, then one confirmed update reopened the requested release.
+- The initial public-page incident exposed the startup guard calling reload whenever the active worker and network page had different build IDs. Legacy workers can pass new public routes through to the network, so reload can return the same mismatched page indefinitely. Startup now shows actionable update guidance before workspace operations mount, while still acknowledging coordinated updates from another app window. This corrects the identified reload path; it is not a diagnosis of every possible display flicker.
+- In connected Chrome, synthetic documents verified the initial left-pinned Cards layout, left/bottom/floating visibility toggles, Details view and resized dimensions, and collapsed-state restoration after refresh. All 24 synthetic Markdown hashes remained unchanged. Existing saved display preferences remain valid; the new default does not overwrite a user's chosen layout.
+- `test:skill-release` passed sequentially against both custom origins using their actual authored compatibility and delivered UI. Three official snapshots and a modified installation verified comparison without writes, fresh replacement consent, exact replacement, complete exported backup, explicit restore and backup retention. These were isolated Chrome OPFS folders; no personal skill installation or existing folder connection was changed.
+- The existing native macOS/Windows dual-install and remaining OS-folder acceptance items stay open in AKC-04/05. These deployment and OPFS results do not mark those separate checks complete. Receipt-only commits retain the served source above using the existing Pages skip convention.
 
 ## 2026-11-06 canary document-workflow release receipt
 
