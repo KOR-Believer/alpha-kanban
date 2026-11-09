@@ -39,7 +39,7 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
     step("skill-restore", "Confirm restoration separately", "Confirm restore replaces only files matching the recorded copies. Finish work using this skill first; this tour does not restore anything.")
   ];
   if (kind === "linked") return [
-    step("linked-source", "Return to your source document", "This link returns to the document you were reading. Connected pages keep that project’s sidebar and your unfinished ticket inputs."),
+    step("linked-source", "Return to your source document", "This link returns to the document you were reading. Connected pages keep that project’s document panel and your unfinished ticket inputs."),
     step("linked-readonly", "Read a connected document", "This page opens a local file through your saved connection. It is read-only here; follow its links and outline just as in an ordinary document."),
     step("document-properties", "Read the recorded properties", "Owner is the name recorded in this file. Folder ownership is determined separately by the nearest @ folder. Document-ID identifies the file even after a move."),
     step("document-outline", "Jump to a heading", "Use the outline to move within this document. Heading links let you return to a specific section.")
@@ -88,16 +88,21 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   ];
   return [
     step("project-switcher", "Switch the current project", "Choose another connected project here. The Alpha Kanban name returns to the start screen."),
+    step("document-panel-toggle", "Open your document panel", "Open documents above the board, or pin the panel to the left or bottom. Cards and Details are available in every position."),
+    step("document-status-search", "Search from the status bar", "Select the magnifier to search. Results appear in the document panel, using the same search as its input. The input stays open while a search is entered."),
+    step("document-set-switcher", "Switch documents in this set", "Select the document type to open its plan, tickets or inventory. The menu includes this set’s documents even when the document list is filtered."),
+    step("project-owner-filter", "Filter documents by owner", "Choose an owner here without opening the document panel. This uses the same owner filter as the panel and leaves the open document unchanged."),
+    step("document-panel-layout", "Arrange your document panel", "Choose the panel position and Cards or Details here. Unpin to float above the board. Drag the panel edges to resize; double-click a resize handle to reset its size."),
     step("documents", "Search this project’s documents", "Search names, paths and the contents of plans, tickets, inventories and other Markdown. Results stay grouped by document set."),
     step("document-results", "Open a matching document set", "A match shows which document or ticket contains the text. Selecting it opens the matching tickets or the matching place in the document."),
-    step("applied-document-search", "Keep or clear the search", "The opened document keeps the applied search. View whole document clears that view’s search without erasing the sidebar query. Clear the sidebar search separately to see every document set."),
-    step("document-filters", "Keep the document list focused", "Hide plain Markdown or completed document sets. If the project has owner folders, you can also filter by owner. These choices only change the sidebar list, not the documents."),
+    step("applied-document-search", "Keep or clear the search", "The opened document keeps the applied search. View whole document clears that view’s search without erasing the document search. Clear the document search separately to see every document set."),
+    step("document-filters", "Keep the document list focused", "Hide plain Markdown or completed document sets. If the project has owner folders, you can also filter by owner. These choices only change the document list, not the documents."),
     step("document-sort", "Choose a document order", "Sort by document number, recent changes, or progress. The arrow reverses the order. This is a viewing preference, not a file edit."),
     step("document-view", "Switch between board and Markdown", "The board summarizes tickets. Markdown shows the whole document, including text that does not appear on cards. Both views read the same file."),
     step("document-owner", "Ownership comes from the folder", "This owner comes from the nearest @ folder. Use the document filter to choose an owner; this does not change the Owner recorded inside a file."),
     step("document-properties", "Read the recorded properties", "Owner is the name recorded in this file. Folder ownership is determined separately by the nearest @ folder. Document-ID identifies the file even after a move."),
     step("document-maintenance", "Preview document maintenance", "Keep a document you continue to use aligned with the current format. Preview missing ID assignment, Owner correction to the nearest @ folder, and removal of obsolete guidance and templates. Only Apply reviewed changes saves this document."),
-    step("project-guide", "Create your first plan and tickets", "Use these example requests in your AI tool. Review the draft, discuss relevant open questions, update the tickets, and then request implementation. Ordinary Markdown remains available in the sidebar."),
+    step("project-guide", "Create your first plan and tickets", "Use these example requests in your AI tool. Review the draft, discuss relevant open questions, update the tickets, and then request implementation. Ordinary Markdown remains available in the document panel."),
     status(), card(),
     step("all-tickets", "See work across projects", "Open All tickets to compare connected projects on one board and filter the projects you want to see."),
     skills(), folders(),

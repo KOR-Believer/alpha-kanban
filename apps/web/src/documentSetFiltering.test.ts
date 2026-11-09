@@ -1,7 +1,7 @@
 import type { DocumentSetSummary, MarkdownFileSummary, MarkdownFileType } from "@alpha-kanban/shared";
 import { buildDocumentSets, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DOCUMENT_FILTERS, filterDocumentSets } from "./documentSetFiltering";
+import { DEFAULT_COLUMN_FILTERS, DEFAULT_DOCUMENT_FILTERS, filterDocumentSets } from "./documentSetFiltering";
 
 function file(filename: string, type: MarkdownFileType, slug: string): MarkdownFileSummary {
   return { id: filename, workspaceId: "workspace", type, filename, slug, directory: "docs/auth",
@@ -17,6 +17,23 @@ const sets = buildDocumentSets([
 ]);
 
 describe("document sidebar filters", () => {
+  it("combines column filters with OR document types without mutating a group", () => {
+    const before = structuredClone(sets);
+    const visible = filterDocumentSets(sets, "account", DEFAULT_DOCUMENT_FILTERS, "all", { ...DEFAULT_COLUMN_FILTERS, name: "Account", directory: "AUTH", types: ["plan", "tickets"] });
+    expect(visible).toHaveLength(1);
+    expect(visible[0]!.documents.map((file) => file.type)).toEqual(["plan", "tickets"]);
+    expect(visible[0]!.documentSet.documents).toHaveLength(3);
+    expect(sets).toEqual(before);
+    expect(filterDocumentSets(sets, "", DEFAULT_DOCUMENT_FILTERS, "all", { ...DEFAULT_COLUMN_FILTERS, directory: "missing" })).toEqual([]);
+  });
+  it("does not count unknown progress as complete or as having no tickets", () => {
+    const complete = { ...sets[0]!, allTicketsDone: true };
+    expect(filterDocumentSets([complete, ...sets], "", DEFAULT_DOCUMENT_FILTERS, "all", { ...DEFAULT_COLUMN_FILTERS, completion: "complete" }).map((row) => row.documentSet)).toEqual([complete]);
+    const without = filterDocumentSets(sets, "", DEFAULT_DOCUMENT_FILTERS, "all", { ...DEFAULT_COLUMN_FILTERS, completion: "without-tickets" });
+    expect(without.every((row) => row.documentSet.documents.every((file) => file.type !== "tickets"))).toBe(true);
+    expect(without.some((row) => row.documentSet.slug === "solo")).toBe(true);
+    expect(filterDocumentSets([complete, ...sets], "", { ...DEFAULT_DOCUMENT_FILTERS, hideCompletedSets: true }, "all", { ...DEFAULT_COLUMN_FILTERS, completion: "complete" }).map((row) => row.documentSet)).toEqual(sets);
+  });
   it("leaves source groups, ordering and progress untouched", () => {
     const before = structuredClone(sets);
     const visible = filterDocumentSets(sets, "", DEFAULT_DOCUMENT_FILTERS);

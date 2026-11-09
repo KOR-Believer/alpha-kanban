@@ -1,6 +1,6 @@
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
 import { documentPathOwner } from "@alpha-kanban/shared/documents";
-import { Users, X } from "lucide-react";
+import { Check, Users, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { useTranslation } from "@/i18n";
 import { Badge } from "./ui/badge";
@@ -41,6 +41,40 @@ export function OwnerFilterSelect({ owners, value, onChange, label, disabled }: 
       </SelectContent>
     </Select>
   </div>;
+}
+
+export function OwnerFilterChoices({ owners, value, onChange }: { owners: string[]; value: OwnerFilter; onChange: (value: OwnerFilter) => void }) {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const names = [...new Set([...owners, ...(value.startsWith("@") ? [value] : [])])].sort() as OwnerFilter[];
+  const label = (owner: OwnerFilter) => owner === "all" ? t("All") : owner === "unassigned" ? t("Unassigned") : owner;
+  const query = search.trim().normalize("NFC").toLocaleLowerCase();
+  const choices: OwnerFilter[] = ["all", "unassigned", ...names];
+  const matches = choices.filter((owner) => label(owner).normalize("NFC").toLocaleLowerCase().includes(query));
+  return <div className="grid min-h-0 gap-2">
+    <Input aria-label={t("Search owners")} placeholder={t("Search owners")} value={search} onChange={(event) => setSearch(event.target.value)} />
+    <div className="ak-scroll-area grid max-h-60 overflow-y-auto" role="group" aria-label={t("Document owner")}>
+      {matches.map((owner) => <Button key={owner} size="sm" variant={owner === value ? "secondary" : "ghost"} className="min-w-0 justify-start" aria-pressed={owner === value} onClick={() => onChange(owner)}>
+        <Check aria-hidden="true" className={owner === value ? "shrink-0" : "invisible shrink-0"} /><span className="truncate">{label(owner)}</span>
+      </Button>)}
+      {!matches.length ? <p role="status" className="py-2 text-sm text-muted-foreground">{t("No matching owners")}</p> : null}
+    </div>
+  </div>;
+}
+
+export function ProjectOwnerFilter({ owners, value, onChange }: { owners: string[]; value: OwnerFilter; onChange: (value: OwnerFilter) => void }) {
+  const { t } = useTranslation();
+  if (!owners.length && value === "all") return null;
+  return <Popover>
+    <PopoverTrigger asChild><Button data-tour="project-owner-filter" size="sm" variant={value === "all" ? "ghost" : "secondary"} title={t("Document owner")}
+      aria-label={value === "all" ? t("Document owner") : `${t("Document owner")}: ${value === "unassigned" ? t("Unassigned") : value}`}>
+      <Users aria-hidden="true" /><span className="truncate">{value === "all" ? t("Document owner") : value === "unassigned" ? t("Unassigned") : value}</span>
+    </Button></PopoverTrigger>
+    <PopoverContent data-document-panel-overlay="" side="top" align="start" className="w-64 p-3" aria-label={t("Document owner")}>
+      <h3 className="mb-2 text-sm font-semibold">{t("Document owner")}</h3>
+      <OwnerFilterChoices owners={owners} value={value} onChange={onChange} />
+    </PopoverContent>
+  </Popover>;
 }
 
 export function BoardOwnerFilter({ owners, selected, onChange }: {

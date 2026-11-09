@@ -173,6 +173,19 @@ describe("browser mode UI boundaries", () => {
     expect(browserRepository.files).toHaveBeenCalledTimes(reads);
   });
 
+  it("keeps folder reconnection visible in the board when the document panel starts collapsed", async () => {
+    vi.mocked(browserRepository.workspaces).mockResolvedValue({ workspaces: [{ ...workspace, isAvailable: false }] });
+    const handle = new FakeDirectory("panel-reconnect") as unknown as FileSystemDirectoryHandle;
+    const request = vi.spyOn(handle, "requestPermission");
+    vi.spyOn(browserRepository, "projectConnection").mockResolvedValue({ id: "c_panel", name: "panel-reconnect", kind: "project", handle });
+    selectDocument();
+    await render(<App allowStartupAutoOpen={false} />);
+    const reconnect = await waitForElement<HTMLButtonElement>('[data-board-scroll] button');
+    expect(reconnect.textContent).toContain("폴더 다시 연결");
+    expect(container.querySelector<HTMLButtonElement>('[data-tour="document-panel-toggle"]')!.getAttribute("aria-expanded")).toBe("false");
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])("keeps direct intro entry independent of auto-open=%s, folder queries and agents", async (autoOpen) => {
     localStorage.setItem("alpha-kanban.autoOpenLastWorkspace", String(autoOpen));
     vi.mocked(browserRepository.workspaces).mockResolvedValue({ workspaces: [workspace], lastWorkspaceId: workspace.id });
@@ -637,6 +650,51 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector<HTMLInputElement>('[role="searchbox"]')?.value).toBe("청록색 등대");
     expect(routing.location.searchStr).toContain("doc=d_plan");
     expect(browserRepository.prepareDocumentSearch).toHaveBeenCalled();
+  });
+
+  it("shares status-bar search with the panel and switches all documents in the current set despite search filtering", async () => {
+    const plan = { ...response.file, id: "d_plan", type: "plan" as const, filename: "01_test_plan.md", relativePath: "docs/01_test_plan.md", workspaceRelativePath: "docs/01_test_plan.md" };
+    const inventory = { ...plan, id: "d_inventory", type: "inventory" as const, filename: "01_test_inventory.md", relativePath: "docs/01_test_inventory.md", workspaceRelativePath: "docs/01_test_inventory.md" };
+    const files = [response.file, plan, inventory, plainFile];
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets(files) });
+    vi.mocked(browserRepository.documentSearch.get).mockImplementation(async (file) => createDocumentSearchEntry(file, file.id === response.file.id ? "# Only tickets\n\nblue lighthouse" : "# Unrelated"));
+    vi.mocked(browserRepository.markdown).mockImplementation(async (_workspace, id) => ({ file: files.find((file) => file.id === id)!, markdown: "# Plan body", outline: [] }));
+    selectDocument(); await render(<App />);
+    const panel = container.querySelector<HTMLElement>(".ak-document-panel")!;
+    const status = container.querySelector<HTMLElement>(".ak-document-statusbar")!;
+    const panelSearch = panel.querySelector<HTMLInputElement>('[role="searchbox"]')!;
+    expect(panel.hidden).toBe(true); expect(status.querySelector("input")).toBeNull();
+    await act(async () => status.querySelector<HTMLButtonElement>('[aria-label="문서·티켓 검색"]')!.click());
+    const search = status.querySelector<HTMLInputElement>("input")!;
+    expect(panel.hidden).toBe(false); expect(document.activeElement).toBe(search);
+    await typeInto(search, "blue lighthouse");
+    await waitForElement('nav[data-project-search="blue lighthouse"][aria-busy="false"]');
+    expect(panelSearch.value).toBe(search.value);
+    expect(new URL(routing.location.href, "http://localhost").searchParams.get("doc")).toBe(response.file.id);
+    expect(panel.querySelector('nav a[title="docs/01_test_plan.md"]')).toBeNull();
+    await act(async () => status.querySelector<HTMLButtonElement>('[data-tour="document-set-switcher"]')!.click());
+    const menu = await waitForElement<HTMLElement>('[aria-label="같은 묶음의 문서"]', document);
+    expect(menu.querySelectorAll("a")).toHaveLength(3);
+    expect(menu.querySelector('a[aria-current="page"]')?.getAttribute("title")).toBe(response.file.workspaceRelativePath);
+    const link = menu.querySelector<HTMLAnchorElement>('a[title="docs/01_test_plan.md"]')!;
+    const target = new URL(link.href);
+    expect(target.searchParams.get("q")).toBe("blue lighthouse");
+    expect(target.searchParams.get("doc")).toBe(plan.id);
+    expect(target.searchParams.has("match")).toBe(false);
+    const before = routing.location.href;
+    for (const init of [{ button: 1 }, { button: 0, metaKey: true }, { button: 0, ctrlKey: true }]) {
+      await act(async () => link.dispatchEvent(new MouseEvent("click", { ...init, bubbles: true, cancelable: true })));
+      expect(routing.location.href).toBe(before);
+      expect(document.contains(menu)).toBe(true);
+    }
+    await act(async () => link.click());
+    expect((await waitForElement(".ak-markdown")).textContent).toContain("Plan body");
+    expect(routing.location.searchStr).toContain("doc=d_plan");
+    expect(status.querySelector<HTMLInputElement>("input")?.value).toBe("blue lighthouse");
+    await typeInto(panelSearch, "panel query");
+    expect(status.querySelector<HTMLInputElement>("input")?.value).toBe("panel query");
+    await typeInto(panelSearch, "");
+    expect(status.querySelector("input")).toBeNull();
   });
 
   it("opens a name-only match unfiltered, and a ticket document's common prose in Markdown", async () => {

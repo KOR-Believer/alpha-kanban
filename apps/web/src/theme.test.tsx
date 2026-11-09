@@ -196,10 +196,11 @@ describe("display theme", () => {
   it("keeps both color schemes and document surfaces tied to semantic theme colors", () => {
     const css = readFileSync(resolve(import.meta.dirname, "styles.css"), "utf8");
     const app = readFileSync(resolve(import.meta.dirname, "App.tsx"), "utf8");
+    const documentNavigation = readFileSync(resolve(import.meta.dirname, "components/documents/DocumentNavigation.tsx"), "utf8");
     expect(css).toMatch(/:root\s*\{\s*color-scheme: light/);
     expect(css).toMatch(/\.dark\s*\{\s*color-scheme: dark/);
     expect(app).not.toMatch(/bg-(blue|red|amber)-50\b|bg-neutral-100\b/);
-    expect(app).toContain("bg-[var(--ak-primary-soft)] text-foreground");
+    expect(documentNavigation).toContain("bg-[var(--ak-primary-soft)] text-foreground");
     expect(app).toContain("bg-[var(--ak-danger-soft)]");
     expect(app).toContain("bg-[var(--ak-warning-soft)]");
   });

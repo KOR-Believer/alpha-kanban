@@ -3,6 +3,7 @@ import type {
   MarkdownFileSummary,
   MarkdownFileType,
 } from "@alpha-kanban/shared";
+import { documentPathOwner } from "@alpha-kanban/shared/documents";
 
 export type DocumentSetSortMode =
   | "document_order"
@@ -10,6 +11,7 @@ export type DocumentSetSortMode =
   | "type"
   | "progress"
   | "name"
+  | "owner"
   | "directory";
 
 export type DocumentSetSortDirection = "asc" | "desc";
@@ -54,6 +56,7 @@ export const DOCUMENT_SET_SORT_OPTIONS: Array<{
     mode: "directory",
     title: "Sort by containing directory",
   },
+  { label: "Document owner", mode: "owner", title: "Sort by document owner" },
 ];
 
 export const DEFAULT_DOCUMENT_SET_SORT_PREFERENCE: DocumentSetSortPreference = {
@@ -146,6 +149,12 @@ function compareDocumentSetsByMode(
       );
     case "name":
       return compareText(left.label, right.label, preference.direction);
+    case "owner": {
+      const a = documentPathOwner(left.primaryFile).value;
+      const b = documentPathOwner(right.primaryFile).value;
+      if (!a || !b) return a ? -1 : b ? 1 : 0;
+      return compareText(a, b, preference.direction);
+    }
     case "directory":
       return (
         compareText(left.directory, right.directory, preference.direction) ||

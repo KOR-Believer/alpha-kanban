@@ -1,9 +1,12 @@
+import { DocumentPanelShell } from "./components/documents/DocumentPanelShell";
+import { DocumentListHeader, DocumentSetNavigator, type DocumentNavigationSettings } from "./components/documents/DocumentNavigation";
+import { useDocumentColumnFilters } from "./components/documents/documentPanelState";
+import { DocumentSetSwitcher } from "./components/documents/DocumentStatusControls";
 import { VirtualTicketList } from "./components/tickets/VirtualTicketList";
 import { TicketSearchExcerpt, SearchHighlight } from "./components/tickets/TicketSearch";
 import { useProjectSearch } from "./useProjectSearch";
-import type { DocumentSearchMatch } from "./documentSearch";
 import { matchesTicketSearch, normalizeTicketQuery } from "./ticketSearch";
-import { MarkdownDocumentReader as SharedMarkdownDocumentReader, DocumentTypeBadge, documentTypeLabel, documentTypeIcon } from "./components/MarkdownDocumentReader";
+import { MarkdownDocumentReader as SharedMarkdownDocumentReader, DocumentTypeBadge, documentTypeLabel } from "./components/MarkdownDocumentReader";
 import { useLinkedNavigation } from "./browser/linkedNavigation";
 import { LinkedDocumentPage } from "./browser/LinkedDocumentPage";
 import { DocumentMaintenance } from "./browser/DocumentMaintenance";
@@ -22,7 +25,7 @@ import { TourHelp, useScreenTour } from "./onboarding/ScreenTour";
 import { errorSummary, errorDetails } from "@/i18n/errors";
 import {
   useCallback, useDeferredValue, useEffect, useMemo, useRef, useState,
-  type CSSProperties, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode,
+  type DragEvent, type FormEvent, type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -34,8 +37,8 @@ import {
   type TicketProgress, type TicketStatus, type WorkspaceSummary,
 } from "@alpha-kanban/shared";
 import {
-  AlertCircle, Archive, ArrowDown, ArrowUp, BookOpen, Check, CircleDot, FileText,
-  Filter, LayoutGrid, ListChecks, Loader2, RefreshCcw, Save, Search, X,
+  AlertCircle, Archive, BookOpen, Check, CircleDot, FileText,
+  LayoutGrid, ListChecks, Loader2, RefreshCcw, Save, Search, X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -45,14 +48,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   buildAppRoute,
   parseAppRouteState,
@@ -61,14 +56,12 @@ import {
 } from "./appRoute";
 import {
   DEFAULT_DOCUMENT_SET_SORT_PREFERENCE,
-  DOCUMENT_SET_SORT_OPTIONS,
-  defaultDirectionForDocumentSetSortMode,
   isDocumentSetSortDirection,
   isDocumentSetSortMode,
   sortDocumentSets,
   type DocumentSetSortPreference,
 } from "./documentSetSorting";
-import { DEFAULT_DOCUMENT_FILTERS, filterDocumentSets, type DocumentFilters, type VisibleDocumentSet } from "./documentSetFiltering";
+import { DEFAULT_DOCUMENT_FILTERS, filterDocumentSets, type DocumentFilters, DEFAULT_COLUMN_FILTERS } from "./documentSetFiltering";
 import { TicketStatusFields, type SaveTicketStatus, type TicketWriteGuard } from "@/components/tickets/TicketStatusFields";
 import { TicketMoveDialog, prepareTicketMove, type TicketMove } from "@/components/tickets/TicketMoveDialog";
 import {
@@ -76,7 +69,7 @@ import {
 } from "./components/tickets/useTicketDetailPresentation";
 import { TicketDetailFrame } from "./components/tickets/TicketDetailFrame";
 import { TicketProgressBar } from "./components/tickets/TicketProgressBar";
-import { DocumentOwnerBadge, OwnerFilterSelect } from "./components/DocumentOwner";
+import { DocumentOwnerBadge, ProjectOwnerFilter } from "./components/DocumentOwner";
 import { matchesOwnerFilter, ownerFilterFor, ownersInFiles, useOwnerFilters, type OwnerFilter } from "./ownerFilters";
 
 export const BOARD_STATUSES: TicketStatus[] = [
@@ -87,31 +80,9 @@ export const BOARD_STATUSES: TicketStatus[] = [
   "DONE",
   "DEFERRED",
 ];
-const SIDEBAR_WIDTH_STORAGE_KEY = "alpha-kanban.sidebarWidth";
 const DOCUMENT_SET_SORT_STORAGE_KEY = "alpha-kanban.documentSetSort";
 const DOCUMENT_FILTERS_STORAGE_KEY = "alpha-kanban.documentFilters";
 const AUTO_OPEN_LAST_WORKSPACE_STORAGE_KEY = "alpha-kanban.autoOpenLastWorkspace";
-const DEFAULT_SIDEBAR_WIDTH = 340;
-const MIN_SIDEBAR_WIDTH = 280;
-const MAX_SIDEBAR_WIDTH = 560;
-
-function clampSidebarWidth(width: number): number {
-  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)));
-}
-
-function readStoredSidebarWidth(): number {
-  if (typeof window === "undefined") {
-    return DEFAULT_SIDEBAR_WIDTH;
-  }
-
-  try {
-    const parsed = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
-    return Number.isFinite(parsed) ? clampSidebarWidth(parsed) : DEFAULT_SIDEBAR_WIDTH;
-  } catch {
-    return DEFAULT_SIDEBAR_WIDTH;
-  }
-}
-
 function readStoredDocumentSetSortPreferences(): Record<string, DocumentSetSortPreference> {
   if (typeof window === "undefined") {
     return {};
@@ -247,7 +218,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const linked = useLinkedNavigation();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const appShellRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const routeLocation = useLocation({
     select: (location) => ({
@@ -270,8 +240,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const [defaultDocument, setDefaultDocument] = useState<{ workspaceId: string; fileId: string }>();
   const [pendingBoardTour, setPendingBoardTour] = useState<string>();
   const lastBoardFile = useRef<MarkdownFileSummary | undefined>(undefined);
-  const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
-  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const ticketPresentation = useTicketDetailPresentation(routeState.detailMode, (detailMode) => {
     void navigateTo({ ...routeState, filePath: resolvedSelectedFileId, detailMode });
   });
@@ -283,6 +251,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const [documentSearch, setDocumentSearchValue] = useState(routeState.documentSearch ?? "");
   const deferredDocumentSearch = useDeferredValue(documentSearch);
   const [documentFilters, setDocumentFilters] = useState(readStoredDocumentFilters);
+  const [columnFilters, setColumnFilters] = useDocumentColumnFilters(selectedWorkspaceId);
   const ownerPreferences = useOwnerFilters();
   const ownerFilter = ownerFilterFor(ownerPreferences.filters, selectedWorkspaceId);
   const setOwnerFilter = (value: OwnerFilter) => { if (selectedWorkspaceId) ownerPreferences.update({ [selectedWorkspaceId]: value }); };
@@ -324,14 +293,14 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   );
   const projectSearch = useProjectSearch(allFiles, deferredDocumentSearch, canLoadWorkspace && !documentSetsQuery.isError);
   const visibleDocumentSets = useMemo(() => {
-    const filtered = filterDocumentSets(sortedDocumentSets, "", documentFilters, ownerFilter);
+    const filtered = filterDocumentSets(sortedDocumentSets, "", documentFilters, ownerFilter, columnFilters);
     if (!deferredDocumentSearch.trim()) return filtered;
-    const names = new Set(filterDocumentSets(sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter).map((set) => set.documentSet.id));
+    const names = new Set(filterDocumentSets(sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter, columnFilters).map((set) => set.documentSet.id));
     return filtered.flatMap((set) => {
       const documents = names.has(set.documentSet.id) ? set.documents : set.documents.filter((file) => projectSearch.matches.has(file.id));
       return documents.length ? [{ ...set, documents }] : [];
     });
-  }, [sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter, projectSearch.matches]);
+  }, [sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter, columnFilters, projectSearch.matches]);
   const boardScroll = useRef<HTMLDivElement>(null);
   const deferredTicketSearch = routeState.appliedSearch ?? "";
   useEffect(() => { boardScroll.current?.scrollTo({ top: 0 }); }, [deferredTicketSearch]);
@@ -399,13 +368,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       ? ticketQuery.data?.document.tickets.find((ticket) => ticket.id === selectedTicketId)
       : undefined;
   const isTicketDetailOpen = Boolean(selectedTicket);
-  const shellStyle = {
-    "--sidebar-width": `${sidebarWidth}px`,
-  } as CSSProperties;
-  const resizeSidebarFromClientX = useCallback((clientX: number) => {
-    const shellLeft = appShellRef.current?.getBoundingClientRect().left ?? 0;
-    setSidebarWidth(clampSidebarWidth(clientX - shellLeft));
-  }, []);
   const updateDocumentSetSortPreference = useCallback(
     (preference: DocumentSetSortPreference) => {
       if (!selectedWorkspaceId) {
@@ -530,14 +492,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   ]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
-    } catch {
-      // Ignore storage failures; the resize affordance still works for this session.
-    }
-  }, [sidebarWidth]);
-
-  useEffect(() => {
     setDocumentSearchValue(routeState.documentSearch ?? "");
   }, [selectedWorkspaceId, routeState.documentSearch]);
 
@@ -559,38 +513,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       // Ignore storage failures; startup behavior falls back to the start page.
     }
   }, [autoOpenLastWorkspace]);
-
-  useEffect(() => {
-    if (!isSidebarResizing) {
-      return;
-    }
-
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    function handlePointerMove(event: PointerEvent): void {
-      event.preventDefault();
-      resizeSidebarFromClientX(event.clientX);
-    }
-
-    function finishResize(): void {
-      setIsSidebarResizing(false);
-    }
-
-    window.addEventListener("pointermove", handlePointerMove, { passive: false });
-    window.addEventListener("pointerup", finishResize);
-    window.addEventListener("pointercancel", finishResize);
-
-    return () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", finishResize);
-      window.removeEventListener("pointercancel", finishResize);
-    };
-  }, [isSidebarResizing, resizeSidebarFromClientX]);
 
   async function replaceDocument(data: TicketDocumentResponse): Promise<void> {
     await queryClient.cancelQueries({ queryKey: ticketDocumentKey(data.file.workspaceId, data.file.id) });
@@ -729,6 +651,13 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     if (boardTour.enabled && ticketQuery.isSuccess) { boardTour.start(); setPendingBoardTour(undefined); }
   }, [pendingBoardTour, resolvedSelectedFileId, isProjectGuideVisible, isTicketDetailOpen, boardTour.enabled, boardTour.start, ticketQuery.isSuccess]);
 
+  const navigationSettings: DocumentNavigationSettings = {
+    disabled: !canLoadWorkspace, filters: documentFilters, onFiltersChange: setDocumentFilters,
+    columns: columnFilters, onColumnsChange: setColumnFilters,
+    owners: documentOwners, ownerFilter, onOwnerFilterChange: setOwnerFilter,
+    preference: documentSetSortPreference, onPreferenceChange: updateDocumentSetSortPreference,
+  };
+
   if (!selectedWorkspaceId) {
     return (
       <main className="min-h-dvh bg-background text-foreground">
@@ -740,7 +669,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   return (
     <>
       <main
-        className="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-secondary)] max-[860px]:h-auto max-[860px]:min-h-dvh max-[860px]:overflow-visible"
+        className="grid h-dvh min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--ak-canvas-soft)] text-[var(--ak-ink-secondary)]"
       >
         <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--ak-hairline)] bg-[var(--ak-header-surface)] px-4 py-2 max-[720px]:flex-wrap">
           <NavigationLink href="/"
@@ -769,32 +698,22 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           </div>
         </header>
 
-        <div
-          className="grid min-h-0 grid-cols-[var(--sidebar-width)_8px_minmax(0,1fr)] overflow-hidden max-[860px]:grid-cols-1 max-[860px]:overflow-visible"
-          ref={appShellRef}
-          style={shellStyle}
-        >
-          <aside
-            className="flex min-h-0 flex-col overflow-hidden border-r border-[var(--ak-hairline)] bg-[var(--ak-surface)] max-[860px]:max-h-[68dvh] max-[860px]:border-b max-[860px]:border-r-0"
-            aria-label={t("Workspace files")}
-          >
-            <div className="border-b border-[var(--ak-hairline)] p-3">
-              <DocumentListHeader
-                disabled={!canLoadWorkspace}
-                search={documentSearch}
-                onSearchChange={setDocumentSearch}
-                filters={documentFilters}
-                onFiltersChange={setDocumentFilters}
-                owners={documentOwners}
-                ownerFilter={ownerFilter}
-                onOwnerFilterChange={setOwnerFilter}
-                onPreferenceChange={updateDocumentSetSortPreference}
-                preference={documentSetSortPreference}
-              />
-            </div>
-
-            <div className="ak-scroll-area min-h-0 flex-1 overflow-y-auto">
-              <div className="ak-scroll-content grid gap-1">
+        <DocumentPanelShell contextKey={selectedWorkspaceId} count={visibleDocumentSets.length} total={sortedDocumentSets.length}
+          ownerControl={<ProjectOwnerFilter owners={documentOwners} value={ownerFilter} onChange={setOwnerFilter} />}
+          search={{ value: documentSearch, onChange: setDocumentSearch, disabled: !canLoadWorkspace }}
+          currentDocument={selectedFile ? <>
+            <span className="ak-document-current-title truncate">{ticketQuery.data?.document.title ?? markdownQuery.data?.outline[0]?.title ?? selectedDocumentSet?.label ?? selectedFile.filename}</span>
+            <DocumentSetSwitcher key={selectedFile.id} file={selectedFile} documents={selectedDocumentSet?.documents ?? [selectedFile]}
+              disabled={!canLoadWorkspace} href={(file) => buildAppRoute(documentRoute(file))} onSelect={(file) => { void handleDocumentSelect(file); }} />
+            <span className="ak-document-current-path truncate" title={selectedFile.workspaceRelativePath}>{selectedFile.workspaceRelativePath}</span>
+          </> : <span className="truncate">{isProjectGuideVisible ? t("Usage guide") : t("Document workspace")}</span>}
+          toolbar={(controls, close) => <DocumentListHeader settings={navigationSettings} search={documentSearch} onSearchChange={setDocumentSearch} controls={controls} count={visibleDocumentSets.length}
+            guide={<NavigationLink href={buildAppRoute({ workspaceId: selectedWorkspaceId, showGuide: true })} data-tour-help=""
+              aria-current={isProjectGuideVisible ? "page" : undefined} title={t("Usage guide")} aria-label={t("Usage guide")}
+              className={buttonVariants({ size: "sm", variant: isProjectGuideVisible ? "secondary" : "ghost", className: "ak-document-guide" })}
+              onNavigate={() => { handleShowProjectGuide(); close(); }}><BookOpen aria-hidden="true" /><span>{t("Usage guide")}</span></NavigationLink>} />}
+          navigation={(view, close) => <>
+            <div className="ak-document-panel-notices">
                 {selectedWorkspace && !selectedWorkspace.isAvailable ? (
                   <SidebarState label={t("Project unavailable")} tone="error" />
                 ) : null}
@@ -815,48 +734,20 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {sortedDocumentSets.length > 0 && visibleDocumentSets.length === 0 && !projectSearch.busy && !projectSearch.missing && documentSearch === deferredDocumentSearch ? (
                   <div className="grid justify-items-start gap-2 px-3 py-2 text-sm text-muted-foreground" role="status">
                     <p>{t("No matching documents")}</p>
-                    <Button size="sm" variant="link" onClick={() => { setDocumentSearch(""); setDocumentFilters(DEFAULT_DOCUMENT_FILTERS); setOwnerFilter("all"); }}>
+                    <Button size="sm" variant="link" onClick={() => { setDocumentSearch(""); setDocumentFilters(DEFAULT_DOCUMENT_FILTERS); setColumnFilters(DEFAULT_COLUMN_FILTERS); setOwnerFilter("all"); }}>
                       {t("Clear filters")}
                     </Button>
                   </div>
                 ) : null}
-                <DocumentSetNavigator
-                  documentSets={visibleDocumentSets}
-                  onSelectFile={documentSearch.trim() ? handleSearchResultSelect : handleDocumentSelect}
-                  fileHref={(file) => buildAppRoute(documentSearch.trim() ? searchResultRoute(file) : documentRoute(file))}
-                  selectedFileId={resolvedSelectedFileId}
-                  matches={projectSearch.matches}
-                  search={deferredDocumentSearch}
-                  busy={projectSearch.busy || documentSearch !== deferredDocumentSearch}
-                />
-              </div>
             </div>
-            <div className="shrink-0 border-t border-border p-3">
-                <NavigationLink href={buildAppRoute({ workspaceId: selectedWorkspaceId, showGuide: true })}
-                  data-tour-help=""
-                  aria-current={isProjectGuideVisible ? "page" : undefined}
-                  className={buttonVariants({ size: "sm", variant: isProjectGuideVisible ? "secondary" : "ghost", className: "w-full justify-start" })}
-                  onNavigate={handleShowProjectGuide}
-                >
-                  <BookOpen aria-hidden="true" />
-                  {t("Usage guide")}
-                </NavigationLink>
-              </div>
-          </aside>
-
-          <SidebarResizeHandle
-            isDragging={isSidebarResizing}
-            onChangeWidth={setSidebarWidth}
-            onNudge={(delta) => setSidebarWidth((width) => clampSidebarWidth(width + delta))}
-            onPointerDown={(clientX) => {
-              resizeSidebarFromClientX(clientX);
-              setIsSidebarResizing(true);
-            }}
-            onReset={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
-            width={sidebarWidth}
-          />
-
-          <div className={`min-h-0 min-w-0 ${linked.id ? "max-[860px]:h-[calc(100dvh-4rem)]" : ""}`}>
+            <DocumentSetNavigator documentSets={visibleDocumentSets} view={view} settings={navigationSettings}
+              onSelectFile={async (file) => { await (documentSearch.trim() ? handleSearchResultSelect(file) : handleDocumentSelect(file)); close(); }}
+              fileHref={(file) => buildAppRoute(documentSearch.trim() ? searchResultRoute(file) : documentRoute(file))}
+              selectedFileId={resolvedSelectedFileId} matches={projectSearch.matches} search={deferredDocumentSearch}
+              busy={projectSearch.busy || documentSearch !== deferredDocumentSearch} />
+          </>}
+        >
+          <div className="min-h-0 min-w-0">
           <section
             className={`${linked.id ? "hidden" : "grid"} h-full min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden`}
             aria-labelledby="workspace-title"
@@ -961,7 +852,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           </section>
           {linked.id ? <LinkedDocumentPage key={linked.id} /> : null}
           </div>
-        </div>
+        </DocumentPanelShell>
       </main>
 
       {selectedTicket && resolvedSelectedFileId && ticketQuery.data ? (
@@ -981,358 +872,6 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
       ) : null}
 
     </>
-  );
-}
-
-function SidebarResizeHandle({
-  isDragging,
-  onChangeWidth,
-  onNudge,
-  onPointerDown,
-  onReset,
-  width,
-}: {
-  isDragging: boolean;
-  onChangeWidth: (width: number) => void;
-  onNudge: (delta: number) => void;
-  onPointerDown: (clientX: number) => void;
-  onReset: () => void;
-  width: number;
-}) {
-  const { t } = useTranslation();
-  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      onNudge(-24);
-      return;
-    }
-
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      onNudge(24);
-      return;
-    }
-
-    if (event.key === "Home") {
-      event.preventDefault();
-      onChangeWidth(MIN_SIDEBAR_WIDTH);
-      return;
-    }
-
-    if (event.key === "End") {
-      event.preventDefault();
-      onChangeWidth(MAX_SIDEBAR_WIDTH);
-      return;
-    }
-
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onReset();
-    }
-  }
-
-  return (
-    <button
-      aria-label={t("Resize sidebar")}
-      aria-orientation="vertical"
-      aria-valuemax={MAX_SIDEBAR_WIDTH}
-      aria-valuemin={MIN_SIDEBAR_WIDTH}
-      aria-valuenow={width}
-      className={[
-        "ak-focus-ring group relative h-full w-full cursor-col-resize border-x border-[var(--ak-hairline)] transition-colors max-[860px]:hidden",
-        isDragging
-          ? "bg-muted"
-          : "bg-[var(--ak-surface)] hover:bg-[var(--ak-canvas-soft)]",
-      ].join(" ")}
-      onDoubleClick={onReset}
-      onKeyDown={handleKeyDown}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        onPointerDown(event.clientX);
-      }}
-      role="separator"
-      title={t("Drag to resize. Double-click to reset.")}
-      type="button"
-    >
-      <span
-        className={[
-          "absolute left-1/2 top-1/2 h-12 w-px -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ak-ink-faint)] transition-colors group-hover:bg-[var(--ak-ink-muted)]",
-          isDragging ? "bg-[var(--ak-ink-muted)]" : "",
-        ].join(" ")}
-        aria-hidden="true"
-      />
-    </button>
-  );
-}
-
-function DocumentListHeader({
-  disabled,
-  search,
-  onSearchChange,
-  filters,
-  onFiltersChange,
-  onPreferenceChange,
-  preference,
-  owners,
-  ownerFilter,
-  onOwnerFilterChange,
-}: {
-  disabled: boolean;
-  search: string;
-  onSearchChange: (value: string) => void;
-  filters: DocumentFilters;
-  onFiltersChange: (value: DocumentFilters) => void;
-  onPreferenceChange: (preference: DocumentSetSortPreference) => void;
-  preference: DocumentSetSortPreference;
-  owners: string[];
-  ownerFilter: OwnerFilter;
-  onOwnerFilterChange: (value: OwnerFilter) => void;
-}) {
-  const { t } = useTranslation();
-  const directionLabel = t(preference.direction === "asc" ? "Ascending" : "Descending");
-  const DirectionIcon = preference.direction === "asc" ? ArrowUp : ArrowDown;
-  const activeFilters = Number(filters.hidePlainMarkdown) + Number(filters.hideCompletedSets) + Number(ownerFilter !== "all");
-
-  return (
-    <div className="grid gap-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input
-          data-tour="documents"
-          role="searchbox"
-          aria-label={t("Search documents and tickets")}
-          placeholder={t("Search documents and tickets")}
-          disabled={disabled}
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          className="pl-9 pr-16"
-        />
-        <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
-          {search ? <Button size="iconSm" variant="ghost" aria-label={t("Clear search")} title={t("Clear search")} onClick={() => onSearchChange("")}>
-            <X className="size-3.5" aria-hidden="true" />
-          </Button> : null}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button data-tour="document-filters" size="iconSm" variant={activeFilters ? "primary" : "ghost"} disabled={disabled}
-                aria-label={t("Document filters")} title={t("Document filters ({{count}} active)", { count: activeFilters })}>
-                <Filter className="size-3.5" aria-hidden="true" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-3" aria-label={t("Document filters")}>
-              <div className="flex items-center justify-between gap-2 pb-2">
-                <h3 className="text-sm font-semibold">{t("Document filters")}</h3>
-                <Button size="xs" variant="ghost" disabled={!activeFilters} onClick={() => { onFiltersChange(DEFAULT_DOCUMENT_FILTERS); onOwnerFilterChange("all"); }}>{t("Reset")}</Button>
-              </div>
-              <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
-                <Checkbox checked={filters.hideCompletedSets} onCheckedChange={(checked) => onFiltersChange({ ...filters, hideCompletedSets: checked === true })} />
-                {t("Hide completed sets (100%)")}
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
-                <Checkbox checked={filters.hidePlainMarkdown} onCheckedChange={(checked) => onFiltersChange({ ...filters, hidePlainMarkdown: checked === true })} />
-                {t("Hide plain Markdown")}
-              </label>
-              {owners.length || ownerFilter !== "all" ? <div className="mt-2 border-t border-border pt-3">
-                <OwnerFilterSelect owners={owners} value={ownerFilter} onChange={onOwnerFilterChange} disabled={disabled} />
-              </div> : null}
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-      <div data-tour="document-sort" className="flex min-w-0 items-center gap-2">
-        <Select
-          disabled={disabled}
-          onValueChange={(value) => {
-            if (!isDocumentSetSortMode(value)) {
-              return;
-            }
-
-            onPreferenceChange({
-              direction: defaultDirectionForDocumentSetSortMode(value),
-              mode: value,
-            });
-          }}
-          value={preference.mode}
-        >
-          <SelectTrigger
-            aria-label={t("Document sort")}
-            className="h-8 min-w-0 flex-1 px-2.5 text-xs"
-            title={t("Document list sort")}
-          >
-            <SelectValue placeholder={t("Document order")} />
-          </SelectTrigger>
-          <SelectContent className="min-w-52">
-            {DOCUMENT_SET_SORT_OPTIONS.map((option) => (
-              <SelectItem key={option.mode} title={t(option.title)} value={option.mode}>
-                {t(option.label)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          aria-label={t("Sort {{direction}}", { direction: directionLabel })}
-          disabled={disabled}
-          onClick={() =>
-            onPreferenceChange({
-              ...preference,
-              direction: preference.direction === "asc" ? "desc" : "asc",
-            })
-          }
-          size="iconSm"
-          title={t("{{direction}}. Click to toggle sort direction.", { direction: directionLabel })}
-          type="button"
-          variant="outline"
-        >
-          <DirectionIcon className="size-3.5" aria-hidden="true" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function DocumentSetNavigator({
-  documentSets,
-  onSelectFile,
-  fileHref,
-  selectedFileId,
-  matches,
-  search,
-  busy,
-}: {
-  documentSets: VisibleDocumentSet[];
-  onSelectFile: (file: MarkdownFileSummary) => void;
-  fileHref: (file: MarkdownFileSummary) => string;
-  selectedFileId?: string;
-  matches: Map<string, DocumentSearchMatch>;
-  search: string;
-  busy: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <nav data-tour={search && documentSets.length ? "document-results" : undefined} className="grid gap-1" aria-label={t("Documents")} aria-busy={busy} data-project-search={search}>
-      {documentSets.map(({ documentSet, documents }) => (
-        <DocumentSetRow
-          documentSet={documentSet}
-          visibleDocuments={documents}
-          key={documentSet.id}
-          onSelectFile={onSelectFile}
-          fileHref={fileHref}
-          selectedFileId={selectedFileId}
-          matches={matches}
-          search={search}
-        />
-      ))}
-    </nav>
-  );
-}
-
-function DocumentSetRow({
-  documentSet,
-  visibleDocuments,
-  onSelectFile,
-  fileHref,
-  selectedFileId,
-  matches,
-  search,
-}: {
-  documentSet: DocumentSetSummary;
-  visibleDocuments: MarkdownFileSummary[];
-  onSelectFile: (file: MarkdownFileSummary) => void;
-  fileHref: (file: MarkdownFileSummary) => string;
-  selectedFileId?: string;
-  matches: Map<string, DocumentSearchMatch>;
-  search: string;
-}) {
-  const { t } = useTranslation();
-  const isSelected = documentSet.documents.some((file) => file.id === selectedFileId);
-
-  return (
-    <section
-      className={[
-        "ak-row grid min-w-0 gap-2 px-3 py-2 transition-colors",
-        isSelected ? "ak-row-active" : "",
-      ].join(" ")}
-      title={documentSet.documents.map((file) => file.relativePath).join("\n")}
-    >
-      <div className="grid min-w-0 grid-cols-[18px_minmax(0,1fr)] gap-2">
-        <FileText className="mt-0.5 size-4 shrink-0 text-[var(--ak-ink-muted)]" aria-hidden="true" />
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <span className="truncate text-sm font-medium text-[var(--ak-ink)]">
-              <SearchHighlight text={documentSet.label} query={search} />
-            </span>
-            <span className="flex shrink-0 items-center gap-1">
-              {documentSet.documents.length === 1 ? (
-                <Badge variant="outline">{t("standalone")}</Badge>
-              ) : null}
-              {documentSet.ticketProgress?.totalTickets !== undefined ? (
-                <Badge variant="muted">
-                  {documentSet.ticketProgress.doneTickets ?? 0}/
-                  {documentSet.ticketProgress.totalTickets}
-                </Badge>
-              ) : null}
-            </span>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <DocumentOwnerBadge file={documentSet.primaryFile} />
-            <span className="ak-body-muted min-w-0 truncate text-xs">{documentSet.directory || t("docs root")}</span>
-          </div>
-        </div>
-      </div>
-      <div className="flex min-w-0 flex-wrap gap-1 pl-6">
-        {visibleDocuments.map((file) => (
-          <DocumentTypeButton
-            file={file}
-            href={fileHref(file)}
-            isSelected={file.id === selectedFileId}
-            key={file.id}
-            onSelect={() => onSelectFile(file)}
-            matches={matches.get(file.id)?.ticketIds.length}
-          />
-        ))}
-      </div>
-      {search.trim() ? visibleDocuments.flatMap((file) => {
-        const match = matches.get(file.id);
-        return match ? [<NavigationLink href={fileHref(file)} key={file.id} onNavigate={() => onSelectFile(file)}
-          className="ak-focus-ring ml-6 min-w-0 rounded-sm text-left text-xs text-muted-foreground" title={file.relativePath}>
-          <span className="font-medium">{documentTypeLabel(file.type)} · {t("Line {{line}}", { line: match.line })}</span>
-          <span className="mt-1 line-clamp-2 break-words"><SearchHighlight text={match.excerpt} query={search} /></span>
-        </NavigationLink>] : [];
-      }) : null}
-    </section>
-  );
-}
-
-function DocumentTypeButton({
-  file,
-  href,
-  isSelected,
-  onSelect,
-  matches,
-}: {
-  file: MarkdownFileSummary;
-  href: string;
-  isSelected: boolean;
-  onSelect: () => void;
-  matches?: number;
-}) {
-  useTranslation();
-  const Icon = documentTypeIcon(file.type);
-
-  return (
-    <NavigationLink href={href}
-      className={[
-        "ak-focus-ring inline-flex h-7 min-w-0 items-center gap-1 rounded-[var(--ak-radius-sm)] border px-1.5 text-[11px] font-medium transition-colors",
-        isSelected
-          ? "border-[var(--ak-primary)] bg-[var(--ak-primary-soft)] text-foreground"
-          : "border-[var(--ak-hairline)] bg-[var(--ak-surface)] text-[var(--ak-ink-muted)] hover:bg-[var(--ak-surface-hover)] hover:text-[var(--ak-ink)]",
-      ].join(" ")}
-      onNavigate={onSelect}
-      title={file.relativePath}
-    >
-      <Icon className="size-3 shrink-0" aria-hidden="true" />
-      <span className="truncate">{documentTypeLabel(file.type)}</span>
-      {matches ? <span>{t("{{count}} matches", { count: matches })}</span> : null}
-    </NavigationLink>
   );
 }
 
@@ -1539,6 +1078,7 @@ function DocumentContent({
         icon="error"
         title={t("Project unavailable")}
         description={t("Select another available project from the project switcher.")}
+        action={selectedWorkspace ? <BrowserReconnect workspaceId={selectedWorkspace.id} /> : undefined}
       />
     );
   }
