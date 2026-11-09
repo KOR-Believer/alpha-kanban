@@ -55,12 +55,17 @@ try {
   current = true;
   await legacy.evaluate(async () => { await (await navigator.serviceWorker.getRegistration("/")).update(); });
   await legacy.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration("/"))?.waiting));
-  const page = await context.newPage(); let navigations = 0;
-  page.on("framenavigated", (frame) => { if (frame === page.mainFrame()) navigations++; });
+  const page = await context.newPage();
+  report.navigationEvents = [];
+  report.navigationRequests = [];
+  page.on("framenavigated", (frame) => { if (frame === page.mainFrame()) report.navigationEvents.push(frame.url()); });
+  page.on("request", (request) => { if (request.isNavigationRequest() && request.frame() === page.mainFrame()) report.navigationRequests.push(request.url()); });
   await page.goto(origin + "/releases/" + release.releaseId, { waitUntil: "commit" });
   await page.getByRole("heading", { name: "앱 업데이트를 확인해 주세요", exact: true }).waitFor();
   await new Promise((done) => setTimeout(done, 1500));
-  assert.equal(navigations, 1, "A version mismatch must not automatically reload");
+  // Router history initialization also emits framenavigated without loading a
+  // document. Count navigation requests so the assertion measures real reloads.
+  assert.equal(report.navigationRequests.length, 1, "A version mismatch must not automatically reload");
   assert.equal(await page.locator("html").getAttribute("class"), "dark");
   assert.equal(await page.getByRole("link", { name: "칸반 열기", exact: true }).getAttribute("href"), "/");
   await page.screenshot({ path: resolve(output, "guard.png") });
@@ -68,7 +73,7 @@ try {
   await legacy.getByRole("button", { name: "Apply test update", exact: true }).click();
   await page.getByRole("heading", { name: release.history.at(-1).title.ko, exact: true }).waitFor();
   await new Promise((done) => setTimeout(done, 750));
-  assert.equal(navigations, 2, "Only a confirmed update commit reloads the page");
+  assert.equal(report.navigationRequests.length, 2, "Only a confirmed update commit reloads the page");
   assert.equal(await page.locator("html").getAttribute("class"), "dark");
   await page.screenshot({ path: resolve(output, "updated.png") });
   report.checks.push("The stopped page participates in a confirmed worker update and opens the requested release after one reload");
