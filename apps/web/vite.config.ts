@@ -13,7 +13,14 @@ export default defineConfig(({ command }) => {
   if (!["app", "recovery", "retired"].includes(pwaMode)) throw new Error("Invalid AK_PWA_MODE");
   const release = releaseInfo(pwaMode as "app" | "recovery" | "retired");
   return ({
-  plugins: [react(), tailwindcss(), browserBrand(release.channel), {
+  plugins: [{ name: "file-preview-policy", configureServer(server) {
+    const headers = readFileSync(new URL("./public-browser/_headers", import.meta.url), "utf8");
+    const policy = headers.split("/file-preview.html\n")[1]?.match(/Content-Security-Policy: (.+)/)?.[1];
+    server.middlewares.use((req, res, next) => {
+      if (["/file-preview.html", "/file-preview"].includes((req.url || "").split("?")[0]!) && policy) res.setHeader("Content-Security-Policy", policy);
+      next();
+    });
+  } }, react(), tailwindcss(), browserBrand(release.channel), {
     name: "font-licenses",
     generateBundle() {
       this.emitFile({
@@ -35,6 +42,9 @@ export default defineConfig(({ command }) => {
       // DOM-free decoder there; production changes only the worker bundle.
       ...(command === "serve" ? markdownWorkerAliases : {}),
       "@alpha-kanban/shared/documentSettings": fileURLToPath(new URL("../../packages/shared/src/documentSettings.mjs", import.meta.url)),
+      "@alpha-kanban/shared/smokeMarkdown": fileURLToPath(new URL("../../packages/shared/src/smokeMarkdown.mjs", import.meta.url)),
+      "@alpha-kanban/shared/smokeRun": fileURLToPath(new URL("../../packages/shared/src/smokeRun.mjs", import.meta.url)),
+      "@alpha-kanban/shared/smokeComparison": fileURLToPath(new URL("../../packages/shared/src/smokeComparison.mjs", import.meta.url)),
       "@alpha-kanban/shared/documentMigration": fileURLToPath(new URL("../../packages/shared/src/documentMigration.mjs", import.meta.url)),
       "@alpha-kanban/shared/documentReferences": fileURLToPath(new URL("../../packages/shared/src/documentReferences.mjs", import.meta.url)),
       "@alpha-kanban/shared/documentMetadata": fileURLToPath(new URL("../../packages/shared/src/documentMetadata.ts", import.meta.url)),

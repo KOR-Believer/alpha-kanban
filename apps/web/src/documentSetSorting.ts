@@ -262,7 +262,9 @@ function internalDocumentTypeOrder(type: MarkdownFileType): number {
     plan: 0,
     tickets: 1,
     inventory: 2,
-    markdown: 3,
+    smoke: 3,
+    "smoke-run": 4,
+    markdown: 5,
   }[type];
 }
 
@@ -271,6 +273,8 @@ function documentSetTypeOrder(type: MarkdownFileType): number {
     tickets: 0,
     plan: 1,
     inventory: 2,
-    markdown: 3,
+    smoke: 3,
+    "smoke-run": 4,
+    markdown: 5,
   }[type];
 }

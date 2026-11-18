@@ -15,7 +15,7 @@ import { exampleAfter } from "./DocExample";
 describe("public content boundary", () => {
   it.each(["stable", "canary"] as const)("resolves every public link and example anchor for %s", channel => {
     const docs = publicDocuments(channel);
-    expect(docs).toHaveLength(16);
+    expect(docs).toHaveLength(17);
     expect(new Set(docs.map(doc => doc.id)).size).toBe(docs.length);
     const corpus = JSON.stringify(docs);
     expect(corpus).not.toMatch(/\/Users\/|sparkone|AKD-\d|AKC-\d|127\.0\.0\.1|localhost|INI/);
@@ -99,6 +99,17 @@ describe("public documentation routes", () => {
     await render("/docs/not/a/guide"); expect(container.querySelector("h1")!.textContent).toBe("Guide not found");
     expect(container.querySelector('main a[href="/docs"]')).not.toBeNull();
     expect(documentId("/docs/%zz")).toBe("");
+  });
+  it("opens the smoke guide in both languages without local queries or file actions", async () => {
+    await render("/docs/smoke#perform");
+    expect(container.querySelector("h1")?.textContent).toBe("Smoke cases & run records");
+    expect(container.textContent).toContain("A successful build or automated test does not establish a smoke pass.");
+    expect(searchDocs(publicDocuments("canary"), "unperformed checks", "en").some(result => result.href === "/docs/smoke#perform")).toBe(true);
+    await act(async () => setLanguage("ko"));
+    expect(container.querySelector("h1")?.textContent).toBe("스모크와 실행 기록");
+    expect(router.state.location.hash).toBe("perform");
+    expect(container.textContent).toContain("문서의 Owner를 수정자로 자동 사용하지 않습니다.");
+    expect(container.querySelector('[data-tour="docs-toc"] a[href="/docs/smoke#regression"]')).not.toBeNull();
   });
   it("searches sections with keyboard navigation and goes to the selected anchor", async () => {
     await render("/docs");

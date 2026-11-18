@@ -35,6 +35,7 @@ describe("application navigation history", () => {
     vi.spyOn(browserRepository, "select").mockResolvedValue({ workspace });
     vi.spyOn(browserRepository, "connections").mockResolvedValue([]);
     vi.spyOn(browserRepository, "recoveries").mockResolvedValue([]);
+    vi.spyOn(browserRepository, "documentRootSetting").mockResolvedValue({ value: "docs", source: null });
     vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([response.file]) });
     vi.spyOn(browserRepository, "ticketFiles").mockResolvedValue([response.file]);
     vi.spyOn(browserRepository, "boardOrder").mockResolvedValue({ keys: [] });

@@ -40,3 +40,32 @@ it("ignores a delayed old query and cancelled results without repeating source p
     vi.restoreAllMocks(); vi.unstubAllGlobals();
   }
 });
+
+it("stops scheduling body reads on explicit cancel and can resume the same query", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const files = Array.from({ length: 9 }, (_, index) => documentFixture(projectFixture("fixture", "bw_cancel"), `d_${index}`).file);
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => { release = resolve; });
+  const prepare = vi.spyOn(browserRepository, "prepareDocumentSearch").mockImplementation(() => pending);
+  const get = vi.spyOn(browserRepository.documentSearch, "get").mockImplementation(async (file) => { await pending; return createDocumentSearchEntry(file, "needle"); });
+  const host = document.createElement("div"), root = createRoot(host);
+  let cancel!: () => void, retry!: () => void;
+  function Search() {
+    const result = useProjectSearch(files, "needle", true);
+    cancel = result.cancel; retry = result.retry;
+    return <div data-busy={result.busy} data-cancelled={result.cancelled}>{result.matches.size}</div>;
+  }
+  try {
+    await act(async () => root.render(<Search />));
+    expect(prepare).toHaveBeenCalledTimes(4);
+    const reads = get.mock.calls.length;
+    await act(async () => cancel());
+    await act(async () => release());
+    expect(prepare).toHaveBeenCalledTimes(4); expect(get).toHaveBeenCalledTimes(reads);
+    expect(host.firstElementChild?.getAttribute("data-busy")).toBe("false");
+    expect(host.firstElementChild?.getAttribute("data-cancelled")).toBe("true");
+    await act(async () => retry());
+    expect(host.textContent).toBe("9");
+    expect(host.firstElementChild?.getAttribute("data-cancelled")).toBe("false");
+  } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); vi.unstubAllGlobals(); }
+});

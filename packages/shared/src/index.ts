@@ -150,7 +150,7 @@ export const ticketDocumentSchema = z.object({
 
 export type TicketDocument = z.infer<typeof ticketDocumentSchema>;
 
-export const markdownFileTypeSchema = z.enum(["tickets", "plan", "inventory", "markdown"]);
+export const markdownFileTypeSchema = z.enum(["tickets", "plan", "inventory", "smoke", "smoke-run", "markdown"]);
 
 export type MarkdownFileType = z.infer<typeof markdownFileTypeSchema>;
 

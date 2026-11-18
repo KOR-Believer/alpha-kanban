@@ -69,6 +69,8 @@ export function buildDocumentSets(files: MarkdownFileSummary[]): DocumentSetSumm
 export function inferMarkdownFileType(filePath: string): MarkdownFileType {
   const basename = filePath.split(/[\\/]/).at(-1) ?? filePath;
 
+  if (basename.endsWith("_smoke_run.md")) return "smoke-run";
+  if (basename.endsWith("_smoke.md")) return "smoke";
   if (basename.endsWith("_tickets.md")) {
     return "tickets";
   }
@@ -84,7 +86,7 @@ export function inferMarkdownFileType(filePath: string): MarkdownFileType {
 export function inferSlug(filePath: string): string {
   return (filePath.split(/[\\/]/).at(-1) ?? filePath).replace(/\.md$/, "")
     .replace(/^\d+_/, "")
-    .replace(/_(tickets|plan|inventory)$/, "");
+    .replace(/_(smoke_run|smoke|tickets|plan|inventory)$/, "");
 }
 
 export function inferSequenceNumber(filePath: string): number | undefined {
@@ -177,7 +179,9 @@ function documentTypeSortOrder(type: MarkdownFileType): number {
     plan: 0,
     tickets: 1,
     inventory: 2,
-    markdown: 3,
+    smoke: 3,
+    "smoke-run": 4,
+    markdown: 5,
   }[type];
 }
 

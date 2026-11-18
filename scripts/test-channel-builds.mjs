@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { RELEASE_CHANNELS } from "../apps/web/release-channel.mjs";
 import { checkBrowserRelease } from "./check-browser-release.mjs";
 import { unzipSync } from "fflate";
+import { removeSmokeScratch } from "./lib/smoke-artifacts.mjs";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -80,3 +81,4 @@ assert.notEqual(releases.stable.skillArchive, releases.canary.skillArchive, "Cha
 assert(!releases.canary.history.some((row) => releases.stable.history.some((stable) => row.id === stable.id)));
 await writeFile(resolve(output, "report.json"), JSON.stringify({ releases, checks: "isolated builds, hashes, histories, mismatched deployment targets", output }, null, 2));
 console.log(`PASS distinct app builds with identical skill contents. Artifacts: ${output}`);
+await removeSmokeScratch(output, ["stable", "canary"]);

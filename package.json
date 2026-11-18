@@ -29,6 +29,7 @@
     "document-cli": "node scripts/document-cli.mjs",
     "test:ledger": "node --test scripts/test/document-context.test.mjs scripts/test/document-owner.test.mjs",
     "build:document-cli": "node scripts/build-document-cli.mjs",
+    "build:smoke-check": "node scripts/build-smoke-check.mjs",
     "test:skill-distribution": "node --test --test-concurrency=1 scripts/test/skill-distribution.test.mjs",
     "test:documents": "node --test --test-concurrency=1 scripts/test/document-plan.test.mjs scripts/test/document-scan.test.mjs scripts/test/document-journal.test.mjs scripts/test/document-transaction.test.mjs scripts/test/document-cli.test.mjs scripts/test/document-migration.test.mjs scripts/test/document-root.test.mjs",
     "test": "pnpm test:channels && pnpm test:ledger && pnpm test:documents && pnpm test:maintenance-worker && pnpm test:skill-distribution && pnpm -r --if-present test"

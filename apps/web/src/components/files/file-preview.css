@@ -1,0 +1,20 @@
+.ak-file-preview, .ak-source-reader, .ak-html-preview { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
+.ak-file-preview-tools { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+.ak-file-preview-tools > span:first-child { color: var(--foreground); }
+.ak-file-preview-tools > button:last-child { margin-left: auto; }
+.ak-file-preview-message { display: grid; align-content: center; justify-items: center; gap: 16px; padding: 24px; flex: 1; overflow: auto; font-size: 14px; color: var(--muted-foreground); }
+.ak-source-reader { flex: 1; background: var(--card); }
+.ak-source-scroll { flex: 1; min-height: 0; overflow: auto; }
+.ak-source-scroll pre { margin: 0; font: 12px/22px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); }
+.ak-source-line { white-space: pre; width: 100%; display: flex; }
+.ak-source-line-number { flex: none; width: 6ch; padding-right: 2ch; margin-right: 2ch; text-align: right; user-select: none; color: var(--muted-foreground); border-right: 1px solid var(--border); }
+.ak-source-keyword { color: color-mix(in oklab, var(--primary) 65%, var(--foreground)); font-weight: 600; }
+.ak-source-string { color: var(--ak-success); }
+.ak-source-number { color: var(--ak-warning); }
+.ak-source-comment { color: var(--muted-foreground); }
+.ak-image-preview { flex: 1; min-height: 0; overflow: auto; padding: 24px; background: var(--sidebar); }
+.ak-image-preview[data-fit="true"] { display: flex; align-items: center; justify-content: center; }
+.ak-image-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ak-native-pdf, .ak-html-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: white; }
+.ak-html-frame[hidden] { display: none; }
+.ak-html-preview > .ak-source-reader { flex: 1; }

@@ -1,7 +1,7 @@
 import type { DriveStep } from "driver.js";
 import type { TFunction } from "i18next";
 
-export type TourKind = "start" | "project" | "all" | "detail" | "linked" | "maintenance" | "link" | "connections" | "skill" | "docs" | "releases";
+export type TourKind = "start" | "project" | "all" | "detail" | "linked" | "files" | "maintenance" | "link" | "connections" | "skill" | "docs" | "releases" | "smoke" | "smoke-create" | "smoke-edit" | "smoke-compare";
 
 export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   const step = (anchor: string, title: string, description: string): DriveStep => ({
@@ -11,6 +11,41 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   const skills = () => step("skill-updates", "Keep your installed skill up to date", "Drop or choose your installed implementation-ledger folder to compare it with the skill provided by this app. Review and approve an update to back up the existing files before replacing them. Connecting alone does not change files.");
   const status = () => step("board-status", "Read progress by status", "Each column groups tickets by their current status. Moving a card to another column asks for confirmation and records your reason in Markdown. You can also just read the board.");
   const card = () => step("board-card", "Open a ticket for the details", "Read the ticket ID, priority, and progress here. Select the card to review its scope, completion criteria, and history. The detail window has its own tour.");
+  if (kind === "files") return [
+    step("explorer-mode", "Choose work documents or project files", "Work documents shows your configured document folder as sets. File explorer shows folders and reference files throughout the connected project. Switching keeps the open document and panel layout."),
+    step("file-search", "Find a project file", "Search filenames and paths, including folders you have not expanded. Markdown contents use the document search too. Work document filters do not hide files here."),
+    step("file-tree", "Open a file in place", "Expand folders or use arrow keys. Choose a file to open it beside the panel. Middle-click or use a modified click to open its link in another tab."),
+    step("file-preview", "Read reference files", "Read source with line numbers, zoom images or use the browser PDF tools. These previews are read-only; download opens the original in another app."),
+    step("html-preview-tools", "Inspect an HTML screen", "The selected HTML runs automatically in an isolated view. Switch to Source to read its code. Changing panel layout does not restart the screen."),
+    folders(),
+  ];
+  if (kind === "smoke") return [
+    step("smoke-overview", "Check which sheet you are reading", "The definition holds the current criteria. A run holds the criteria saved when it was created. Run closed and All cases passed describe different things."),
+    step("smoke-notes", "Keep notes with this sheet", "Use sheet notes for shared setup, observations or exceptions. A run also keeps the original common conditions. Notes alone do not change a test result."),
+    step("smoke-tools", "Find a case or result", "Search the complete case and its records, or filter by lifecycle or result. Counts still describe the whole sheet."),
+    step("smoke-cases", "Read the criteria before testing", "Expand a TC to read its steps and expected result. In a run, the same area also shows observations and earlier corrections. Passing automated tests does not prove this app check."),
+    step("smoke-result", "Correct a result with a reason", "Select a result to record a user correction or update its notes. Earlier records stay visible. A recorded @ID identifies the editor, independently of the document owner."),
+    step("smoke-tabs", "Switch between definition and runs", "The bottom tabs open the definition and each run. Each sheet keeps its search, expanded cases and reading position."),
+    step("smoke-create", "Start a fresh run", "New run saves the selected active criteria in a separate Markdown file. Every result starts as Not run; previous results are not copied."),
+    step("smoke-compare", "Compare two runs", "Compare saved criteria, results and notes side by side. A case absent from one run is different from a case marked Not run.")
+  ];
+  if (kind === "smoke-create") return [
+    step("smoke-create-fields", "Identify the test session", "Enter a run name, the app or build you will test, and its environment. These identify what the results apply to."),
+    step("smoke-create-cases", "Choose the cases for this run", "Only active cases can be selected. Unselected cases are absent from the run, rather than marked Skipped."),
+    step("smoke-create-file", "Review the new file", "The file goes beside the definition. Its common conditions and selected criteria stay unchanged when the definition is revised later."),
+    step("smoke-create-save", "Create when the setup is ready", "Create run writes the separate file. Nothing is tested automatically. If the source changed, reload the setup and review the case selection again.")
+  ];
+  if (kind === "smoke-edit") return [
+    step("smoke-edit-purpose", "Review the kind of change", "This form edits the current sheet. Correcting a result, editing notes and closing a run are separate actions."),
+    step("smoke-edit-fields", "Record what changed and why", "A result change needs a reason and keeps earlier records. An author is optional and is not taken from Owner. Closing preserves the results, including unperformed cases."),
+    step("smoke-edit-save", "Save this change explicitly", "Save writes the current document. If it changed elsewhere, your input stays here for review. Cancel or the tour does not apply the edit.")
+  ];
+  if (kind === "smoke-compare") return [
+    step("smoke-compare-controls", "Choose the two runs", "Compare any two records of this smoke definition. Differences only narrows the rows without editing either file."),
+    step("smoke-compare-context", "Compare the shared conditions too", "Common conditions and run notes can differ even when individual revision numbers match. Expand them to read the saved text."),
+    step("smoke-compare-cases", "Distinguish result and criteria changes", "TC IDs align the rows. Expand one to read each run’s criteria and history. Current retirement and absence from a run do not replace its recorded result."),
+    step("smoke-compare-back", "Return to the sheet", "Close the comparison to return to the same sheet and reading position. Comparing never saves a document.")
+  ];
   if (kind === "maintenance") return [
     step("maintenance-purpose", "Maintain this document", "Review format updates for the selected document, such as a missing ID, folder-based Owner correction, or obsolete guidance removal. Nothing is saved by opening this preview."),
     step("maintenance-diff", "Compare before and after", "Removed lines are marked with minus signs and added lines with plus signs. Expand unchanged context when you need to read around a change."),
@@ -88,11 +123,13 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   ];
   return [
     step("project-switcher", "Switch the current project", "Choose another connected project here. The Alpha Kanban name returns to the start screen."),
-    step("document-panel-toggle", "Open your document panel", "Open documents above the board, or pin the panel to the left or bottom. Cards and Details are available in every position."),
+    step("explorer-mode", "Choose work documents or project files", "Work documents shows your configured document folder as sets. File explorer shows folders and reference files throughout the connected project. Switching keeps the open document and panel layout."),
+    step("document-panel-toggle", "Open your document panel", "Open or close the panel without changing its layout. Pin it to any side, or unpin to float above the board. Cards and Details are available in every position."),
     step("document-status-search", "Search from the status bar", "Select the magnifier to search. Results appear in the document panel, using the same search as its input. The input stays open while a search is entered."),
     step("document-set-switcher", "Switch documents in this set", "Select the document type to open its plan, tickets or inventory. The menu includes this set’s documents even when the document list is filtered."),
     step("project-owner-filter", "Filter documents by owner", "Choose an owner here without opening the document panel. This uses the same owner filter as the panel and leaves the open document unchanged."),
     step("document-panel-layout", "Arrange your document panel", "Choose the panel position and Cards or Details here. Unpin to float above the board. Drag the panel edges to resize; double-click a resize handle to reset its size."),
+    step("document-panel-move", "Move document panel", "Drag this handle to preview a new dock position, then release to apply. Drop in the center or press Esc to cancel. You can also click the handle to choose a position."),
     step("documents", "Search this project’s documents", "Search names, paths and the contents of plans, tickets, inventories and other Markdown. Results stay grouped by document set."),
     step("document-results", "Open a matching document set", "A match shows which document or ticket contains the text. Selecting it opens the matching tickets or the matching place in the document."),
     step("applied-document-search", "Keep or clear the search", "The opened document keeps the applied search. View whole document clears that view’s search without erasing the document search. Clear the document search separately to see every document set."),

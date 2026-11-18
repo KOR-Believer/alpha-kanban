@@ -16,7 +16,7 @@ import type { LinkContext } from "../browser/linkMappings";
 const MARKDOWN_HEADING_HIGHLIGHT_CLASS = "ak-markdown-heading-highlight";
 export type ReaderFile = Pick<MarkdownFileSummary, "id" | "workspaceId" | "type" | "filename" | "slug" | "sequenceNumber" | "workspaceRelativePath" | "relativePath">;
 
-export function MarkdownDocumentReader({ document, documentSet, file, onFileSelect, fileHref, linkContext, bodyRef, titleRef, headingPrefix, searchQuery = "" }: {
+export function MarkdownDocumentReader({ document, documentSet, file, onFileSelect, fileHref, linkContext, bodyRef, titleRef, headingPrefix, searchQuery = "", fragment = "" }: {
   document: Pick<MarkdownDocumentResponse, "markdown" | "outline">;
   documentSet?: DocumentSetSummary;
   file: ReaderFile;
@@ -27,6 +27,7 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
   titleRef?: RefObject<HTMLHeadingElement | null>;
   headingPrefix?: string;
   searchQuery?: string;
+  fragment?: string;
 }) {
   const { t } = useTranslation();
   const headingIdsByLine = useMemo(() => createHeadingIdsByLine(document.outline, headingPrefix), [document.outline, headingPrefix]);
@@ -46,6 +47,11 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
   useEffect(() => {
     readerRef.current?.querySelector<HTMLElement>("[data-search-hit]")?.scrollIntoView({ block: "center" });
   }, [file.id, document.markdown, searchQuery, readerRef]);
+  useEffect(() => {
+    if (!fragment) return;
+    const target = [...readerRef.current?.querySelectorAll<HTMLElement>("[id]") ?? []].find(element => element.id === fragment || element.id.endsWith("-" + fragment));
+    target?.scrollIntoView({ block: "start" });
+  }, [file.id, document.markdown, fragment, readerRef]);
 
   return (
     <div className="grid h-full min-h-0 min-w-[840px] grid-cols-[260px_minmax(0,1fr)] items-stretch gap-4 max-[960px]:h-auto max-[960px]:min-w-0 max-[960px]:grid-cols-1">
@@ -355,6 +361,8 @@ export function documentTypeLabel(type: MarkdownFileType): string {
     markdown: t("Markdown"),
     plan: t("Plan"),
     tickets: t("Tickets"),
+    smoke: t("Smoke tests"),
+    "smoke-run": t("Smoke run"),
   }[type];
 }
 
@@ -364,5 +372,7 @@ export function documentTypeIcon(type: MarkdownFileType) {
     markdown: FileText,
     plan: BookOpen,
     tickets: ListChecks,
+    smoke: ListChecks,
+    "smoke-run": FileText,
   }[type];
 }

@@ -6,6 +6,18 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./smokeComparison": {
+      "types": "./src/smokeComparison.d.mts",
+      "import": "./src/smokeComparison.mjs"
+    },
+    "./smokeRun": {
+      "types": "./src/smokeRun.d.mts",
+      "import": "./src/smokeRun.mjs"
+    },
+    "./smokeMarkdown": {
+      "types": "./src/smokeMarkdown.d.mts",
+      "import": "./src/smokeMarkdown.mjs"
+    },
     "./documentSettings": {
       "types": "./src/documentSettings.d.mts",
       "import": "./src/documentSettings.mjs"

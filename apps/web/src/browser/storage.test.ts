@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import { IndexedDbStorage } from "./storage";
 
 describe("browser operational storage", () => {
+  it("waits for a strict-durability creation journal transaction", async () => {
+    const storage = new IndexedDbStorage("strict-" + crypto.randomUUID());
+    const transaction = vi.spyOn(IDBDatabase.prototype, "transaction");
+    try {
+      await storage.setDurable("recovery:create", { operation: "smoke-create", intended: "kept" });
+      expect(transaction).toHaveBeenCalledWith("records", "readwrite", { durability: "strict" });
+      expect(await storage.get("recovery:create")).toEqual({ operation: "smoke-create", intended: "kept" });
+    } finally { transaction.mockRestore(); }
+  });
   it("commits discovered identity pairs together and aborts the entire batch on failure", async () => {
     const storage = new IndexedDbStorage("batch-" + crypto.randomUUID());
     await storage.setMany([{ key: "document:kept", value: "original" }, { key: "document-path:p:kept", value: "kept" }]);

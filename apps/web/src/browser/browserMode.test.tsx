@@ -3,6 +3,8 @@ import { act, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { App } from "../App";
 import { AppRoot } from "../AppRoot";
 import { partitionProjects, ProjectLists } from "../components/ProjectLauncher";
@@ -26,6 +28,7 @@ import { OWNER_FILTERS_KEY } from "../ownerFilters";
 import { ALL_BOARD_OWNER_FILTERS_KEY } from "../allBoardOwnerFilters";
 import { createDocumentSearchEntry } from "../documentSearch";
 import { attachTicketSearch } from "../ticketSearch";
+import { readPanelPreferences } from "../components/documents/documentPanelState";
 
 const routing = vi.hoisted(() => ({ location: { pathname: "/", searchStr: "", hash: "", href: "/" }, navigate: vi.fn(), listeners: new Set<() => void>(), router: { history: { block: () => () => {} } } }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -64,6 +67,7 @@ describe("browser mode UI boundaries", () => {
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
     vi.spyOn(browserRepository, "workspaces").mockResolvedValue({ workspaces: [workspace] });
     vi.spyOn(browserRepository, "documentCount").mockResolvedValue(1);
+    vi.spyOn(browserRepository, "documentRootSetting").mockResolvedValue({ value: "docs", source: null });
     vi.spyOn(browserRepository, "connections").mockResolvedValue([]);
     vi.spyOn(browserRepository, "recoveries").mockResolvedValue([]);
     vi.spyOn(browserRepository, "files").mockResolvedValue([response.file]);
@@ -171,6 +175,43 @@ describe("browser mode UI boundaries", () => {
     expect(draft.value).toBe("원문 유지 / keep draft");
     expect(container.textContent).toContain("The open document is outside the selected owner filter.");
     expect(browserRepository.files).toHaveBeenCalledTimes(reads);
+  });
+
+  it("limits Work documents by the configured path without changing the open board, draft or panel layout", async () => {
+    const outside = { ...plainFile, id: "d_outside", workspaceRelativePath: "contexts-old/reference.md", relativePath: "contexts-old/reference.md", filename: "reference.md", slug: "reference" };
+    const inside = { ...plainFile, id: "d_inside", workspaceRelativePath: "contexts/기획 문서/notes.md", relativePath: "contexts/기획 문서/notes.md" };
+    vi.mocked(browserRepository.documentRootSetting).mockResolvedValue({ value: "contexts/기획 문서", source: "project" });
+    vi.mocked(browserRepository.files).mockResolvedValue([response.file, inside, outside]);
+    vi.spyOn(browserRepository.projectFiles, "list").mockResolvedValue([{ name: "src", path: "src", kind: "directory" }]);
+    selectDocument("TEST-01"); await render(<App />);
+    const draft = await waitForElement<HTMLTextAreaElement>('textarea', document);
+    await typeInto(draft, "파일 탐색 중에도 유지할 지시");
+    const board = container.querySelector(".ak-project-board"), href = routing.location.href;
+    const panel = readPanelPreferences();
+    const navigation = container.querySelector('nav[aria-label="문서"]')!;
+    expect(navigation.textContent).toContain("notes"); expect(navigation.textContent).not.toContain("reference");
+    const switchMode = async (label: string) => {
+      const button = [...container.querySelectorAll<HTMLButtonElement>('[data-tour="explorer-mode"] button')].find(button => button.textContent === label)!;
+      await act(async () => button.click());
+    };
+    await switchMode("파일 탐색");
+    expect(browserRepository.projectFiles.list).toHaveBeenCalledWith(workspace.id, "", expect.any(AbortSignal));
+    expect(container.querySelector('[data-tour="file-search"]')).not.toBeNull();
+    expect(container.querySelector(".ak-project-board")).toBe(board);
+    expect(routing.location.href).toBe(href); expect(draft.value).toBe("파일 탐색 중에도 유지할 지시");
+    expect(readPanelPreferences()).toEqual(panel);
+    expect(JSON.parse(localStorage.getItem("alpha-kanban.fileExplorer.v1")!)[workspace.id].mode).toBe("files");
+    await switchMode("작업 문서"); expect(draft.isConnected).toBe(true);
+    expect(container.querySelector('nav[aria-label="문서"]')?.textContent).toContain("notes");
+  });
+
+  it("keeps a deep-linked board and File explorer available when the document root is invalid", async () => {
+    vi.mocked(browserRepository.documentRootSetting).mockResolvedValue({ value: null, source: "project", error: "Invalid root" });
+    selectDocument(); await render(<App />);
+    expect(container.querySelector(".ak-project-board")).not.toBeNull();
+    expect(container.textContent).toContain(".ak.config");
+    expect(container.querySelector('[data-tour="explorer-mode"]')).not.toBeNull();
+    expect(container.querySelector('nav[aria-label="문서"]')?.textContent).not.toContain(response.file.slug);
   });
 
   it("keeps folder reconnection visible in the board when the document panel starts collapsed", async () => {
@@ -381,6 +422,18 @@ describe("browser mode UI boundaries", () => {
     await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ mode: "readwrite" });
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("recovers a file preview with read access and invalidates its failed read", async () => {
+    const directory = new FakeDirectory("preview project");
+    vi.spyOn(browserRepository, "projectConnection").mockResolvedValue({ id: "preview", name: directory.name, kind: "project", handle: directory.handle() });
+    const request = vi.spyOn(directory, "requestPermission");
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await render(<BrowserReconnect workspaceId={workspace.id} mode="read" />);
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ mode: "read" });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["project-file-preview"] });
   });
 
   it("replays from Help on the populated board and keeps all-project guidance independent", async () => {
@@ -834,18 +887,21 @@ describe("browser mode UI boundaries", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it.each(["tickets", "plan", "inventory", "markdown"] as const)("opens a selected %s before the sidebar, retaining it when the list arrives", async (type) => {
+  it.each(["tickets", "plan", "inventory", "smoke", "smoke-run", "markdown"] as const)("opens a selected %s before the sidebar, retaining it when the list arrives", async (type) => {
     selectDocument();
     const file = { ...response.file, type };
     vi.mocked(browserRepository.file).mockResolvedValue(file);
+    if (type === "smoke" || type === "smoke-run") vi.spyOn(browserRepository, "smokeCollection").mockResolvedValue({ files: [file], entries: [], index: { definitions: [], runs: [], duplicates: [] } });
     vi.mocked(browserRepository.markdown).mockResolvedValue({ file, markdown: "# Original document\n\nOriginal body", outline: [{ level: 1, line: 1, title: "Original document" }] });
     let finish!: (value: Awaited<ReturnType<typeof browserRepository.documentSets>>) => void;
     vi.spyOn(browserRepository, "documentSets").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     await render(<App />);
     expect(browserRepository.file).toHaveBeenCalledWith(workspace.id, file.id);
-    await waitForElement(type === "tickets" ? ".ak-project-board" : ".ak-markdown");
-    const content = () => type === "tickets" ? container.querySelector(".ak-project-board") : container.querySelector(".ak-markdown");
-    expect(content()?.textContent).toContain(type === "tickets" ? "TEST-01" : "Original body");
+    const isSmoke = type === "smoke" || type === "smoke-run";
+    const selector = type === "tickets" ? ".ak-project-board" : isSmoke ? ".ak-smoke-sheet" : ".ak-markdown";
+    await waitForElement(selector);
+    const content = () => container.querySelector(selector);
+    expect(content()?.textContent).toContain(type === "tickets" ? "TEST-01" : isSmoke ? "마크다운 보기" : "Original body");
     expect(container.querySelector('aside[aria-label]')?.textContent).toContain("문서 불러오는 중");
     const opened = content();
     const another = { ...file, id: "d_other", slug: "another", relativePath: "another.md" };
@@ -855,6 +911,56 @@ describe("browser mode UI boundaries", () => {
     expect(container.querySelector('aside[aria-label]')?.textContent).not.toContain("문서 불러오는 중");
     expect(routing.navigate).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+    if (isSmoke) {
+      await act(async () => [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === "마크다운")!.click());
+      await waitForElement(".ak-markdown");
+      expect(container.querySelector(".ak-markdown")?.textContent).toContain("Original body");
+      expect(routing.location.searchStr).toContain("view=markdown");
+    }
+  });
+
+  it.each(["memo", "new-run"] as const)("keeps a smoke %s draft mounted when project permission is revoked and refuses a stale save", async kind => {
+    selectDocument();
+    const markdown = [...readFileSync(resolve(process.cwd(), "../../docs/31_alpha_kanban_smoke_inventory.md"), "utf8").matchAll(/^```md\n([\s\S]*?)^```$/gm)][kind === "memo" ? 1 : 0]![1]!;
+    const file = { ...response.file, type: kind === "memo" ? "smoke-run" as const : "smoke" as const };
+    const source = { file, markdown, outline: [] };
+    vi.mocked(browserRepository.file).mockResolvedValue(file);
+    vi.mocked(browserRepository.markdown).mockResolvedValue(source);
+    vi.spyOn(browserRepository, "documentSets").mockResolvedValue({ sets: buildDocumentSets([file]) });
+    vi.spyOn(browserRepository, "smokeCollection").mockResolvedValue({ files: [file], entries: [], index: { definitions: [], runs: [], duplicates: [] } });
+    vi.spyOn(browserRepository, "prepareSmokeRun").mockResolvedValue({ id: "plan", workspaceId: workspace.id, sourceFileId: file.id, source, path: "docs/02_notes_smoke_run.md", owner: null, number: 1, documentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", contextHash: "context" });
+    const edit = vi.spyOn(browserRepository, kind === "memo" ? "editSmoke" : "createSmokeRun").mockRejectedValue(new Error("Write permission is required."));
+    await render(<App />);
+    await waitForElement(".ak-smoke-sheet");
+    const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label || item.getAttribute("aria-label") === label)!;
+    await act(async () => button(kind === "memo" ? "시트 메모 수정" : "새 회차").click());
+    const input = document.querySelector<HTMLTextAreaElement | HTMLInputElement>(kind === "memo" ? '[role="dialog"] textarea' : '[role="dialog"] input')!;
+    await act(async () => {
+      for (const element of document.querySelectorAll<HTMLInputElement>('[role="dialog"] input')) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, "Keep this smoke draft");
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      Object.getOwnPropertyDescriptor(kind === "memo" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value")!.set!.call(input, "Keep this smoke draft");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    vi.mocked(browserRepository.workspaces).mockResolvedValue({ workspaces: [{ ...workspace, isAvailable: false }] });
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: ["workspaces"] }); });
+    await render(<App />);
+    expect(input.isConnected).toBe(true);
+    expect(input.value).toBe("Keep this smoke draft");
+    expect(container.querySelector(".ak-smoke-sheet")).not.toBeNull();
+    expect(button("새 회차").disabled).toBe(true);
+    const saveLabel = kind === "memo" ? "저장" : "회차 만들기";
+    await act(async () => button(saveLabel).click());
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="alert"]')).not.toBeNull();
+    expect(input.value).toBe("Keep this smoke draft");
+    expect(button(saveLabel).disabled).toBe(true);
+    vi.mocked(browserRepository.workspaces).mockResolvedValue({ workspaces: [workspace] });
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: ["workspaces"] }); });
+    expect(input.isConnected).toBe(true);
+    expect(input.value).toBe("Keep this smoke draft");
+    expect(edit).toHaveBeenCalledTimes(1);
   });
 
   it("keeps an open ticket and its draft when sidebar refresh fails", async () => {

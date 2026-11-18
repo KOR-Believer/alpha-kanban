@@ -1,0 +1,28 @@
+.ak-explorer-mode { display: flex; gap: 4px; padding: 7px 12px; border-bottom: 1px solid var(--border); }
+.ak-explorer-mode > button { flex: 1; }
+.ak-explorer-tools { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "title search layout"; align-items: center; gap: 8px; padding: 8px 12px; }
+.ak-explorer-tools > .ak-document-tools-title { grid-area: title; }
+.ak-explorer-tools > .ak-document-tools-layout { grid-area: layout; }
+.ak-explorer-search-tools { grid-area: search; display: flex; align-items: center; gap: 4px; justify-self: end; width: 100%; max-width: 430px; min-width: 0; }
+.ak-explorer-search { position: relative; flex: 1; min-width: 0; }
+.ak-explorer-search > svg { position: absolute; width: 16px; height: 16px; top: 10px; left: 10px; color: var(--muted-foreground); }
+.ak-explorer-search input { padding-left: 34px; padding-right: 32px; }
+.ak-explorer-search button { position: absolute; right: 2px; top: 2px; }
+@container ak-document-panel (max-width: 480px) {
+  .ak-explorer-tools { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title layout" "search search"; }
+  .ak-explorer-search-tools { max-width: none; }
+}
+.ak-explorer-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 7px 12px; font-size: 11px; color: var(--muted-foreground); }
+.ak-explorer-state { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 12px; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.ak-file-tree-row { position: absolute; top: 0; left: 0; display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding-right: 10px; font-size: 13px; color: var(--foreground); text-align: left; border: 0; background: transparent; border-radius: var(--ak-radius-xs); }
+.ak-file-tree-row:hover { background: var(--muted); }
+.ak-file-tree-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.ak-file-tree-row.ak-row-active { background: var(--muted); }
+.ak-file-tree-row > svg { width: 15px; height: 15px; flex: none; color: var(--muted-foreground); }
+.ak-file-tree-row > .ak-tree-chevron { width: 12px; height: 12px; flex: none; }
+.ak-file-tree-label { display: flex; flex-direction: column; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ak-file-tree-label > small { overflow: hidden; text-overflow: ellipsis; color: var(--muted-foreground); font-size: 11px; }
+.ak-file-tree-item { position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: center; }
+.ak-file-tree-item > a { position: relative; flex: 1; min-width: 0; }
+.ak-file-tree-item > button { flex: none; margin-right: 6px; }
+.ak-document-view-switch[hidden] { display: none; }

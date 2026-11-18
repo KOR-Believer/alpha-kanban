@@ -261,7 +261,7 @@ describe("screen tours", () => {
   });
 
   it("has localized steps and shared button variants", async () => {
-    for (const kind of ["start", "project", "all", "detail", "linked", "maintenance", "link", "connections", "skill", "docs", "releases"] as const) {
+    for (const kind of ["start", "project", "all", "detail", "linked", "maintenance", "link", "connections", "skill", "docs", "releases", "smoke", "smoke-create", "smoke-edit", "smoke-compare"] as const) {
       expect(tourSteps(kind, t).length).toBeGreaterThanOrEqual(3);
       expect(tourSteps(kind, t).every((step) => /[가-힣]/.test(step.popover!.title!))).toBe(true);
       tourSteps(kind, ((key: string) => {

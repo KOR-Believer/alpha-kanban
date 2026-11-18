@@ -181,5 +181,114 @@
         "sha256": "76b775ee3ec2326e4a12793e04bc4978057e4edd68cd41ef713c51961cc98e9f"
       }
     ]
+  },
+  {
+    "source": "ea7276ed09d1df0f97d69260d7bd097f333193ff",
+    "files": [
+      {
+        "path": "agents/openai.yaml",
+        "sha256": "d33d7319302d47e0188d8bd903ce32e38bf2c1fff317f2ed7f7eafdb271d7da9"
+      },
+      {
+        "path": "assets/inventory-template.md",
+        "sha256": "6694a016825f105e3a20baa12ab7500bf6c5f04f9a8e25c9a2d8aca8b0d6b963"
+      },
+      {
+        "path": "assets/plan-template.md",
+        "sha256": "35524f6a07d19a7547f6dec0f88b7c1c8a6f3a5168381e7f8a95dda7d1942542"
+      },
+      {
+        "path": "assets/tickets-template.md",
+        "sha256": "b29bbaaa43de059c5eb0fd599af605cea112580885c3fb7387b13f09163abd94"
+      },
+      {
+        "path": "licenses/document-cli.txt",
+        "sha256": "4df6227a5fef943c44966911003d31978de7d7528ef1e5ea5f2cb87f0d58622d"
+      },
+      {
+        "path": "references/compatibility.md",
+        "sha256": "67d3e73f3f7563fe8652faa4d7f1e2d346e9442c520f506e4baa8ea09c86edbe"
+      },
+      {
+        "path": "references/document-context.md",
+        "sha256": "1181a0bb44449fa405d458188ad0f8dc64a727fc5863efc2406abdc267d18809"
+      },
+      {
+        "path": "references/document-operations.md",
+        "sha256": "9b22cff6ab07ffd00175abb0f3c9b7a2aa013166a8558add9daaf189323577f6"
+      },
+      {
+        "path": "references/ledger-format.md",
+        "sha256": "03ee67ad43e602140cbc0e79391f5a799c8d5e8cf78b6f67f576b2ae44b9a01c"
+      },
+      {
+        "path": "scripts/check-ledger.mjs",
+        "sha256": "aa8161e5ce71dec062da2877a22d28a72c6f78caeb6cad198ea2ff03b0dac7f1"
+      },
+      {
+        "path": "scripts/document-cli.mjs",
+        "sha256": "97ea9099c10587bd28645a3d5c04693afcdba16179301f9ec45a920c4eb032b3"
+      },
+      {
+        "path": "scripts/document-context.mjs",
+        "sha256": "018366687530ba0635f5edabc2010f2685a2939b6d80f2ee2f5ce400b6ec92c6"
+      },
+      {
+        "path": "scripts/lib/context-error.mjs",
+        "sha256": "fd9a2d5675b5d1784404b8e67c9c8e9b9ed98a4f2a0d46b1e6193f5a8f2f9fe3"
+      },
+      {
+        "path": "scripts/lib/document-context.mjs",
+        "sha256": "591c82eefe055057581e3e184cb8e584db5dd07962ffa84e78fcdbe6b53c3e76"
+      },
+      {
+        "path": "scripts/lib/document-header.mjs",
+        "sha256": "94495a0e0cf3707d67cdf6bc7b0990df58bcd3f9352cbb2a2de2104e9258eaf8"
+      },
+      {
+        "path": "scripts/lib/document-metadata.d.mts",
+        "sha256": "d4ab85ce781e0ee52dd3dbddeefd5b25db444f842ba2b44035489503e9898ca4"
+      },
+      {
+        "path": "scripts/lib/document-metadata.mjs",
+        "sha256": "087f0594f7f9396f4fc4b327e320ca461a35cba98ab0bbdab6db54c6bf355c06"
+      },
+      {
+        "path": "scripts/lib/document-owner.d.mts",
+        "sha256": "b413b8ba87bb51dd4121b1664c676c45033e8a13f58f896edd95cda69e9590ed"
+      },
+      {
+        "path": "scripts/lib/document-owner.mjs",
+        "sha256": "2dc88e2af50b9b1dd4b167b41c0f6930a63c4aa1b5218abfbfb3b77ad0c84677"
+      },
+      {
+        "path": "scripts/lib/document-root.mjs",
+        "sha256": "04dceddf60642402740f76f8581f3bb535c1cb81b28fec76eb3f161a25556b5f"
+      },
+      {
+        "path": "scripts/lib/document-settings.mjs",
+        "sha256": "6e393aa753678ba6305a93ce5fe90b12a5a2b1171512fe643c867c3b35c23a8f"
+      },
+      {
+        "path": "scripts/lib/ledger-contract.mjs",
+        "sha256": "28e53367a9b2c6949f3d09b08c8a4e741e02fc6d935355777d63e58f2139d078"
+      },
+      {
+        "path": "scripts/lib/ledger-format.d.mts",
+        "sha256": "c054c2e3fe20d98d2cbb34cf44f4770baac458cd33e9e4df697cf2d3ce68524e"
+      },
+      {
+        "path": "scripts/lib/ledger-format.mjs",
+        "sha256": "8215855c3cf34bb6cd0ea75841e1ba33af2ff45962c06fb79751c5114d3274f8"
+      },
+      {
+        "path": "scripts/ticket-md.mjs",
+        "sha256": "03695076571df776e4617447cbda40d8c1ea5e14e978ed23c1a0b99ebed3e6c0"
+      },
+      {
+        "path": "SKILL.md",
+        "sha256": "a757e34ae4166ae8035b4024970e5b88c1b2828d0a7e9864a7117fd948a332a3"
+      }
+    ]
   }
 ]

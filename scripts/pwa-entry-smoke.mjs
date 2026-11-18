@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
+import { removeSmokeScratch } from "./lib/smoke-artifacts.mjs";
 
 // Model a legacy active worker that does not handle a newly introduced route.
 // All state belongs to this isolated profile; no native folder or user tab is used.
@@ -83,5 +84,6 @@ finally {
   await writeFile(resolve(output, "report.json"), JSON.stringify(report, null, 2) + "\n");
   for (const check of report.checks) console.log("PASS", check);
   console.log("Evidence:", output);
+  if (!failure) await removeSmokeScratch(output, ["chrome-profile"]);
 }
 if (failure) throw failure;

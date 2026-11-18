@@ -198,5 +198,38 @@
         ]
       }
     }
+  },
+  {
+    "id": "2026-11-18-canary-smoke-sheets",
+    "sequence": 7,
+    "date": "2026-11-18",
+    "notify": true,
+    "title": {
+      "ko": "스모크 시트와 회차별 QA 기록",
+      "en": "Smoke sheets and QA run history"
+    },
+    "notes": {
+      "ko": [
+        "스모크 시트에 테스트 케이스를 모아 두고 회차마다 결과와 메모를 기록하세요. 두 회차를 비교하면 달라진 결과와 개정된 케이스를 함께 볼 수 있습니다.",
+        "문서 패널의 손잡이를 끌어 보드 위·아래·왼쪽·오른쪽에 고정할 수 있습니다. 놓기 전에 위치를 미리 보여줍니다.",
+        "문서 패널에서 파일 탐색으로 전환하면 프로젝트 폴더를 탐색하고 코드·이미지·PDF·HTML 파일을 열 수 있습니다."
+      ],
+      "en": [
+        "Keep test cases in a smoke sheet and record results and notes for each run. Compare two runs to see changes in outcomes and case revisions.",
+        "Drag the document panel handle to dock it above, below or on either side of the board. Preview the position before dropping.",
+        "Switch to File explorer in the document panel to browse project folders and open code, images, PDFs and HTML files."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "스모크 기준·실행 기록 Markdown 템플릿과 형식 검증기를 추가했습니다."
+        ],
+        "en": [
+          "Adds Markdown templates for smoke cases and run records, plus a format checker."
+        ]
+      }
+    }
   }
 ]

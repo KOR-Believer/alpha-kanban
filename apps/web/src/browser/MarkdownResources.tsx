@@ -10,7 +10,7 @@ import { defaultUrlTransform, type Components, type UrlTransform } from "react-m
 import { LocalLinkDialog } from "./LocalLinkDialog";
 import { normalizeLink, readLinkedFile } from "./linkPaths";
 import type { LinkAttempt, LinkContext, LinkedResource } from "./linkMappings";
-import { linkedRoute, useLinkedNavigation } from "./linkedNavigation";
+import { filePreviewRoute, linkedRoute, useLinkedNavigation } from "./linkedNavigation";
 
 const rasterMimeTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
 type FileReference = Pick<MarkdownFileSummary, "id" | "workspaceId">;
@@ -81,15 +81,39 @@ export function BrowserMarkdownLink({ href = "", children, file, context }: { hr
   const [connecting, setConnecting] = useState<{ context: LinkContext; attempt: LinkAttempt }>();
   const pending = useRef(false);
   const active = useRef(true);
+  const [prepared, setPrepared] = useState<{ source: string; href: string }>();
+  function targetRoute(entry: { preview?: string; id?: string }) {
+    if (entry.preview !== "markdown") return filePreviewRoute(navigation.href, entry.id!, file?.id);
+    const fragment = href.includes("#") ? href.slice(href.indexOf("#") + 1) : "";
+    const route = buildAppRoute({ workspaceId: file!.workspaceId, filePath: entry.id, ticketViewMode: fragment ? "markdown" : "board" });
+    if (!fragment) return route;
+    const url = new URL(route, window.location.origin);
+    url.searchParams.set("anchor", decodeURIComponent(fragment));
+    return url.pathname + url.search;
+  }
+  useEffect(() => {
+    let current = true; setPrepared(undefined);
+    if (file && isLocalResource(href) && !href.startsWith("#")) {
+      void browserRepository.localFileEntry(file.workspaceId, file.id, href).then(entry => {
+        if (!current) return;
+        setPrepared({ source: href, href: targetRoute(entry) });
+      }).catch(() => { /* Explicit link connection handles missing/foreign paths. */ });
+    }
+    return () => { current = false; };
+  }, [file?.id, file?.workspaceId, href, navigation.href]);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const open = (resource: LinkedResource) => {
     setConnecting(undefined);
-    if (/\.md$/i.test(resource.file.name)) void navigate({ href: linkedRoute(navigation.href, resource.context.documentId, resource.fragment, file?.id), resetScroll: false });
-    else downloadLinkedResource(resource);
+    void navigate({ href: linkedRoute(navigation.href, resource.context.documentId, resource.fragment, file?.id), resetScroll: false });
   };
   if (/^(https?:|mailto:)/i.test(href)) return <a href={href} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{children}<ExternalLink className="ml-1 inline size-3" aria-hidden="true" /></a>;
-  return <span><a href={href.startsWith("#") ? href : "#"} onClick={(event) => {
+  return <span><a href={href.startsWith("#") ? href : prepared?.source === href ? prepared.href : "#"} onClick={(event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); setError("");
+    if (prepared?.source === href) {
+      navigation.rememberSource(event.currentTarget);
+      void navigate({ href: prepared.href, resetScroll: false }); return;
+    }
     if (href.startsWith("#")) {
       let slug: string; try { slug = decodeURIComponent(href.slice(1)); } catch { setError("This local link has an unsupported or invalid path."); return; }
       const scope = event.currentTarget.closest("[data-linked-document]") ?? document;
@@ -103,10 +127,9 @@ export function BrowserMarkdownLink({ href = "", children, file, context }: { hr
     void (async () => {
       if (file && isLocalResource(href)) {
         try {
-          const resource = await browserRepository.localResource(file.workspaceId, file.id, href);
+          const resource = await browserRepository.localFileEntry(file.workspaceId, file.id, href);
           if (!active.current) return;
-          if (resource.documentId) await navigate({ href: buildAppRoute({ workspaceId: file.workspaceId, filePath: resource.documentId, ticketViewMode: "markdown" }) });
-          else downloadLinkedResource(resource);
+          await navigate({ href: targetRoute(resource), resetScroll: false });
           return;
         } catch { /* Missing and out-of-project links can be connected explicitly. */ }
       }

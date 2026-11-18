@@ -13,6 +13,8 @@ import { appActivity } from "../pwa/activity";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { LinkedNavigationProvider, useLinkedNavigation } from "./linkedNavigation";
 import { LinkedDocumentPage } from "./LinkedDocumentPage";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 function Source({ context, href }: { context: LinkContext; href: string }) {
   useTranslation();
@@ -58,6 +60,26 @@ describe("local link connection UI", () => {
     for (let i = 0; i < 80 && !check(); i++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
     expect(check()).toBe(true);
   }
+  it("opens connected smoke runs with the shared read-only sheet and preserves raw Markdown access", async () => {
+    const source = [...readFileSync(resolve(process.cwd(), "../../docs/31_alpha_kanban_smoke_inventory.md"), "utf8").matchAll(/^```md\n([\s\S]*?)^```$/gm)][2]![1]!;
+    const run = target.file("01_notes_smoke_run.md", source);
+    const at = await service.attempt(context, "/old/repo/01_notes_smoke_run.md");
+    const opened = await service.save(context, at.location, "/old/repo", { handle: target.handle(), label: "target" });
+    const address = "/w/source?doc=d_source&linked=" + opened.context.documentId;
+    await render(undefined, address, true);
+    await ready(() => Boolean(document.querySelector(".ak-smoke-sheet")));
+    expect(document.querySelector('[data-tour="linked-readonly"]')?.textContent).toBe("읽기 전용");
+    expect(document.querySelectorAll(".ak-smoke-tabs a")).toHaveLength(0);
+    expect(document.querySelectorAll(".ak-smoke-tabs [aria-current]")).toHaveLength(1);
+    expect(document.querySelector(".ak-smoke-sheet")?.textContent).toContain("미수행 1");
+    expect(document.querySelector('[data-tour="document-maintenance"]')).toBeNull();
+    await click("Markdown"); await ready(() => Boolean(document.querySelector(".ak-document-properties")));
+    expect(document.querySelector(".ak-markdown")?.textContent).toContain("LOG-001");
+    await click("Sheet"); await ready(() => Boolean(document.querySelector(".ak-smoke-sheet")));
+    expect(history.location.href).toBe(address); expect(run.writes).toBe(0);
+    await click("Back to source document"); await ready(() => !history.location.href.includes("linked="));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
   it("tours missing-link selection and its preview without saving or requesting more access", async () => {
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) { return (this.hidden ? [] : [new DOMRect(0, 0, 180, 28)]) as unknown as DOMRectList; });
     await render(); await follow(); await ready(() => Boolean(document.querySelector('[role="dialog"]')));
@@ -131,6 +153,23 @@ describe("local link connection UI", () => {
     expect(history.location.href).toContain("doc=d_source");
     await click("Cancel");
     expect(history.location.href).toContain("linked=");
+  });
+  it("protects a draft hidden by a file preview without duplicating the visible detail's close confirmation", async () => {
+    const source = "/w/source?doc=d_source#ticket=T-1&detail=side";
+    await render(undefined, source, true);
+    await act(async () => history.push(source.replace("#", "&asset=f_fixture#")));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => history.push("/w/source?doc=d_other"));
+    await ready(() => Boolean(document.querySelector('[role="dialog"]')));
+    await click("Cancel"); expect(history.location.href).toContain("asset=f_fixture");
+    await act(async () => history.push(source));
+    expect(history.location.href).toBe(source);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    // The visible frame has already confirmed this action; its own guard remains
+    // responsible for close. The preview guard must not show a second dialog.
+    await act(async () => history.push("/w/source?doc=d_source"));
+    expect(history.location.href).toBe("/w/source?doc=d_source");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it("shows an unknown saved ID and storage failure without navigating to another document", async () => {
     const address = "/w/source?doc=d_source&linked=ld_missing";

@@ -1,4 +1,10 @@
+import { ExplorerModeSwitch, FileExplorerTools, FileExplorer } from "./components/documents/FileExplorer";
+import { useExplorerPreferences, inDocumentRoot } from "./components/documents/explorerState";
+import { filePreviewRoute } from "./browser/linkedNavigation";
+import type { ProjectFileEntry } from "./browser/projectFiles";
+import { ProjectFilePage } from "./browser/ProjectFilePage";
 import { DocumentPanelShell } from "./components/documents/DocumentPanelShell";
+import { ProjectSmokeSheets } from "./components/smoke/ProjectSmokeSheets";
 import { DocumentListHeader, DocumentSetNavigator, type DocumentNavigationSettings } from "./components/documents/DocumentNavigation";
 import { useDocumentColumnFilters } from "./components/documents/documentPanelState";
 import { DocumentSetSwitcher } from "./components/documents/DocumentStatusControls";
@@ -234,6 +240,10 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const initialRouteRef = useRef<AppRouteState>(routeState);
   const selectedWorkspaceId = routeState.workspaceId;
   const preferredFilePath = routeState.filePath;
+  const [explorer, setExplorer] = useExplorerPreferences(selectedWorkspaceId);
+  const [previewMeta, setPreviewMeta] = useState<{ id: string; path: string }>();
+  const [fileRevision, setFileRevision] = useState(0);
+  const filesMode = explorer.mode === "files";
   const selectedTicketId = routeState.ticketId;
   const ticketViewMode = routeState.ticketViewMode ?? "board";
   const isProjectGuideOpen = routeState.showGuide === true;
@@ -270,6 +280,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     (workspace) => workspace.id === selectedWorkspaceId,
   );
   const canLoadWorkspace = Boolean(selectedWorkspaceId && selectedWorkspace?.isAvailable);
+  const rootQuery = useQuery({ enabled: canLoadWorkspace, queryKey: ["document-root", selectedWorkspaceId],
+    queryFn: () => browserRepository.documentRootSetting(selectedWorkspaceId!), refetchInterval: 15_000 });
+  const workRoot = rootQuery.data?.value ?? (rootQuery.isLoading ? "docs" : null);
   const documentSetsQuery = useQuery({
     enabled: canLoadWorkspace,
     queryKey: documentSetsKey(selectedWorkspaceId),
@@ -291,16 +304,20 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     () => sortedDocumentSets.flatMap((documentSet) => documentSet.documents),
     [sortedDocumentSets],
   );
-  const projectSearch = useProjectSearch(allFiles, deferredDocumentSearch, canLoadWorkspace && !documentSetsQuery.isError);
+  const workSets = useMemo(() => sortedDocumentSets.filter(set => inDocumentRoot(set.primaryFile.workspaceRelativePath, workRoot)), [sortedDocumentSets, workRoot]);
+  const workFiles = useMemo(() => workSets.flatMap(set => set.documents), [workSets]);
+  const fileQuery = useDeferredValue(explorer.query);
+  const activeSearch = filesMode ? fileQuery : deferredDocumentSearch;
+  const projectSearch = useProjectSearch(filesMode ? allFiles : workFiles, activeSearch, canLoadWorkspace && !documentSetsQuery.isError);
   const visibleDocumentSets = useMemo(() => {
-    const filtered = filterDocumentSets(sortedDocumentSets, "", documentFilters, ownerFilter, columnFilters);
+    const filtered = filterDocumentSets(workSets, "", documentFilters, ownerFilter, columnFilters);
     if (!deferredDocumentSearch.trim()) return filtered;
-    const names = new Set(filterDocumentSets(sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter, columnFilters).map((set) => set.documentSet.id));
+    const names = new Set(filterDocumentSets(workSets, deferredDocumentSearch, documentFilters, ownerFilter, columnFilters).map((set) => set.documentSet.id));
     return filtered.flatMap((set) => {
       const documents = names.has(set.documentSet.id) ? set.documents : set.documents.filter((file) => projectSearch.matches.has(file.id));
       return documents.length ? [{ ...set, documents }] : [];
     });
-  }, [sortedDocumentSets, deferredDocumentSearch, documentFilters, ownerFilter, columnFilters, projectSearch.matches]);
+  }, [workSets, deferredDocumentSearch, documentFilters, ownerFilter, columnFilters, projectSearch.matches]);
   const boardScroll = useRef<HTMLDivElement>(null);
   const deferredTicketSearch = routeState.appliedSearch ?? "";
   useEffect(() => { boardScroll.current?.scrollTo({ top: 0 }); }, [deferredTicketSearch]);
@@ -327,6 +344,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     documentSet.documents.some((file) => file.id === resolvedSelectedFileId),
   );
   const isTicketsDocument = selectedFile?.type === "tickets";
+  const isSmokeDocument = selectedFile?.type === "smoke" || selectedFile?.type === "smoke-run";
   const ticketQuery = useQuery({
     enabled: Boolean(canLoadWorkspace && resolvedSelectedFileId && isTicketsDocument),
     queryFn: () => fetchTicketDocument(selectedWorkspaceId ?? "", resolvedSelectedFileId ?? ""),
@@ -434,6 +452,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
 
       const event = parsed.data;
       void queryClient.invalidateQueries({ queryKey: documentSetsKey(selectedWorkspaceId) });
+      void queryClient.invalidateQueries({ queryKey: ["smoke-family", selectedWorkspaceId] });
 
       const isCurrentFile =
         event.fileId === resolvedSelectedFileId ||
@@ -591,6 +610,19 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     return navigateTo(searchResultRoute(file));
   }
 
+  function explorerHref(entry: ProjectFileEntry): string {
+    if (entry.preview !== "markdown") return filePreviewRoute(linked.href, entry.id!, resolvedSelectedFileId);
+    const match = filesMode && fileQuery.trim() ? projectSearch.matches.get(entry.id!) : undefined;
+    const file = allFiles.find(file => file.id === entry.id);
+    return buildAppRoute({ workspaceId: selectedWorkspaceId, filePath: entry.id,
+      ticketViewMode: match ? file?.type === "tickets" && match.ticketIds.length ? "board" : "markdown" : "board",
+      documentSearch, appliedSearch: match ? fileQuery.trim() : undefined });
+  }
+  function selectExplorerFile(entry: ProjectFileEntry) {
+    if (document.activeElement instanceof HTMLElement) linked.rememberSource(document.activeElement);
+    void navigate({ href: explorerHref(entry), resetScroll: false });
+  }
+
   function handleTicketSelect(ticketId?: string): void {
     void navigateTo({ ...routeState, filePath: resolvedSelectedFileId, ticketId, detailMode: ticketPresentation.mode });
   }
@@ -639,9 +671,9 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
     );
   }
 
-  const boardTour = useScreenTour(linked.id ? "linked" : "project", {
-    enabled: canLoadWorkspace && (!isTicketDetailOpen || Boolean(linked.id)),
-    eligible: !linked.id && !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
+  const boardTour = useScreenTour(linked.previewId || filesMode ? "files" : linked.previewing ? "linked" : isSmokeDocument && ticketViewMode === "board" ? "smoke" : "project", {
+    enabled: canLoadWorkspace && (!isTicketDetailOpen || linked.previewing),
+    eligible: !filesMode && !linked.previewing && !isProjectGuideVisible && isTicketsDocument && ticketViewMode === "board" && ticketQuery.isSuccess && Boolean(ticketQuery.data?.document.tickets.length),
     scope: `${selectedWorkspaceId}:${resolvedSelectedFileId}:${ticketViewMode}:${isProjectGuideVisible}:${linked.id ?? ""}`,
   });
   const tourFile = allFiles.find((file) => file.id === lastBoardFile.current?.id && file.type === "tickets") ?? allFiles.find((file) => file.type === "tickets");
@@ -698,22 +730,36 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
           </div>
         </header>
 
-        <DocumentPanelShell contextKey={selectedWorkspaceId} count={visibleDocumentSets.length} total={sortedDocumentSets.length}
+        <DocumentPanelShell contextKey={selectedWorkspaceId} count={visibleDocumentSets.length} total={workSets.length} workView={!filesMode}
           ownerControl={<ProjectOwnerFilter owners={documentOwners} value={ownerFilter} onChange={setOwnerFilter} />}
-          search={{ value: documentSearch, onChange: setDocumentSearch, disabled: !canLoadWorkspace }}
-          currentDocument={selectedFile ? <>
+          search={{ value: filesMode ? explorer.query : documentSearch, onChange: filesMode ? value => setExplorer({ query: value }) : setDocumentSearch, disabled: !canLoadWorkspace, label: filesMode ? "Search project files" : "Search documents and tickets" }}
+          currentDocument={linked.previewId ? <>
+            <span className="ak-document-current-title truncate">{previewMeta?.id === linked.previewId ? previewMeta.path.split("/").at(-1) : t("File preview")}</span>
+            <span className="ak-document-current-type">{t("Read-only")}</span>
+            {previewMeta?.id === linked.previewId ? <span className="ak-document-current-path truncate" title={previewMeta.path}>{previewMeta.path}</span> : null}
+          </> : selectedFile ? <>
             <span className="ak-document-current-title truncate">{ticketQuery.data?.document.title ?? markdownQuery.data?.outline[0]?.title ?? selectedDocumentSet?.label ?? selectedFile.filename}</span>
             <DocumentSetSwitcher key={selectedFile.id} file={selectedFile} documents={selectedDocumentSet?.documents ?? [selectedFile]}
               disabled={!canLoadWorkspace} href={(file) => buildAppRoute(documentRoute(file))} onSelect={(file) => { void handleDocumentSelect(file); }} />
             <span className="ak-document-current-path truncate" title={selectedFile.workspaceRelativePath}>{selectedFile.workspaceRelativePath}</span>
           </> : <span className="truncate">{isProjectGuideVisible ? t("Usage guide") : t("Document workspace")}</span>}
-          toolbar={(controls, close) => <DocumentListHeader settings={navigationSettings} search={documentSearch} onSearchChange={setDocumentSearch} controls={controls} count={visibleDocumentSets.length}
+          toolbar={(controls, close, moveHandle) => <>
+            <ExplorerModeSwitch mode={explorer.mode} onChange={mode => setExplorer({ mode })} />
+            {filesMode ? <FileExplorerTools query={explorer.query} onQuery={query => setExplorer({ query })} controls={controls} moveHandle={moveHandle} disabled={!canLoadWorkspace}
+              onRefresh={() => { browserRepository.projectFiles.invalidate(); setFileRevision(value => value + 1); }} /> : <DocumentListHeader settings={navigationSettings} search={documentSearch} onSearchChange={setDocumentSearch} controls={controls} count={visibleDocumentSets.length} moveHandle={moveHandle}
             guide={<NavigationLink href={buildAppRoute({ workspaceId: selectedWorkspaceId, showGuide: true })} data-tour-help=""
               aria-current={isProjectGuideVisible ? "page" : undefined} title={t("Usage guide")} aria-label={t("Usage guide")}
               className={buttonVariants({ size: "sm", variant: isProjectGuideVisible ? "secondary" : "ghost", className: "ak-document-guide" })}
               onNavigate={() => { handleShowProjectGuide(); close(); }}><BookOpen aria-hidden="true" /><span>{t("Usage guide")}</span></NavigationLink>} />}
-          navigation={(view, close) => <>
+          </>}
+          navigation={(view, close) => filesMode ? <>
+            {!canLoadWorkspace ? <BrowserReconnect workspaceId={selectedWorkspaceId} /> : <FileExplorer key={`${selectedWorkspaceId}:${workRoot}`} projectId={selectedWorkspaceId} enabled={canLoadWorkspace} expanded={explorer.expanded} onExpanded={expanded => setExplorer({ expanded })} query={explorer.query} revision={fileRevision}
+              selectedId={linked.previewId ?? resolvedSelectedFileId} href={explorerHref} onSelect={entry => { selectExplorerFile(entry); close(); }} documents={allFiles} matches={projectSearch.matches} bodyBusy={projectSearch.busy} bodyMissing={projectSearch.missing} cancelBody={projectSearch.cancel} retryBody={projectSearch.retry} />}
+          </> : <>
             <div className="ak-document-panel-notices">
+                <div className="ak-explorer-scope"><span title={workRoot ?? undefined}>{workRoot ? t("Work folder: {{path}}", { path: workRoot }) : t("Check the document folder setting in .ak.config.")}</span>
+                  <Button size="xs" variant="link" onClick={() => setExplorer({ mode: "files", query: documentSearch })}>{t(documentSearch.trim() ? "Search entire project" : "Browse project files")}</Button></div>
+                {documentSetsQuery.isSuccess && !workSets.length ? <SidebarState label={t("No work documents in this folder. Browse project files to open other documents.")} /> : null}
                 {selectedWorkspace && !selectedWorkspace.isAvailable ? (
                   <SidebarState label={t("Project unavailable")} tone="error" />
                 ) : null}
@@ -726,7 +772,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 {documentSetsQuery.isSuccess && sortedDocumentSets.length === 0 ? (
                   <SidebarState label={t("No documents")} />
                 ) : null}
-                {documentSearch.trim() && (projectSearch.busy || documentSearch !== deferredDocumentSearch) ? <SidebarState label={t("Searching document contents · {{checked}} / {{total}}", { checked: projectSearch.checked, total: allFiles.length })} /> : null}
+                {documentSearch.trim() && (projectSearch.busy || documentSearch !== deferredDocumentSearch) ? <SidebarState label={t("Searching document contents · {{checked}} / {{total}}", { checked: projectSearch.checked, total: workFiles.length })} /> : null}
                 {documentSearch.trim() && projectSearch.missing ? <div className="grid gap-1 px-3 py-2 text-xs text-muted-foreground" role="status">
                   <p>{t("{{count}} documents could not be searched. Results are incomplete.", { count: projectSearch.missing })}</p>
                   <Button size="sm" variant="link" onClick={projectSearch.retry}>{t("Retry search preparation")}</Button>
@@ -749,11 +795,11 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         >
           <div className="min-h-0 min-w-0">
           <section
-            className={`${linked.id ? "hidden" : "grid"} h-full min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden`}
+            className={`${linked.previewing ? "hidden" : "grid"} h-full min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden`}
             aria-labelledby="workspace-title"
           >
-            <header className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-3 max-[720px]:flex-col max-[720px]:items-start">
-              <div className="min-w-0">
+            <header className="ak-project-document-header flex min-h-[72px] flex-wrap items-center justify-between gap-4 border-b border-[var(--ak-hairline)] bg-[var(--ak-surface)] px-5 py-3">
+              <div className="ak-project-document-heading min-w-0">
                 <p className="ak-muted-label truncate">
                   {selectedWorkspace?.root ?? t("Project unavailable")}
                 </p>
@@ -781,14 +827,17 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                   </div>
                 ) : null}
               </div>
-              {!isProjectGuideVisible ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 max-[720px]:w-full max-[720px]:justify-between">
+              {!isProjectGuideVisible ? <div className="ak-project-document-actions flex min-w-0 flex-wrap items-center justify-end gap-3">
                 {selectedFile ? <DocumentMaintenance key={selectedFile.id} file={selectedFile} /> : null}
                 {selectedFile?.type === "tickets" ? (
                   <TicketDocumentViewToggle
                     mode={ticketViewMode}
                     onChange={handleTicketViewChange}
                   />
-                ) : null}
+                ) : isSmokeDocument ? <div className="flex gap-1" role="group" aria-label={t("Document view")}>
+                  <Button size="sm" variant={ticketViewMode === "board" ? "secondary" : "ghost"} aria-pressed={ticketViewMode === "board"} onClick={() => handleTicketViewChange("board")}><ListChecks />{t("Sheet")}</Button>
+                  <Button size="sm" variant={ticketViewMode === "markdown" ? "secondary" : "ghost"} aria-pressed={ticketViewMode === "markdown"} onClick={() => handleTicketViewChange("markdown")}><FileText />{t("Markdown")}</Button>
+                </div> : null}
                 <DocumentSummary
                   file={ticketQuery.data?.file}
                   fallbackFile={selectedFile}
@@ -811,7 +860,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
                 <Button size="sm" variant="outline" onClick={() => void navigateTo({ ...routeState, appliedSearch: undefined })}>{t("View whole document")}</Button>
               </div> : null}
             </div>
-            <div ref={boardScroll} data-board-scroll className={`ak-scroll-area min-h-0 overflow-auto ${isTicketsDocument && ticketViewMode === "board" ? "ak-project-board-scroll" : "p-5"}`}>
+            <div ref={boardScroll} data-board-scroll className={`ak-scroll-area min-h-0 min-w-0 ${isSmokeDocument && ticketViewMode === "board" ? "overflow-hidden" : `overflow-auto ${isTicketsDocument && ticketViewMode === "board" ? "ak-project-board-scroll" : "p-5"}`}`}>
               <DocumentContent
                 documentSetsError={documentSetsQuery.error}
                 documentSetsIsError={documentSetsQuery.isError}
@@ -850,7 +899,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
               />
             </div>
           </section>
-          {linked.id ? <LinkedDocumentPage key={linked.id} /> : null}
+          {linked.id ? <LinkedDocumentPage key={linked.id} /> : linked.previewId ? <ProjectFilePage key={`${selectedWorkspaceId}:${linked.previewId}`} projectId={selectedWorkspaceId} id={linked.previewId} onLoaded={setPreviewMeta} /> : null}
           </div>
         </DocumentPanelShell>
       </main>
@@ -965,7 +1014,7 @@ function DocumentSummary({
   }
 
   return (
-    <div className="flex flex-wrap justify-end gap-2 max-[720px]:justify-start">
+    <div className="ak-project-document-summary flex flex-wrap justify-end gap-2">
 
       <DocumentTypeBadge type={displayFile.type} />
       {displayFile.type === "tickets" && ticketCount !== undefined ? (
@@ -1048,6 +1097,13 @@ function DocumentContent({
 }) {
   const { t } = useTranslation();
   if (showProjectGuide) return <ProjectGuide onBoardTour={onBoardTour} />;
+  // A failed permission refresh must not unmount an already-open smoke draft.
+  // The repository still checks the current permission and file guard on save.
+  if (selectedFile && markdownDocument?.file.id === selectedFile.id &&
+    (selectedFile.type === "smoke" || selectedFile.type === "smoke-run") && ticketViewMode !== "markdown") {
+    return <ProjectSmokeSheets document={markdownDocument} file={selectedFile} onFileSelect={onFileSelect} fileHref={fileHref}
+      isAvailable={Boolean(selectedWorkspace?.isAvailable) && !workspacesError} />;
+  }
   if (workspacesIsLoading || (!selectedFile && (selectedFileIsLoading || (documentSetsIsLoading && !selectedFileError)))) {
     return <BoardState isLoading title={t("Loading documents")} />;
   }
@@ -1104,6 +1160,11 @@ function DocumentContent({
   if (!selectedFile) {
     if (selectedFileError) return <BoardState icon="error" title={t("Document unavailable")} description={formatClientError(selectedFileError)} />;
     return <BoardState title={t("Document unavailable")} />;
+  }
+
+  if ((selectedFile.type === "smoke" || selectedFile.type === "smoke-run") && ticketViewMode !== "markdown") {
+    if (markdownIsLoading) return <BoardState isLoading title={t("Loading documents")} />;
+    return <BoardState title={t("Document unavailable")} description={markdownError ? formatClientError(markdownError) : undefined} />;
   }
 
   if (selectedFile.type !== "tickets" || ticketViewMode === "markdown") {
@@ -1250,6 +1311,7 @@ function MarkdownDocumentReader({
   searchQuery?: string;
 }) {
   const { t } = useTranslation();
+  const navigation = useLinkedNavigation();
   if (isLoading) {
     return <BoardState isLoading title={t("Loading {{type}}", { type: documentTypeLabel(file.type) })} />;
   }
@@ -1264,7 +1326,7 @@ function MarkdownDocumentReader({
     );
   }
 
-  return <SharedMarkdownDocumentReader document={document} documentSet={documentSet} file={file} searchQuery={searchQuery}
+  return <SharedMarkdownDocumentReader document={document} documentSet={documentSet} file={file} searchQuery={searchQuery} fragment={navigation.previewing ? "" : navigation.fragment}
     fileHref={(id) => fileHref(documentSet?.documents.find((entry) => entry.id === id) ?? file)}
     onFileSelect={(id) => onFileSelect(documentSet?.documents.find((entry) => entry.id === id) ?? file)} />;
 }

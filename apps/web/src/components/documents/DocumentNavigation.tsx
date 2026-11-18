@@ -25,7 +25,7 @@ export type DocumentNavigationSettings = {
   owners: string[]; ownerFilter: OwnerFilter; onOwnerFilterChange: (owner: OwnerFilter) => void;
   preference: DocumentSetSortPreference; onPreferenceChange: (value: DocumentSetSortPreference) => void;
 };
-const TYPES: MarkdownFileType[] = ["plan", "tickets", "inventory", "markdown"];
+const TYPES: MarkdownFileType[] = ["plan", "tickets", "inventory", "smoke", "smoke-run", "markdown"];
 type Column = "name" | "owner" | "completion" | "directory" | "types";
 const COLUMN_LABELS: Record<Column, string> = { name: "Document name", owner: "Document owner", completion: "Completion", directory: "Directory", types: "Document types" };
 const COLUMN_SORTS: Record<Column, DocumentSetSortMode> = { name: "name", owner: "owner", completion: "progress", directory: "directory", types: "type" };
@@ -65,15 +65,15 @@ function ColumnFilter({ column, settings }: { column: Column; settings: Document
   </div>;
 }
 
-export function DocumentListHeader({ settings, search, onSearchChange, controls, guide, count }: {
-  settings: DocumentNavigationSettings; search: string; onSearchChange: (value: string) => void; controls: ReactNode; guide: ReactNode; count: number;
+export function DocumentListHeader({ settings, search, onSearchChange, controls, guide, count, moveHandle }: {
+  settings: DocumentNavigationSettings; search: string; onSearchChange: (value: string) => void; controls: ReactNode; guide: ReactNode; count: number; moveHandle?: ReactNode;
 }) {
   const { t } = useTranslation();
   const { disabled, filters, onFiltersChange, preference, onPreferenceChange, ownerFilter, owners, onOwnerFilterChange, columns, onColumnsChange } = settings;
   const activeFilters = Number(filters.hidePlainMarkdown) + (Object.keys(COLUMN_LABELS) as Column[]).filter((column) => activeColumn(column, settings)).length;
   const Direction = preference.direction === "asc" ? ArrowUp : ArrowDown;
   return <div className="ak-document-tools">
-    <div className="ak-document-tools-title">{t("Documents")}<span className="ak-document-count">{count}</span></div>
+    <div className="ak-document-tools-title">{moveHandle}<span className="truncate" title={t("Documents")}>{t("Documents")}</span><span className="ak-document-count">{count}</span></div>
     <div className="ak-document-tools-search relative">
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
       <Input data-tour="documents" role="searchbox" aria-label={t("Search documents and tickets")} placeholder={t("Search documents and tickets")}

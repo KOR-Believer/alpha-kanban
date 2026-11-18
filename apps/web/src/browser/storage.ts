@@ -7,6 +7,7 @@ export const BROWSER_SCHEMA_VERSION = 1;
 export interface BrowserStorage {
   get<T>(key: string): Promise<T | undefined>;
   set<T>(key: string, value: T): Promise<void>;
+  setDurable?<T>(key: string, value: T): Promise<void>;
   setMany?(entries: Array<{ key: string; value: unknown }>): Promise<void>;
   delete(key: string): Promise<void>;
   entries<T>(prefix: string): Promise<Array<{ key: string; value: T }>>;
@@ -42,10 +43,11 @@ export class IndexedDbStorage implements BrowserStorage {
   private async transaction<T>(
     mode: IDBTransactionMode,
     operation: (store: IDBObjectStore) => IDBRequest<T>,
+    durability = this.durability,
   ): Promise<T> {
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction("records", mode, { durability: this.durability });
+      const transaction = db.transaction("records", mode, { durability });
       const request = operation(transaction.objectStore("records"));
       // Wait for commit, not request success: quota or I/O can abort the transaction afterwards.
       transaction.oncomplete = () => resolve(request.result);
@@ -59,6 +61,9 @@ export class IndexedDbStorage implements BrowserStorage {
   }
   async set<T>(key: string, value: T): Promise<void> {
     await appActivity.run(() => this.transaction("readwrite", (store) => store.put(value, key)));
+  }
+  async setDurable<T>(key: string, value: T): Promise<void> {
+    await appActivity.run(() => this.transaction("readwrite", store => store.put(value, key), "strict"));
   }
   async setMany(entries: Array<{ key: string; value: unknown }>): Promise<void> {
     if (!entries.length) return;

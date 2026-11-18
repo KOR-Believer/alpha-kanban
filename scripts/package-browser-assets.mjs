@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { zipSync, strToU8 } from "fflate";
 import { createSkillDistribution, sha256 } from "./lib/skill-distribution.mjs";
 import { buildDocumentCli } from "./build-document-cli.mjs";
+import { buildSmokeCheck } from "./build-smoke-check.mjs";
 import { LEDGER_CONTRACT } from "../skills/implementation-ledger/scripts/lib/ledger-contract.mjs";
 import { RELEASE_CHANNELS, resolveReleaseChannel } from "../apps/web/release-channel.mjs";
 
@@ -12,6 +13,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const destination = path.join(root, "apps/web/public-browser/downloads");
 const channel = resolveReleaseChannel(process.env);
 await buildDocumentCli();
+await buildSmokeCheck();
 const { bundle, payloadSha256 } = await createSkillDistribution();
 const version = bundle.version;
 const files = Object.fromEntries(bundle.files.map((file) => ["implementation-ledger/" + file.path, strToU8(file.content)]));

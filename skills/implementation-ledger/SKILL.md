@@ -1,6 +1,6 @@
 ---
 name: implementation-ledger
-description: Write and maintain Alpha Kanban-compatible work records for user participation. Use for requested plans, tickets, investigation records, or progress updates to tracked work. Keep discussion-only requests read-only.
+description: Write and maintain Alpha Kanban-compatible work records for user participation. Use for requested plans, tickets, investigation records, smoke cases and run records, or progress updates to tracked work. Keep discussion-only requests read-only.
 metadata:
   version: "3"
   read-formats: "unversioned,1"
@@ -58,7 +58,7 @@ Normally update once when handing work back. Write earlier for changed user dire
 
 Preserve the existing document format and backward-compatible rendering. Compatibility checks must not hide boards, cards, details or counts; metadata additions to existing files and legacy cleanup are optional, explicit operations. Unknown or invalid `Ledger-Format` declarations block structural edits, not display. For a compatibility problem or an installation/update request, read [versions and compatibility](references/compatibility.md). Check official updates only then; offline means unverified. A skill update never authorizes document conversion or overwriting a personal installation.
 
-Before the first ticket write, read [the format reference](references/ledger-format.md). For new files, use only the matching template under `assets/`. Replace placeholders and omit empty optional sections; retain ticket fields and the required question section. Exact suffixes are `_tickets.md`, `_plan.md`, and `_inventory.md`; follow local directory/numbering conventions and share a slug across related files.
+Before the first ticket write, read [the format reference](references/ledger-format.md). For new files, use only the matching template under `assets/`. Replace placeholders and omit empty optional sections; retain ticket fields and the required question section for those records. Exact suffixes are `_tickets.md`, `_plan.md`, and `_inventory.md`; smoke records use the separate contract below. Follow local directory/numbering conventions and share a slug across related files.
 
 Before creating each file, run `node <skill-directory>/scripts/document-context.mjs new --cwd <project>` (use `--base-dir` for an established basic directory, or `--target` for an explicitly requested directory). Use its path and numbering; replace `{{DocumentIdHeader}}` with its generated `documentIdHeader`, and `{{OwnerHeader}}` with `ownerHeader` or remove that line when null. The tool does not write files. If `ok` is false, resolve the reported condition before that creation; do not guess settings. Check each new file with `document-context.mjs check-new --cwd <project> --target <file>`; a missing or invalid ID fails. Read [document context](references/document-context.md) only for optional owner setup, user-dependent requests or diagnostics.
 
@@ -66,7 +66,7 @@ The shared tool resolves `[documents] root` in `.ak.config` (default `docs`); `o
 
 For owner-scoped work, use `document-context.mjs edit --cwd <project> --target <file>` on each candidate: the nearest `@` directory within `docs` owns it, so nested owner folders can belong to someone else.
 
-Every new plan, tickets or inventory file gets its own UUID, including basic use without settings or Owner; never reuse one ID for a related document set. Existing files remain readable and editable without IDs, and ordinary edits/moves preserve any existing ID. For requested moves, handoffs, PC path repair or legacy cleanup, read [document operations](references/document-operations.md) and use the bundled Node CLI's analyzed plan and guarded apply/recovery. Reading or taking ownership never starts ticket implementation.
+Every new record gets its own UUID, including basic use without settings or Owner; never reuse one ID for a related document set. Existing files remain readable and editable without IDs, and ordinary edits/moves preserve any existing ID. For requested moves, handoffs, PC path repair or legacy cleanup, read [document operations](references/document-operations.md) and use the bundled Node CLI's analyzed plan and guarded apply/recovery. Reading or taking ownership never starts ticket implementation.
 
 Patch the inspected ticket range, re-read the change, and validate after the related edits:
 
@@ -75,3 +75,9 @@ node <skill-directory>/scripts/check-ledger.mjs <ticket-file>
 ```
 
 Use `--legacy` only as described in the reference. Choose implementation checks proportional to the change. Format validation establishes structure, not implementation success or visual rendering.
+
+## Smoke Cases and Run Records
+
+For requested smoke definitions (`_smoke.md`), actual app checks or execution histories (`_smoke_run.md`), read [smoke format and workflow](references/smoke-format.md). Use its templates and `scripts/check-smoke.mjs`; the ticket checker does not validate smoke records. Keep current criteria in the definition and freeze the selected criteria in each new run, with a separate UUID and initially unperformed results.
+
+Smoke execution means a person or Computer Use / browser use agent actually operates the app. Record the target, environment, actions, observations and unresolved checks. Build, unit-test or format-check success never substitutes for that observation. Preserve earlier results and distinguish explicit user corrections from execution; changed builds or environments get a new run. Creating a record or opening it never authorizes otherwise unrequested app actions.

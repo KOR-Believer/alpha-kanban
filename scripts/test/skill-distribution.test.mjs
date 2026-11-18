@@ -8,6 +8,8 @@ import { unzipSync } from "fflate";
 import { createSkillDistribution, collectSkill, repoRoot, sha256 } from "../lib/skill-distribution.mjs";
 import { installSkill, inspectInstallation } from "../lib/install-skill.mjs";
 import { buildDocumentCli } from "../build-document-cli.mjs";
+import { buildSmokeCheck } from "../build-smoke-check.mjs";
+import { parseSmokeDocument } from "../../packages/shared/src/smokeMarkdown.mjs";
 import { validateBundle, readSkillBundle } from "../../apps/web/src/skills/bundle.ts";
 const distribution = await createSkillDistribution();
 async function fixture(t) {
@@ -18,6 +20,7 @@ async function fixture(t) {
 const hashes = files => files.map(({ path, sha256 }) => ({ path, sha256 }));
 test("standalone artifact is reproducible and package JSON/ZIP/receipt/installed files agree", async t => {
   await buildDocumentCli({ check: true });
+  await buildSmokeCheck({ check: true });
   execFileSync(process.execPath, [path.join(repoRoot, "scripts/package-browser-assets.mjs")], { cwd: repoRoot, stdio: "pipe" });
   const directory = path.join(repoRoot, "apps/web/public-browser/downloads");
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
@@ -60,6 +63,44 @@ test("hash/source/download failures do not create an install target", async t =>
   }
   await assert.rejects(readSkillBundle(new Response("failed", { status: 503 }), distribution.bundle.version, distribution.payloadSha256));
   await assert.rejects(access(f.target), { code: "ENOENT" });
+});
+test("isolated smoke templates and checker validate new runs without editing their files", async t => {
+  const f = await fixture(t); await installSkill({ target: f.target, distribution });
+  const smokeId = "11111111-1111-4111-8111-111111111111", runId = "22222222-2222-4222-8222-222222222222";
+  const fill = (template, values) => template.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+    assert.ok(Object.hasOwn(values, key), key); return values[key];
+  });
+  const source = fill(await readFile(path.join(f.target,"assets/smoke-template.md"),"utf8"), {
+    Title:"Example notes", OwnerHeader:"", DocumentIdHeader:`Document-ID: ${smokeId}`,
+    "검증 목적, 공통 사전조건, 테스트 데이터와 주의사항을 자유 Markdown으로 작성":"Synthetic setup only.",
+    "관찰할 동작의 제목":"Search notes", "조작과 기대 결과를 연결한 한 줄 요약":"Search returns matching notes.",
+    "이 TC를 수행하기 전에 준비할 조건 또는 없음":"A sample note exists.",
+    "사람이나 Computer Use / browser use 에이전트가 실제 앱에서 할 조작":"Enter the sample title in Search.",
+    "실제 화면이나 동작에서 확인할 수 있는 결과":"The sample note is visible."
+  });
+  const model = parseSmokeDocument(source,"smoke"), tc = model.cases[0]; assert.equal(model.valid,true);
+  const run = fill(await readFile(path.join(f.target,"assets/smoke-run-template.md"),"utf8"), {
+    RunTitle:"Synthetic run",OwnerHeader:"",DocumentIdHeader:`Document-ID: ${runId}`,SourceSmokeDocumentId:smokeId,
+    SourceSmokeH1Title:model.title,SourceSmokeProjectRelativePath:"01_notes_smoke.md",RunNumber:"1",
+    "실행 대상 앱과 빌드를 식별할 값":"Example synthetic build", "브라우저, OS 및 필요한 실행 환경":"Synthetic data; no app executed",
+    "YYYY-MM-DDTHH:mm:ss+HH:MM":"2026-11-10T00:00:00Z", "이번 회차의 목적, 준비 및 진행 특이사항을 자유 Markdown으로 작성":"Format check only.",
+    "회차를 생성할 때 원본 스모크의 메모 본문 전체를 그대로 보존":model.memo.content,
+    SourceCaseId:tc.id,SourceCaseTitle:tc.title,SourceCaseRevision:String(tc.revision),SourceCaseSummary:tc.summary,SourceCaseChangeReason:tc.changeReason,
+    SourceCasePrerequisites:tc.prerequisites.content,SourceCaseSteps:tc.steps.content,SourceCaseExpected:tc.expected.content
+  });
+  const sourcePath=path.join(f.base,"01_notes_smoke.md"),runPath=path.join(f.base,"02_notes_smoke_run.md");
+  await writeFile(sourcePath,source);await writeFile(runPath,run);
+  const executable=path.join(f.target,"scripts/check-smoke.mjs"),args=["--json","--new-run","--project",f.base,sourcePath,runPath];
+  const report=JSON.parse(execFileSync(process.execPath,[executable,...args],{cwd:f.base,encoding:"utf8"}));
+  assert.equal(report.ok,true);assert.equal(report.relations.runs[0].status,"linked");assert.equal(report.files[1].counts.NOT_RUN,1);
+  assert.equal(await readFile(runPath,"utf8"),run);assert.equal(await readFile(sourcePath,"utf8"),source);
+  const invalid=run.replace("Result: NOT_RUN","Result: PASS");await writeFile(runPath,invalid);
+  assert.throws(()=>execFileSync(process.execPath,[executable,...args],{cwd:f.base,encoding:"utf8",stdio:"pipe"}),error=>error.status===1);
+  assert.equal(await readFile(runPath,"utf8"),invalid);
+  for(const file of ["SKILL.md","references/smoke-format.md"]) {
+    const content=await readFile(path.join(f.target,file),"utf8");
+    for(const match of content.matchAll(/\]\(([^)#]+\.md)(?:#[^)]*)?\)/g))if(!match[1].includes(":"))await access(path.resolve(f.target,path.dirname(file),match[1]));
+  }
 });
 for (const stage of ["prepared", "file", "before-publish", "published"]) test("install interruption at " + stage + " retains verified prepared files for explicit recovery", async t => {
   const f = await fixture(t);

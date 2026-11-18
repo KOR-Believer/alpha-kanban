@@ -42,7 +42,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
   const [pendingExit, setPendingExit] = useState<"close" | "workspace" | null>(null);
   const tourContainer = useRef<HTMLDivElement>(null);
   const tour = useScreenTour("detail", {
-    enabled: !linked.id && !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
+    enabled: !linked.previewing && !isBusy && !pendingExit && !viewMenuOpen && !presentation.isResizing,
     eligible: false, scope: `${ticketId}:${presentation.mode}`, container: tourContainer,
   });
   const returnFocus = useRef(typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null);
@@ -72,7 +72,7 @@ export function TicketDetailFrame({ ticketId, presentation, onClose, onOpenInWor
 
   // Draft state is owned by the still-mounted detail component; keep its PWA guard
   // while suspending this portal's focus trap during connected-page navigation.
-  if (linked.id) return null;
+  if (linked.previewing) return null;
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestExit("close"); }}>
       <DialogContent ref={tourContainer} layout="custom" showCloseButton={false} aria-describedby={undefined}

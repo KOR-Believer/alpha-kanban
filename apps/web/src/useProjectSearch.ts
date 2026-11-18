@@ -8,12 +8,14 @@ const EMPTY_MATCHES = new Map<string, DocumentSearchMatch>();
 
 export function useProjectSearch(files: MarkdownFileSummary[], query: string, enabled: boolean) {
   const needle = normalizeTicketQuery(query);
-  const active = enabled && Boolean(needle);
   const scope = useMemo(() => JSON.stringify(files.map((file) => [file.workspaceId, file.id, file.hash, file.workspaceRelativePath])), [files]);
+  const key = scope + "\n" + needle;
+  const [cancelledKey, setCancelledKey] = useState<string>();
+  const cancelled = cancelledKey === key;
+  const active = enabled && Boolean(needle) && !cancelled;
   const [retry, setRetry] = useState(0);
   const [prepared, setPrepared] = useState({ scope: "", done: false });
   const [result, setResult] = useState({ key: "", matches: EMPTY_MATCHES, checked: 0, missing: 0, running: false });
-  const key = scope + "\n" + needle;
 
   useEffect(() => {
     if (!active) return;
@@ -61,12 +63,14 @@ export function useProjectSearch(files: MarkdownFileSummary[], query: string, en
     return () => controller.abort();
   }, [active, key, preparationDone, retry]);
 
-  const current = active && result.key === key;
+  const current = enabled && Boolean(needle) && result.key === key;
   return {
     matches: current ? result.matches : EMPTY_MATCHES,
     busy: active && (!current || !preparationDone || result.running),
     checked: current ? result.checked : 0,
     missing: current && preparationDone && !result.running ? result.missing : 0,
-    retry: () => setRetry((value) => value + 1),
+    cancelled,
+    cancel: () => setCancelledKey(key),
+    retry: () => { setCancelledKey(undefined); setRetry((value) => value + 1); },
   };
 }

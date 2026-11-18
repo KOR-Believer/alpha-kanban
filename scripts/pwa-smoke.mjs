@@ -7,6 +7,7 @@ import { resolve, extname } from "node:path";
 import { promisify } from "node:util";
 import { chromium } from "playwright";
 import { unzipSync } from "fflate";
+import { removeSmokeScratch } from "./lib/smoke-artifacts.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "output/playwright/pwa-" + Date.now());
@@ -660,4 +661,7 @@ try {
   if (!installed && process.env.PWA_KEEP_PROFILE !== "1") await rm(profile, { recursive: true, force: true });
   await writeFile(resolve(output, "results.json"), JSON.stringify({ origin, chrome, results, limitations, failure, versions: Object.fromEntries(Object.entries(versions).map(([key, value]) => [key, value.release.buildId])), network }, null, 2));
   await new Promise((done) => server.close(done));
+  if (!failure && !installed && !process.exitCode && !process.env.PWA_SMOKE_BUILD_DIR) {
+    await removeSmokeScratch(output, ["a", "b", "recovery", "retired"]);
+  }
 }

@@ -8,10 +8,18 @@ export function linkedRoute(href: string, id?: string, fragment = "", sourceDocu
   const url = new URL(href, "https://local.invalid");
   if (sourceDocumentId && !url.searchParams.has("linked") && url.pathname.startsWith("/w/")) url.searchParams.set("doc", sourceDocumentId);
   url.searchParams.delete("linked"); url.searchParams.delete("anchor");
+  url.searchParams.delete("asset");
   if (id) {
     url.searchParams.set("linked", /^ld_[a-zA-Z0-9-]+$/.test(id) ? id : "unavailable");
     if (fragment) url.searchParams.set("anchor", fragment);
   }
+  return url.pathname + url.search + url.hash;
+}
+
+export function filePreviewRoute(href: string, id: string, sourceDocumentId?: string): string {
+  const url = new URL(linkedRoute(href), "https://local.invalid");
+  if (sourceDocumentId && !url.searchParams.has("doc")) url.searchParams.set("doc", sourceDocumentId);
+  url.searchParams.set("asset", /^f_[a-zA-Z0-9-]+$/.test(id) ? id : "unavailable");
   return url.pathname + url.search + url.hash;
 }
 
@@ -21,7 +29,7 @@ function draftSource(href: string) {
   return url.pathname + url.search + url.hash;
 }
 
-const Navigation = createContext<{ id?: string; fragment: string; href: string; sourceHref: string; rememberSource: (element: HTMLElement) => void; protectDraft: (owner: object, dirty: boolean, busy: boolean) => void }>({ fragment: "", href: "/", sourceHref: "/", rememberSource: () => {}, protectDraft: () => {} });
+const Navigation = createContext<{ id?: string; previewId?: string; previewing: boolean; fragment: string; href: string; sourceHref: string; rememberSource: (element: HTMLElement) => void; protectDraft: (owner: object, dirty: boolean, busy: boolean) => void }>({ previewing: false, fragment: "", href: "/", sourceHref: "/", rememberSource: () => {}, protectDraft: () => {} });
 export const useLinkedNavigation = () => useContext(Navigation);
 
 export function LinkedNavigationProvider({ children }: { children: ReactNode }) {
@@ -41,7 +49,11 @@ export function LinkedNavigationProvider({ children }: { children: ReactNode }) 
     const unblock = router.history.block({
       enableBeforeUnload: false, // The existing PWA draft guard owns full-page exits.
       blockerFn: ({ currentLocation, nextLocation }) => {
-        if (!new URL(currentLocation.href, "https://local.invalid").searchParams.has("linked") || !drafts.current.size || draftSource(currentLocation.href) === draftSource(nextLocation.href)) return false;
+        // Visible ticket dialogs already own their discard confirmation. This
+        // additional guard is for drafts whose portal is suspended by a preview.
+        const current = new URL(currentLocation.href, "https://local.invalid");
+        if (!current.searchParams.has("linked") && !current.searchParams.has("asset")) return false;
+        if (!drafts.current.size || draftSource(currentLocation.href) === draftSource(nextLocation.href)) return false;
         if (resolveExit.current || [...drafts.current.values()].some((draft) => draft.busy)) return true;
         return new Promise<boolean>((resolve) => { resolveExit.current = resolve; setPendingExit(true); });
       },
@@ -53,12 +65,12 @@ export function LinkedNavigationProvider({ children }: { children: ReactNode }) 
   }
   const value = useMemo(() => {
     const url = new URL(href, "https://local.invalid");
-    return { href, id: url.searchParams.get("linked") ?? undefined, fragment: url.searchParams.get("anchor") ?? "", sourceHref: linkedRoute(href), rememberSource: (element: HTMLElement) => { sourceFocus.current = element; }, protectDraft };
+    return { href, id: url.searchParams.get("linked") ?? undefined, previewId: url.searchParams.get("asset") ?? undefined, previewing: url.searchParams.has("linked") || url.searchParams.has("asset"), fragment: url.searchParams.get("anchor") ?? "", sourceHref: linkedRoute(href), rememberSource: (element: HTMLElement) => { sourceFocus.current = element; }, protectDraft };
   }, [href, protectDraft]);
   useEffect(() => {
-    if (wasLinked.current && !value.id && sourceFocus.current?.isConnected) sourceFocus.current.focus({ preventScroll: true });
-    wasLinked.current = Boolean(value.id);
-  }, [value.id]);
+    if (wasLinked.current && !value.previewing && sourceFocus.current?.isConnected) sourceFocus.current.focus({ preventScroll: true });
+    wasLinked.current = value.previewing;
+  }, [value.previewing]);
   return <Navigation.Provider value={value}>{children}
     <Dialog open={pendingExit} onOpenChange={(open) => { if (!open) finishExit(true); }}>
       <DialogContent className="w-[min(440px,calc(100vw-2rem))]">

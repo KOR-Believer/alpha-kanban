@@ -44,8 +44,8 @@ export function DocumentSetSwitcher({ file, documents, href, onSelect, disabled 
   </Popover>;
 }
 
-export type DocumentStatusSearchProps = { value: string; onChange: (value: string) => void; disabled?: boolean };
-export function DocumentStatusSearch({ value, onChange, onReveal, disabled }: DocumentStatusSearchProps & { onReveal: () => void }) {
+export type DocumentStatusSearchProps = { value: string; onChange: (value: string) => void; disabled?: boolean; label?: string };
+export function DocumentStatusSearch({ value, onChange, onReveal, disabled, label = "Search documents and tickets" }: DocumentStatusSearchProps & { onReveal: () => void }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -54,13 +54,13 @@ export function DocumentStatusSearch({ value, onChange, onReveal, disabled }: Do
   useLayoutEffect(() => { if (editing) input.current?.focus(); }, [editing]);
   return <div className="ak-document-status-search" data-expanded={expanded} data-tour="document-status-search"
     onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setEditing(false); }}>
-    <Button ref={button} variant="ghost" size="iconSm" disabled={disabled} aria-label={t("Search documents and tickets")}
-      title={t("Search documents and tickets")} aria-expanded={expanded} onClick={() => { setEditing(true); input.current?.focus(); onReveal(); }}>
+    <Button ref={button} variant="ghost" size="iconSm" disabled={disabled} aria-label={t(label)}
+      title={t(label)} aria-expanded={expanded} onClick={() => { setEditing(true); input.current?.focus(); onReveal(); }}>
       <Search aria-hidden="true" />
     </Button>
     {expanded ? <>
-      <Input ref={input} type="search" role="searchbox" aria-label={t("Search documents and tickets")}
-        placeholder={t("Search documents and tickets")} autoComplete="off" spellCheck={false} disabled={disabled} value={value}
+      <Input ref={input} type="search" role="searchbox" aria-label={t(label)}
+        placeholder={t(label)} autoComplete="off" spellCheck={false} disabled={disabled} value={value}
         onFocus={() => { setEditing(true); onReveal(); }} onChange={(event) => { onChange(event.target.value); onReveal(); }}
         onKeyDown={(event) => {
           if (event.key !== "Escape" || event.nativeEvent.isComposing) return;

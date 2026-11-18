@@ -199,6 +199,33 @@
         "local-links",
         "updates"
       ]
+    },
+    "2026-11-18-canary-smoke-sheets": {
+      "sections": [
+        {
+          "id": "smoke-runs",
+          "title": {
+            "ko": "같은 기준으로 다음 회차 검수하기",
+            "en": "Repeat a smoke run"
+          },
+          "body": {
+            "ko": "스모크 시트에서 새 회차를 열고 실제 앱을 조작하면서 케이스별 결과와 관찰한 내용을 적으세요. 회차 상단에는 테스트 환경이나 공통 특이사항을 남길 수 있습니다.\n\n기준을 개정하거나 케이스를 폐기해도 지난 회차는 실행 당시 기준으로 읽을 수 있습니다. 회차 비교에서 바뀐 결과를 확인하세요.",
+            "en": "Start a run from the smoke sheet, operate the actual app, and record each outcome and observation. Use the run note for the test environment or anything that affects several cases.\n\nEarlier runs keep the criteria used at the time, even after a case is revised or retired. Compare runs to see what changed."
+          }
+        },
+        {
+          "id": "workspace",
+          "title": {
+            "ko": "보드 옆에서 프로젝트 파일 열기",
+            "en": "Browse files alongside the board"
+          },
+          "body": {
+            "ko": "문서 패널을 원하는 가장자리에 고정하고 파일 탐색을 선택하세요. 폴더를 펼치거나 파일명을 검색해 미리보기를 열 수 있습니다.",
+            "en": "Dock the document panel along your preferred edge and select File explorer. Expand a folder or search for a filename to open its preview."
+          }
+        }
+      ],
+      "guides": []
     }
   }
 }
