@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { createContext, useCallback, useState } from "react";
+
+export const RevealProjectFolder = createContext<((projectId: string, path: string) => void) | null>(null);
 
 export type ExplorerMode = "work" | "files";
 export type ExplorerPreferences = { mode: ExplorerMode; expanded: string[]; query: string };

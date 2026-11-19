@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
 import { ExternalLink, Image } from "lucide-react";
@@ -11,6 +11,8 @@ import { LocalLinkDialog } from "./LocalLinkDialog";
 import { normalizeLink, readLinkedFile } from "./linkPaths";
 import type { LinkAttempt, LinkContext, LinkedResource } from "./linkMappings";
 import { filePreviewRoute, linkedRoute, useLinkedNavigation } from "./linkedNavigation";
+
+import { RevealProjectFolder } from "../components/documents/explorerState";
 
 const rasterMimeTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
 type FileReference = Pick<MarkdownFileSummary, "id" | "workspaceId">;
@@ -75,6 +77,7 @@ export function BrowserMarkdownImage({ src, alt, file, context }: { src?: string
 
 export function BrowserMarkdownLink({ href = "", children, file, context }: { href?: string; children?: ReactNode; file?: FileReference; context?: LinkContext }) {
   const { t } = useTranslation();
+  const revealFolder = useContext(RevealProjectFolder);
   const navigate = useNavigate();
   const navigation = useLinkedNavigation();
   const [error, setError] = useState("");
@@ -95,7 +98,7 @@ export function BrowserMarkdownLink({ href = "", children, file, context }: { hr
     let current = true; setPrepared(undefined);
     if (file && isLocalResource(href) && !href.startsWith("#")) {
       void browserRepository.localFileEntry(file.workspaceId, file.id, href).then(entry => {
-        if (!current) return;
+        if (!current || entry.kind === "directory") return;
         setPrepared({ source: href, href: targetRoute(entry) });
       }).catch(() => { /* Explicit link connection handles missing/foreign paths. */ });
     }
@@ -129,6 +132,10 @@ export function BrowserMarkdownLink({ href = "", children, file, context }: { hr
         try {
           const resource = await browserRepository.localFileEntry(file.workspaceId, file.id, href);
           if (!active.current) return;
+          if (resource.kind === "directory") {
+            revealFolder?.(file.workspaceId, resource.path);
+            return;
+          }
           await navigate({ href: targetRoute(resource), resetScroll: false });
           return;
         } catch { /* Missing and out-of-project links can be connected explicitly. */ }

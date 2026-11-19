@@ -231,5 +231,36 @@
         ]
       }
     }
+  },
+  {
+    "id": "2026-11-19-canary-folder-links",
+    "sequence": 8,
+    "date": "2026-11-19",
+    "notify": true,
+    "title": {
+      "ko": "폴더 링크와 연결 창 스크롤",
+      "en": "Folder links and connection dialog scrolling"
+    },
+    "notes": {
+      "ko": [
+        "Markdown에서 프로젝트 안의 폴더 링크를 누르면 파일 탐색기가 해당 폴더를 펼칩니다.",
+        "로컬 링크 연결 창에서는 본문을 스크롤해 긴 후보 목록과 선택한 경로를 확인할 수 있습니다. 하단 버튼은 계속 보입니다."
+      ],
+      "en": [
+        "Follow a Markdown link to a project folder to reveal it in the file explorer.",
+        "Scroll the connection dialog body to review long folder lists and the selected path while keeping the action buttons in view."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "동봉 스킬은 직전 카나리와 같습니다."
+        ],
+        "en": [
+          "The bundled skill is unchanged from the previous Canary release."
+        ]
+      }
+    }
   }
 ]

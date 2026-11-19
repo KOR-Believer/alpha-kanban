@@ -93,9 +93,9 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
   const matches = scan?.repos.filter((repo) => (rootFilter === "all" || repo.rootId === rootFilter) && (repo.label + " " + repo.remotes.join(" ")).toLowerCase().includes(search.toLowerCase())) ?? [];
   const remaining = prefix ? relativeToPrefix(attempt.location.path, prefix) : undefined;
   const review = () => run(async () => setPreview(await browserLinkMappings.preview(context, attempt.location, prefix, target!, existing?.prefix === prefix ? existing : undefined)));
-  return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><DialogContent ref={tourContainer} className="w-[min(680px,calc(100vw-2rem))]" onEscapeKeyDown={(event) => { if (busy || tour.active) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy || tour.active) event.preventDefault(); }}>
+  return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><DialogContent ref={tourContainer} className="flex max-h-[min(760px,calc(100dvh-2rem))] w-[min(680px,calc(100vw-2rem))] flex-col [&>div:first-child]:shrink-0" onEscapeKeyDown={(event) => { if (busy || tour.active) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy || tour.active) event.preventDefault(); }}>
     <DialogHeader className="pr-12"><DialogTitle>{t(preview ? "Review link connection" : existing ? "Change link connection" : "Connect local link")}</DialogTitle><DialogDescription>{t("Choose a local repository or folder, then check which old path it replaces.")}</DialogDescription><TourButton tour={tour} labelKey="Tour this dialog" /></DialogHeader>
-    <DialogBody><div className="grid min-w-0 gap-4 text-sm">
+    <DialogBody className="min-h-0 flex-auto overflow-y-auto overscroll-contain"><div className="grid min-w-0 gap-4 text-sm">
       <details className="min-w-0"><summary data-tour="link-original" className="cursor-pointer font-medium">{t("Original link path")}</summary><code className="mt-2 block break-all text-xs text-muted-foreground">{attempt.location.path}</code></details>
       {error ? <p role="alert" className="text-sm text-destructive">{t(error)}</p> : null}
       {preview ? <>
@@ -136,7 +136,7 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
         </section> : null}
       </>}
     </div></DialogBody>
-    <DialogFooter className="flex-wrap">{preview ? <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setPreview(undefined); setError(""); }}><ArrowLeft />{t("Back")}</Button> : null}<Button variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button data-tour="link-apply" disabled={!target || !remaining || busy} onClick={() => void (preview ? run(async () => {
+    <DialogFooter className="shrink-0 flex-wrap">{preview ? <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setPreview(undefined); setError(""); }}><ArrowLeft />{t("Back")}</Button> : null}<Button variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button data-tour="link-apply" disabled={!target || !remaining || busy} onClick={() => void (preview ? run(async () => {
       const resource = await browserLinkMappings.save(context, attempt.location, prefix, target!, preview.expected, undefined, undefined, preview);
       onOpen(resource);
     }) : review())}>{t(preview ? manage ? "Save link connection" : existing?.prefix === prefix ? "Replace connection and open" : "Connect and open" : "Review selected folder")}</Button></DialogFooter>

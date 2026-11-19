@@ -7,6 +7,7 @@ import { DEFAULT_PANEL, MIN_SIDE_DOCK_WIDTH, PANEL_STORAGE_KEY, dockLimits, fitF
 import { neutralDockBounds } from "./documentPanelDocking";
 import { usePanelDockDrag } from "./usePanelDockDrag";
 import { DocumentStatusSearch, type DocumentStatusSearchProps } from "./DocumentStatusControls";
+import { RevealProjectFolder } from "./explorerState";
 import "./document-panel.css";
 
 type ResizeAxis = "width" | "height" | "both" | "dock";
@@ -16,7 +17,7 @@ const dockOptions = [
   { position: "bottom", label: "Dock at the bottom", Icon: PanelBottom },
   { position: "left", label: "Dock on the left", Icon: PanelLeft },
 ] as const;
-export function DocumentPanelShell({ children, toolbar, navigation, ownerControl, currentDocument, search, contextKey, count, total, workView = true }: {
+export function DocumentPanelShell({ children, toolbar, navigation, ownerControl, currentDocument, search, contextKey, count, total, workView = true, onRevealFolder }: {
   children: ReactNode;
   toolbar: (controls: ReactNode, close: () => void, moveHandle: ReactNode) => ReactNode;
   navigation: (view: PanelView, close: () => void) => ReactNode;
@@ -26,6 +27,7 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
   contextKey: string;
   count: number; total: number;
   workView?: boolean;
+  onRevealFolder?: (path: string) => void;
 }) {
   const { t } = useTranslation();
   const [preferences, setPreferences] = useState(readPanelPreferences);
@@ -209,7 +211,9 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
     <GripVertical aria-hidden="true" />
   </Button> : null;
 
-  return <div className="ak-document-workspace">
+  return <RevealProjectFolder.Provider value={(projectId, path) => {
+    if (projectId === contextKey && onRevealFolder) { onRevealFolder(path); setOpen(true); }
+  }}><div className="ak-document-workspace">
     <div ref={body} className="ak-document-workspace-body" data-panel-mode={floating ? "floating" : placement} data-panel-open={visible}
       style={{ "--ak-document-dock-size": `${dockSize}px`, "--ak-document-float-width": `${size.width}px`, "--ak-document-float-height": `${size.height}px` } as CSSProperties}>
       <aside ref={panel} id={id} hidden={!visible} aria-label={t("Workspace files")} className="ak-document-panel" data-view={preferences.view}>
@@ -239,5 +243,5 @@ export function DocumentPanelShell({ children, toolbar, navigation, ownerControl
       {search ? <DocumentStatusSearch key={contextKey} {...search} onReveal={() => setOpen(true)} /> : null}
       <div className="ak-document-status-context">{currentDocument}</div>
     </footer>
-  </div>;
+  </div></RevealProjectFolder.Provider>;
 }

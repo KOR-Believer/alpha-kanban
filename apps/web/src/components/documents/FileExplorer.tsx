@@ -38,9 +38,9 @@ export function FileExplorerTools({ query, onQuery, controls, moveHandle, onRefr
   </div>;
 }
 const emptySearch: FileSearchResult = { entries: [], visited: 0, directories: 0, errors: [], limited: false, complete: false };
-export function FileExplorer({ projectId, enabled, expanded, onExpanded, query, revision, selectedId, href, onSelect, documents, matches, bodyBusy, bodyMissing, cancelBody, retryBody }: {
+export function FileExplorer({ projectId, enabled, expanded, onExpanded, query, revision, folderRequest, selectedId, href, onSelect, documents, matches, bodyBusy, bodyMissing, cancelBody, retryBody }: {
   projectId: string; enabled: boolean; expanded: string[]; onExpanded: (paths: string[]) => void; query: string; revision: number;
-  selectedId?: string; href: (entry: ProjectFileEntry) => string; onSelect: (entry: ProjectFileEntry) => void;
+  folderRequest?: { path: string }; selectedId?: string; href: (entry: ProjectFileEntry) => string; onSelect: (entry: ProjectFileEntry) => void;
   documents: MarkdownFileSummary[]; matches: Map<string, DocumentSearchMatch>; bodyBusy: boolean; bodyMissing: number; cancelBody: () => void; retryBody: () => void;
 }) {
   const { t } = useTranslation();
@@ -83,6 +83,13 @@ export function FileExplorer({ projectId, enabled, expanded, onExpanded, query, 
     }, 180);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [projectId, enabled, query, revision, retry]);
+  useEffect(() => {
+    if (folderRequest) {
+      revealPath.current = folderRequest.path;
+      setRevealed(false);
+      setFocused(folderRequest.path);
+    }
+  }, [folderRequest]);
   const searching = !!query.trim() && !revealed;
   const rows = useMemo(() => {
     if (searching) {
@@ -108,11 +115,12 @@ export function FileExplorer({ projectId, enabled, expanded, onExpanded, query, 
     estimateSize: () => searching ? 56 : 32, overscan: 8, getItemKey: index => rows[index]!.path,
     scrollMargin });
   useEffect(() => {
-    if (!revealed || !revealPath.current) return;
+    if (revealPath.current === undefined || searching) return;
+    if (!revealPath.current) { list.current?.closest(".ak-document-panel-scroll")?.scrollTo?.(0, 0); revealPath.current = undefined; return; }
     const index = rows.findIndex(row => row.path === revealPath.current);
     if (index < 0) return;
     revealPath.current = undefined; focusRow(index);
-  }, [revealed, rows]);
+  }, [folderRequest, revealed, rows, searching]);
   const tabStop = rows.some(row => row.path === focused) ? focused : rows[0]?.path;
   function focusRow(index: number) {
     const row = rows[Math.max(0, Math.min(index, rows.length - 1))]; if (!row) return;

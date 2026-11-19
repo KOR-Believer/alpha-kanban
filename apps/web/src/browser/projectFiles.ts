@@ -72,6 +72,10 @@ export class ProjectFiles {
       return ids;
     });
   }
+  async folderEntry(projectId: string, path: string): Promise<ProjectFileEntry> {
+    const directory = await this.directory(await this.scope(projectId), path);
+    return { kind: "directory", name: directory.name, path };
+  }
   async entry(projectId: string, path: string): Promise<ProjectFileEntry> {
     const scope = await this.scope(projectId); this.check(path, scope, false);
     const parts = safeProjectPath(path);
@@ -165,7 +169,7 @@ export class ProjectFiles {
     return { file: await (await directory.getFileHandle(parts.at(-1)!)).getFile(), path };
   }
 }
-export function relativeFilePath(sourcePath: string, href: string): string {
+export function relativeFilePath(sourcePath: string, href: string, allowRoot = false): string {
   const decoded = decodeURIComponent(href.split(/[?#]/)[0] ?? "");
   if (!decoded || /^[a-z][a-z\d+.-]*:|^[/\\]/i.test(decoded) || decoded.includes("\\")) throw new Error("This file path is outside the connected project.");
   const parts = safeProjectPath(sourcePath).slice(0, -1);
@@ -173,5 +177,5 @@ export function relativeFilePath(sourcePath: string, href: string): string {
     if (part === "..") { if (!parts.length) throw new Error("This file path is outside the connected project."); parts.pop(); }
     else if (part && part !== ".") parts.push(part);
   }
-  safeProjectPath(parts.join("/")); return parts.join("/");
+  safeProjectPath(parts.join("/"), allowRoot); return parts.join("/");
 }

@@ -44,6 +44,19 @@ describe("file exploration boundaries and identity", () => {
     expect((await f.repository.projectFiles.open(f.id, source.id!)).file.name).toBe("example.TS");
     expect(code.writes).toBe(0);
   });
+  it("resolves README folder links relative to their document and respects directory boundaries", async () => {
+    const f = await fixture();
+    const studio = f.project.directory("studio");
+    studio.file("README.md");
+    studio.directory("design").directory("studio-workbench").directory("workbench");
+    const readme = (await f.repository.projectFiles.entry(f.id, "studio/README.md")).id!;
+    const lookup = (href: string) => f.repository.localFileEntry(f.id, readme, href);
+    await expect(lookup("design/studio-workbench/workbench/")).resolves.toMatchObject({ kind: "directory", path: "studio/design/studio-workbench/workbench" });
+    await expect(lookup("../")).resolves.toMatchObject({ kind: "directory", path: "" });
+    await expect(lookup("../../")).rejects.toThrow();
+    studio.directory(".git");
+    await expect(lookup(".git/")).rejects.toThrow();
+  });
   it("honors exclusions and an explicit hidden root, with no parent traversal", async () => {
     const f = await fixture();
     for (const name of [".git", ".runtime", "node_modules", "dist"]) f.project.directory(name).file("secret.txt", "x");

@@ -240,6 +240,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
   const initialRouteRef = useRef<AppRouteState>(routeState);
   const selectedWorkspaceId = routeState.workspaceId;
   const preferredFilePath = routeState.filePath;
+  const [folderRequest, setFolderRequest] = useState<{projectId: string; path: string}>();
   const [explorer, setExplorer] = useExplorerPreferences(selectedWorkspaceId);
   const [previewMeta, setPreviewMeta] = useState<{ id: string; path: string }>();
   const [fileRevision, setFileRevision] = useState(0);
@@ -731,6 +732,12 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
         </header>
 
         <DocumentPanelShell contextKey={selectedWorkspaceId} count={visibleDocumentSets.length} total={workSets.length} workView={!filesMode}
+          onRevealFolder={path => {
+            const parts = path.split("/");
+            const ancestors = parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+            setExplorer({ mode: "files", query: "", expanded: [...new Set([...explorer.expanded, ...ancestors])] });
+            setFolderRequest({ projectId: selectedWorkspaceId, path });
+          }}
           ownerControl={<ProjectOwnerFilter owners={documentOwners} value={ownerFilter} onChange={setOwnerFilter} />}
           search={{ value: filesMode ? explorer.query : documentSearch, onChange: filesMode ? value => setExplorer({ query: value }) : setDocumentSearch, disabled: !canLoadWorkspace, label: filesMode ? "Search project files" : "Search documents and tickets" }}
           currentDocument={linked.previewId ? <>
@@ -753,7 +760,7 @@ export function App({ allowStartupAutoOpen = true }: { allowStartupAutoOpen?: bo
               onNavigate={() => { handleShowProjectGuide(); close(); }}><BookOpen aria-hidden="true" /><span>{t("Usage guide")}</span></NavigationLink>} />}
           </>}
           navigation={(view, close) => filesMode ? <>
-            {!canLoadWorkspace ? <BrowserReconnect workspaceId={selectedWorkspaceId} /> : <FileExplorer key={`${selectedWorkspaceId}:${workRoot}`} projectId={selectedWorkspaceId} enabled={canLoadWorkspace} expanded={explorer.expanded} onExpanded={expanded => setExplorer({ expanded })} query={explorer.query} revision={fileRevision}
+            {!canLoadWorkspace ? <BrowserReconnect workspaceId={selectedWorkspaceId} /> : <FileExplorer key={`${selectedWorkspaceId}:${workRoot}`} projectId={selectedWorkspaceId} enabled={canLoadWorkspace} expanded={explorer.expanded} onExpanded={expanded => setExplorer({ expanded })} query={explorer.query} revision={fileRevision} folderRequest={folderRequest?.projectId === selectedWorkspaceId ? folderRequest : undefined}
               selectedId={linked.previewId ?? resolvedSelectedFileId} href={explorerHref} onSelect={entry => { selectExplorerFile(entry); close(); }} documents={allFiles} matches={projectSearch.matches} bodyBusy={projectSearch.busy} bodyMissing={projectSearch.missing} cancelBody={projectSearch.cancel} retryBody={projectSearch.retry} />}
           </> : <>
             <div className="ak-document-panel-notices">

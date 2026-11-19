@@ -982,7 +982,14 @@ export class BrowserRepository {
 
   async localFileEntry(workspaceId: string, fileId: string, href: string) {
     const source = await this.document(workspaceId, fileId);
-    return this.projectFiles.entry(workspaceId, relativeFilePath(source.path, href));
+    const path = relativeFilePath(source.path, href, true);
+    if (!path || /(?:\/|(?:^|\/)\.{1,2})$/.test(decodeURIComponent(href.split(/[?#]/)[0] ?? ""))) return this.projectFiles.folderEntry(workspaceId, path);
+    try {
+      return await this.projectFiles.entry(workspaceId, path);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "TypeMismatchError")) throw error;
+      return this.projectFiles.folderEntry(workspaceId, path);
+    }
   }
 
   async linkContext(workspaceId: string, fileId: string): Promise<LinkContext> {
