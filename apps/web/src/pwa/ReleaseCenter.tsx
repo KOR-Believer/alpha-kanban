@@ -4,7 +4,7 @@ import { BookOpen, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Button, buttonVariants } from "../components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { ChannelBadge } from "../components/AppBrand";
+import { BrandIcon, ChannelBadge } from "../components/AppBrand";
 import { pwaClient } from "./client";
 import { appActivity } from "./activity";
 import { SkillUpdates } from "../skills/SkillUpdates";
@@ -129,9 +129,14 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
       {skill.result?.error || skill.error ? <p>{t(skill.result?.error || skill.error, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
       {!skill.finishing ? <Button size="sm" variant="outline" onClick={() => { void skill.dismissResult(); setSkillOpen(true); }}>{t("Skill updates")}</Button> : null}
     </aside> : null}
-    {notice && !reading && !skill.result && !skill.error && !skill.finishing && waiting?.buildId === notice.buildId ? <aside role="status" className="fixed bottom-4 right-4 z-40 grid max-w-[calc(100vw-2rem)] gap-2 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-[var(--ak-shadow-soft)]">
-      <div className="flex items-center justify-between gap-4"><p className="text-sm font-medium">{t("An update is ready")}</p><Button size="iconSm" variant="ghost" aria-label={t("Close")} onClick={() => setNotice(null)}><X /></Button></div>
-      <Button size="sm" variant="outline" onClick={(event) => openReleaseNotes(event.currentTarget)}><BookOpen />{t("View update")}</Button>
+    {notice && !reading && !skill.result && !skill.error && !skill.finishing && waiting?.buildId === notice.buildId ? <aside role="status" className="fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-40 grid w-80 max-w-[calc(100vw-2rem)] grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-[var(--ak-shadow-soft)]">
+      <span className="row-span-2 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground"><BrandIcon className="size-5" /></span>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-muted-foreground">{t("An update is ready")}</p>
+        <p className="mt-0.5 line-clamp-2 text-sm font-semibold">{releaseRecords(notice).at(-1)?.title?.[locale] ?? notice.notes[locale][0]}</p>
+      </div>
+      <Button size="iconSm" variant="ghost" aria-label={t("Close")} onClick={() => setNotice(null)}><X /></Button>
+      <Button size="xs" variant="secondary" className="col-start-2 mt-2 justify-self-start" onClick={(event) => openReleaseNotes(event.currentTarget)}><BookOpen />{t("View update")}</Button>
     </aside> : null}
     <Dialog open={Boolean(reading)} onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]" onEscapeKeyDown={(event) => { if (confirming) event.preventDefault(); }} onInteractOutside={(event) => { if (confirming) event.preventDefault(); }} onCloseAutoFocus={(event) => {

@@ -26,6 +26,8 @@ export function PwaMenu() {
   const app = useSyncExternalStore(pwaClient.subscribe, pwaClient.getSnapshot);
   if (!__PWA_ENABLED__) return null;
   const waiting = app.status === "ready" || app.status === "blocked";
+  const downloading = app.status === "downloading";
+  const busy = downloading || app.status === "checking" || app.status === "applying";
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild><Button ref={trigger} data-pwa-menu="" size="iconSm" variant="ghost" aria-label={t("App installation and updates")} title={t("App installation and updates")} className="relative">
       <MonitorDown aria-hidden="true" />{waiting ? <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-primary" /> : null}
@@ -38,13 +40,18 @@ export function PwaMenu() {
         {install.available ? <Button variant="outline" disabled={install.prompting} onClick={() => void appInstaller.install()}><Download aria-hidden="true" />{t("Install app")}</Button> : <p className="text-muted-foreground">{t(install.installed ? "App is installed" : "You can also check installation options in the Chrome menu.")}</p>}
         {install.failed ? <p role="alert">{t("Installation was not completed. Try the Chrome menu.")}</p> : null}
         <div className="border-t border-border pt-3" aria-live="polite">
+          {downloading ? <>
+            <p className="font-medium">{t(app.offlineReady ? "Downloading update files" : "Downloading files for offline use")}</p>
+            <progress aria-label={t("Downloading app files")} className="mt-2 block h-1.5 w-full accent-primary" />
+          </> : <>
           <p className="font-medium">{t(app.offlineReady ? "Ready to use offline" : "Offline access is not ready yet")}</p>
           <p className="mt-1 text-muted-foreground">{t(statusKeys[app.status])}</p>
+          </>}
         </div>
         {waiting && app.prepared ? <ul className="list-disc pl-4 text-muted-foreground">{app.prepared.notes[i18n.language === "ko" ? "ko" : "en"].map((note) => <li key={note}>{note}</li>)}</ul> : null}
         <Button variant="outline" onClick={() => { openNotes.current = true; setOpen(false); }}><BookOpen aria-hidden="true" />{t("Update history")}</Button>
         {waiting ? <div className="flex gap-2"><Button onClick={() => { openNotes.current = true; setOpen(false); }}><RefreshCw aria-hidden="true" />{t("Apply update")}</Button><Button variant="ghost" onClick={() => setOpen(false)}>{t("Later")}</Button></div> : null}
-        <Button variant="outline" disabled={["checking", "downloading", "applying"].includes(app.status)} onClick={() => void pwaClient.check()}><RefreshCw aria-hidden="true" />{t("Check for updates")}</Button>
+        {!busy && !waiting && <Button variant="outline" onClick={() => void pwaClient.check()}><RefreshCw aria-hidden="true" />{t("Check for updates")}</Button>}
         {app.persistent === false ? <Button variant="ghost" onClick={() => void pwaClient.retainStorage()}><HardDrive aria-hidden="true" />{t("Keep app data on this device")}</Button> : null}
         {app.retentionDenied ? <p role="status" className="text-muted-foreground">{t("Chrome did not allow persistent storage. You can continue using the app.")}</p> : null}
         <a href="/repair.html" target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost" })}><Wrench aria-hidden="true" />{t("Repair app")}</a>

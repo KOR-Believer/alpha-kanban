@@ -1007,6 +1007,8 @@ export const korean: Record<string, string> = {
   "Ready to use offline": "오프라인 사용 준비 완료",
   "Offline access is not ready yet": "아직 오프라인으로 사용할 수 없습니다",
   "Checking for updates": "업데이트 확인 중",
+  "Downloading update files": "업데이트 파일을 받는 중",
+  "Downloading files for offline use": "오프라인 사용에 필요한 파일을 받는 중",
   "Downloading app files": "앱 파일 다운로드 중",
   "An update is ready": "새 버전을 적용할 수 있습니다",
   "You are up to date": "최신 버전입니다",

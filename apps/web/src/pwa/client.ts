@@ -99,6 +99,7 @@ export class PwaClient {
   async check() {
     if (this.checking || this.applying || this.state.status === "applying") return;
     if (!this.registration) { await this.start(); return; }
+    if (this.registration.installing) return;
     this.lastCheck = Date.now();
     if (!navigator.onLine) {
       await this.refresh().catch(() => undefined);
