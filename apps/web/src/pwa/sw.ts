@@ -8,6 +8,16 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: str
 const buildId = __APP_RELEASE__.buildId;
 const cacheName = CACHE_PREFIX + buildId;
 const precache = new PrecacheController({ cacheName });
+precache.strategy.plugins.push({
+  async handlerDidError({ event, request }) {
+    if (event.type !== "install" || request.cache !== "default" || !request.integrity) return;
+    // A new asset URL may still have the old site's HTML fallback in the HTTP cache.
+    // Retry that asset once, retaining its integrity and the original precache key.
+    const fresh = new Request(request, { cache: "reload" });
+    const [response] = await Promise.all(precache.strategy.handleAll({ event, request: fresh }));
+    return response;
+  },
+});
 precache.addToCacheList(self.__WB_MANIFEST);
 const precacheRoute = new PrecacheRoute(precache);
 registerRoute((options) => !options.url.searchParams.has("ak-repair") && precacheRoute.match(options), precacheRoute.handler);

@@ -43,6 +43,8 @@ let badAsset = false;
 let brokenWorker = false;
 let networkUnavailable = false;
 const network = [];
+const nextEntry = (await readFile(resolve(versions.b.dir, "index.html"), "utf8")).match(/<script\b[^>]*\bsrc="([^"]+\.js)"/)?.[1];
+assert.ok(nextEntry?.startsWith("/assets/"), "The next build must have a bundled entry script");
 const contentTypes = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".webmanifest": "application/manifest+json", ".png": "image/png", ".woff2": "font/woff2", ".zip": "application/zip", ".txt": "text/plain; charset=utf-8" };
 const headersText = await readFile(resolve(versions.a.dir, "_headers"), "utf8");
 const csp = headersText.match(/Content-Security-Policy: (.+)/)[1];
@@ -55,6 +57,10 @@ const server = createServer(async (request, response) => {
   response.setHeader("Cache-Control", "no-store");
   if (url.searchParams.has("smoke-unresponsive")) { response.setHeader("Content-Type", "text/html"); response.end("<!doctype html><title>Unresponsive app client</title><p>Unresponsive client</p>"); return; }
   if (url.pathname === "/other/sw.js") { response.setHeader("Content-Type", "application/javascript"); response.end("self.addEventListener('install',()=>self.skipWaiting());"); return; }
+  if (serving === versions.a && url.pathname === nextEntry) {
+    response.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "public, max-age=3600" });
+    response.end(await readFile(resolve(versions.a.dir, "index.html"))); return;
+  }
   if (url.pathname === "/sw.js" && brokenWorker) {
     response.setHeader("Content-Type", "application/javascript");
     response.end("self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(e.request.mode==='navigate')e.respondWith(Promise.resolve(new Response('<!doctype html><html><head><title>Stale worker</title></head><body>STALE WORKER</body></html>',{headers:{'Content-Type':'text/html; charset=utf-8'}})));});");
@@ -346,9 +352,15 @@ try {
   const second = await context.newPage(); await second.goto(projectUrl);
   await second.getByText("Offline smoke ticket", { exact: true }).click();
   await second.getByRole("textbox", { name: "수동 지시", exact: true }).fill("잃으면 안 되는 초안");
+  const entryType = (cache) => page.evaluate(async ({ path, cache }) => (await fetch(path, { cache })).headers.get("Content-Type"), { path: nextEntry, cache });
+  assert.match(await entryType("default"), /text\/html/);
   serving = versions.b;
+  const entryRequests = network.filter(entry => entry.path === nextEntry).length;
+  assert.match(await entryType("force-cache"), /text\/html/);
+  assert.equal(network.filter(entry => entry.path === nextEntry).length, entryRequests, "Wrong HTML was still fresh in Chrome's HTTP cache");
   await openMenu(page); await page.getByRole("button", { name: "업데이트 확인", exact: true }).click();
   await until(async () => Boolean(await workerInfo(page, "waiting")), "waiting update");
+  record("A stale HTML response under a new script URL recovers to the verified update without clearing browser data");
   const downloadPage = await context.newPage();
   await downloadPage.goto(origin + "/about");
   assert.equal((await workerInfo(downloadPage)).buildId, versions.a.release.buildId);
