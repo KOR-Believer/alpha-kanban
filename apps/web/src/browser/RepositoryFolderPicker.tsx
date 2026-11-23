@@ -42,7 +42,7 @@ export function useRepositoryFilters() {
 }
 
 export function RepositoryFolderPicker({ scan, filters, scanning, busy, discover, selectedId, touch = () => {},
-  onRefresh, onStop, onPick, onSelect, candidateLabel, repositoryHint }: {
+  onRefresh, onStop, onPick, onSelect, canPick = typeof window.showDirectoryPicker === "function", candidateLabel, repositoryHint }: {
   scan?: RepoScan;
   filters: ReturnType<typeof useRepositoryFilters>;
   scanning: boolean;
@@ -54,11 +54,11 @@ export function RepositoryFolderPicker({ scan, filters, scanning, busy, discover
   onStop: () => void;
   onPick: () => void;
   onSelect: (repo: RepoCandidate) => void;
+  canPick?: boolean;
   candidateLabel?: (repo: RepoCandidate) => string;
   repositoryHint?: string;
 }) {
   const { t } = useTranslation();
-  const canPick = typeof window.showDirectoryPicker === "function";
   const { search, setSearch, rootFilter, setRootFilter } = filters;
   const roots = [...new Map(scan?.repos.map((repo) => [repo.rootId, repo.rootName ?? repo.label.split("/")[0]!])).entries()];
   const activeRoot = roots.some(([id]) => id === rootFilter) ? rootFilter : "all";

@@ -175,5 +175,40 @@
         ]
       }
     }
+  },
+  {
+    "id": "2026-11-23-workspace-and-guides",
+    "sequence": 6,
+    "date": "2026-11-23",
+    "notify": true,
+    "title": {
+      "ko": "스모크 시트, Git 리비전 비교와 문서 체험",
+      "en": "Smoke sheets, Git revision comparisons and interactive guides"
+    },
+    "notes": {
+      "ko": [
+        "스모크 시트에 테스트 케이스를 정리하고 회차별 결과와 메모를 기록하세요. 두 회차를 비교해 달라진 결과를 볼 수 있습니다.",
+        "문서 패널을 네 방향으로 옮기고 파일 탐색기에서 폴더 링크를 열 수 있습니다. Git 리비전 링크는 기록 당시 파일을 열고 현재 파일과 나란히 비교합니다.",
+        "업데이트 창에서 연결한 스킬의 변경 내용을 보고 백업 후 앱과 함께 업데이트할 수 있습니다.",
+        "공식 문서에서 로컬 링크 연결, 문서 정리, 스킬 업데이트와 백업 복원을 예시 파일로 연습할 수 있습니다."
+      ],
+      "en": [
+        "Keep test cases on a smoke sheet, record results and notes for each run, and compare two runs.",
+        "Dock the document panel on any side and follow folder links in the file explorer. Open a Git revision link to read the cited file and compare it with your current copy.",
+        "Review changes to your connected skill in the update dialog, then back it up and update it together with the app.",
+        "Try local link connections, document maintenance, skill updates and backup restoration with sample files in the guides."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "스킬에 스모크 시트·실행 기록 템플릿과 검증기, Git 리비전 링크 생성 도구가 포함됩니다."
+        ],
+        "en": [
+          "The skill includes smoke case and run templates, a smoke validator and the Git revision link generator."
+        ]
+      }
+    }
   }
 ]

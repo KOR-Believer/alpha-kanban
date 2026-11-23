@@ -357,5 +357,36 @@
         ]
       }
     }
+  },
+  {
+    "id": "2026-11-23-canary-interactive-guides",
+    "sequence": 12,
+    "date": "2026-11-23",
+    "notify": true,
+    "title": {
+      "ko": "공식 문서에서 직접 해보기",
+      "en": "Try the app controls in the guides"
+    },
+    "notes": {
+      "ko": [
+        "공식 문서에서 로컬 링크 연결, 문서 정리, 스킬 업데이트와 백업 복원을 예시 파일로 연습할 수 있습니다.",
+        "Git 리비전 링크 예시에서 기록 당시와 현재 파일을 번갈아 읽고, ‘현재와 비교’로 바뀐 줄을 확인하세요."
+      ],
+      "en": [
+        "Try local link connections, document maintenance, skill updates and backup restoration with sample files in the guides.",
+        "In the Git revision example, switch between the cited and current files, then choose Compare with current to see which lines changed."
+      ]
+    },
+    "skill": {
+      "compatibility": "compatible",
+      "notes": {
+        "ko": [
+          "동봉 스킬은 직전 카나리와 같습니다."
+        ],
+        "en": [
+          "The bundled skill is unchanged from the previous Canary release."
+        ]
+      }
+    }
   }
 ]

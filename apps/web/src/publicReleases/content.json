@@ -97,6 +97,28 @@
         "local-links",
         "updates"
       ]
+    },
+    "2026-11-23-workspace-and-guides": {
+      "sections": [
+        {
+          "id": "try-local-links",
+          "title": {
+            "ko": "다른 PC에서 작성한 링크 열기",
+            "en": "Open a link written on another computer"
+          },
+          "body": {
+            "ko": "공식 문서의 **로컬 연결 사용하기** 예시에서 이전 PC의 파일 경로를 누르세요. 저장소 루트를 선택하면 열릴 경로가 `docs/guide.md`이고, `docs` 폴더를 선택하면 `guide.md`입니다. **선택한 폴더 확인**에서 경로를 살펴보고 **연결하고 열기**를 눌러 예시 문서를 읽어 보세요.",
+            "en": "In the local links guide, click the sample path from the old computer. Selecting the repository root opens `docs/guide.md`. Selecting the `docs` folder opens `guide.md`. Choose **Review selected folder** to check the path, then **Connect and open** to read the sample document."
+          }
+        }
+      ],
+      "guides": [
+        "smoke",
+        "local-links",
+        "organize",
+        "updates",
+        "backup"
+      ]
     }
   },
   "canary": {
@@ -280,6 +302,27 @@
         }
       ],
       "guides": ["updates"]
+    },
+    "2026-11-23-canary-interactive-guides": {
+      "sections": [
+        {
+          "id": "try-local-links",
+          "title": {
+            "ko": "다른 PC에서 작성한 링크 열기",
+            "en": "Open a link written on another computer"
+          },
+          "body": {
+            "ko": "공식 문서의 **로컬 연결 사용하기** 예시에서 이전 PC의 파일 경로를 누르세요. 저장소 루트를 선택하면 열릴 경로가 `docs/guide.md`이고, `docs` 폴더를 선택하면 `guide.md`입니다. **선택한 폴더 확인**에서 경로를 살펴보고 **연결하고 열기**를 눌러 예시 문서를 읽어 보세요.",
+            "en": "In the local links guide, click the sample path from the old computer. Selecting the repository root opens `docs/guide.md`. Selecting the `docs` folder opens `guide.md`. Choose **Review selected folder** to check the path, then **Connect and open** to read the sample document."
+          }
+        }
+      ],
+      "guides": [
+        "local-links",
+        "organize",
+        "updates",
+        "backup"
+      ]
     }
   }
 }

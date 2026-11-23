@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileCog, Loader2 } from "lucide-react";
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
 import { isDocumentAssetPath } from "@alpha-kanban/shared/documents";
-import { Button } from "../components/ui/button";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { useTranslation } from "../i18n";
+import { DocumentMaintenanceView } from "../components/DocumentMaintenanceView";
 import { errorSummary } from "../i18n/errors";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { browserRepository, type BrowserMigration } from "./repository";
 import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
-import { CodeDiff } from "../components/CodeDiff";
 
 export function DocumentMaintenance({ file }: { file: MarkdownFileSummary }) {
   if (isDocumentAssetPath(file.workspaceRelativePath, file.documentRoot)) return null;
@@ -18,7 +14,7 @@ export function DocumentMaintenance({ file }: { file: MarkdownFileSummary }) {
 }
 
 function DocumentMaintenanceForFile({ file }: { file: MarkdownFileSummary }) {
-  const { t } = useTranslation(), queryClient = useQueryClient();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false), [plan, setPlan] = useState<BrowserMigration>();
   const [busy, setBusy] = useState<"preview" | "apply">(), [error, setError] = useState<Error>();
   const tourContainer = useRef<HTMLDivElement>(null);
@@ -61,46 +57,8 @@ function DocumentMaintenanceForFile({ file }: { file: MarkdownFileSummary }) {
       if (request.current === current) { inFlight.current = undefined; setBusy(undefined); }
     }
   };
-  return <>
-    <Button data-tour="document-maintenance" size="sm" variant="outline" onClick={() => void preview()}><FileCog />{t("Document maintenance")}</Button>
-    <Dialog open={open} onOpenChange={(value) => { if (!value) close(); }}>
-      <DialogContent ref={tourContainer} className="grid-rows-[auto_minmax(0,1fr)_auto]" showCloseButton={false} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (busy === "apply" || tour.active) event.preventDefault(); }}>
-        <DialogHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2"><DialogTitle>{t("Document maintenance")}</DialogTitle><TourButton tour={tour} labelKey="Tour this dialog" /></div>
-          <DialogDescription data-tour="maintenance-purpose">{t("Keep documents you continue to use aligned with the current document format. Review the changes, then apply them to save only this document. Maintenance is optional; existing documents remain readable.")}</DialogDescription>
-          <p className="break-all text-xs text-muted-foreground">{file.relativePath}</p>
-        </DialogHeader>
-        <DialogBody className="grid gap-4">
-          <p className="text-sm text-muted-foreground">{t("Available changes include missing document IDs, folder-based Owner correction, and removal of obsolete guidance and templates.")}</p>
-          {busy === "preview" ? <p className="flex items-center gap-2 text-sm" role="status"><Loader2 className="size-4 animate-spin" aria-hidden="true" />{t("Preparing document preview…")}</p> : null}
-          {plan ? <div className="grid gap-3 text-sm" aria-live="polite">
-            <div className="grid gap-3" data-tour={plan.preview.retained.length || plan.preview.issues.length || plan.preview.decision === "noop" ? "maintenance-result" : undefined}>
-            {plan.preview.decision === "noop" ? <p>{t("No document changes are needed.")}</p> : null}
-            {plan.preview.retained.map((item, index) => <p key={index}>{t(item.code === "OWNER_PATH_UNRESOLVED" ? "Owner is kept because the document has no confirmed owner folder." : item.code === "LEGACY_REFERENCED_SECTION" ? "{{section}} will be kept to preserve an existing link." : item.code === "LEGACY_NOTES_PRESERVED" ? "Additional content in {{section}} will be kept." : "No recognized legacy content was found in {{section}}. This section will be kept.", { section: item.section })}</p>)}
-            {plan.preview.issues.map((issue, index) => <div key={index} className="text-destructive"><p>{issue.path}</p><p>{t(migrationIssueMessage(issue.code))}</p><code className="text-xs">{issue.code}</code></div>)}
-            </div>
-            {plan.preview.changes.map((change) => <section data-tour="maintenance-diff" key={change.path} className="grid min-w-0 gap-2">
-                <h3 className="break-all font-semibold">{change.path}</h3>
-                <CodeDiff before={change.before} after={change.after} />
-              </section>)}
-            {plan.preview.rules.length > 0 ? <p className="text-xs text-muted-foreground">{t("Only links affected by this cleanup are checked within the connected project. Other documents are not changed.")}</p> : null}
-          </div> : null}
-          {error ? <p role="alert" className="text-sm text-destructive">{errorSummary(error)}</p> : null}
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" disabled={busy === "apply"} onClick={close}>{t("Cancel")}</Button>
-          {error || plan?.preview.decision === "blocked" ? <Button variant="outline" disabled={Boolean(busy)} onClick={() => void preview()}>{t("Refresh preview")}</Button> : null}
-          <Button data-tour="maintenance-apply" disabled={Boolean(busy) || plan?.preview.decision !== "ready" || Boolean(error)} onClick={() => void apply()}>{t("Apply reviewed changes")}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </>;
+  return <DocumentMaintenanceView open={open} path={file.relativePath} preview={plan?.preview}
+    contentRef={tourContainer} headerAction={<TourButton tour={tour} labelKey="Tour this dialog" />} lockDismiss={tour.active}
+    busy={busy} error={error && errorSummary(error)} onPreview={preview} onApply={apply} close={close} />;
 }
-
-export function migrationIssueMessage(code: string) {
-  if (["DELETED_OR_UNKNOWN_ANCHOR", "ANCHOR_UNCERTAIN"].includes(code)) return "A section link cannot be preserved. Keep the section or correct its references first.";
-  if (["OUTSIDE_WRITE_SCOPE", "ABSOLUTE_REFERENCE_UNVERIFIED", "INCOMPLETE_REFERENCE_SCOPE"].includes(code)) return "This cleanup needs a wider reference check. Use the document CLI to inspect the affected files.";
-  if (code === "TICKET_BODY_CHANGED") return "Ticket content will be preserved. Correct the section links before applying cleanup.";
-  if (["UNSUPPORTED_FORMAT", "INVALID_FORMAT", "NEEDS_REPAIR"].includes(code)) return "This document format cannot be changed. Review the original Markdown with a supporting tool.";
-  return "A document or reference could not be verified. Review the original Markdown before making changes.";
-}
+export { migrationIssueMessage } from "../components/DocumentMaintenanceView";

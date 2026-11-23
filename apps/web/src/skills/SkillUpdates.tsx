@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
-import { Copy, Download, FolderOpen, Maximize2, Minimize2, PackageCheck, RefreshCw, RotateCcw, X } from "lucide-react";
+import { Copy, FolderOpen, Maximize2, Minimize2, PackageCheck, RotateCcw, X } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { RELEASE_CHANNELS } from "../../release-channel.mjs";
 import { skillAgentRequest, skillChannelLabel } from "./distribution";
-import { SkillReplacementNotice } from "./SkillReplacementNotice";
-import { SkillChanges } from "./SkillChanges";
-import { SkillComparisonSummary } from "./SkillComparisonSummary";
 import { Button, buttonVariants } from "../components/ui/button";
-import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { PanelResizeHandles } from "../components/ui/PanelResizeHandles";
@@ -16,11 +12,11 @@ import { ChannelBadge } from "../components/AppBrand";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { loadSkillBundle } from "./bundle";
 import { skillRepository, type SkillConnection, type SkillRecovery, type SkillReview } from "./repository";
+import { SkillUpdateReview, SkillBackupList, serializeSkillBackup } from "./SkillReviewPanels";
 import { SkillReinstallReview } from "./SkillReinstallReview";
 import { SkillFolderConnection } from "./SkillFolderConnection";
 import { droppedSkillFolder, supportsSkillFolderDrop } from "./folderDrop";
 import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
-import { formatSkillBytes, skillBackupContentBytes } from "./backupSize";
 
 const presentationPreferences: PanelPreferences = {
   modeKey: "alpha-kanban.skillUpdatesMode",
@@ -43,7 +39,7 @@ export function SkillUpdatesButton({ placement = "panel" }: { placement?: "panel
 }
 
 export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolean; onOpenChange: (open: boolean) => void; returnFocus?: HTMLElement | null }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const presentation = usePanelPresentation(presentationPreferences);
   const [connection, setConnection] = useState<SkillConnection>();
   const [candidate, setCandidate] = useState<FileSystemDirectoryHandle>();
@@ -143,8 +139,7 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
     });
   }
   function exportBackup(record: SkillRecovery) {
-    const data = { schema: 1, skill: "implementation-ledger", createdAt: record.createdAt, state: record.state, operation: record.operation, before: record.before, intended: record.intended };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const url = URL.createObjectURL(new Blob([serializeSkillBackup(record)], { type: "application/json" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `implementation-ledger-backup-${record.id}.json`; anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
@@ -188,23 +183,13 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
           {busy ? <p role="status" className="text-sm text-muted-foreground">{t("Checking or saving skill files…")}</p> : null}
           {error ? <p role="alert" className="break-words text-sm text-destructive">{t(error, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
           {notice ? <p role="status" className="text-sm">{t(notice)}</p> : null}
-          {review && !candidate && !reinstallReview ? <section className="space-y-3">
-            <div data-tour="skill-comparison"><SkillComparisonSummary review={review} /></div>
-            <h3 className="text-sm font-semibold">{t(review.state === "current" ? "Matches this app's skill bundle" : review.state === "update" ? "An update is available for this installation" : review.state === "review" ? "Ask your AI tool to review compatibility before changing your skill or documents." : "This installation differs from known official bundles. Regular updates will not replace it.")}</h3>
-            {review.changes.length ? <SkillChanges review={review} /> : null}
-            {review.state === "update" ? <>
-              <p className="text-sm text-muted-foreground">{t("A full backup stays in this browser, outside the skill folder. Keep this window open until verification finishes. Multiple files cannot be replaced atomically.")}</p>
-              <SkillReplacementNotice />
-              <label className="flex items-start gap-2 text-sm"><Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(value === true)} /><span>{t("I have finished tasks using this skill in my AI tools and reviewed the files to replace.")}</span></label>
-              <Button data-tour="skill-apply" disabled={!confirmed || busy} onClick={() => void action(async () => {
+          {review && !candidate && !reinstallReview && <SkillUpdateReview review={review} busy={busy} pending={pending} confirmed={confirmed} setConfirmed={setConfirmed}
+            onApply={() => void action(async () => {
                 if (await review.connection.handle.requestPermission({ mode: "readwrite" }) !== "granted") throw new Error("Allow access to the registered skill folder to continue.");
                 await skillRepository.apply(review);
-              }, "Skill files saved and verified. Check that your AI tool recognizes the updated skill.")}><RefreshCw />{t("Back up and update skill")}</Button>
-            </> : null}
-            {review.state === "custom" && !pending ? <Button data-tour="skill-reinstall" variant="outline" disabled={busy || Boolean(candidate)} onClick={() => {
+              }, "Skill files saved and verified. Check that your AI tool recognizes the updated skill.")} onReinstall={() => {
               setReinstallReview(review); setReinstallConfirmed(false); setConfirmed(false); setRestoreId(undefined);
-            }}><RotateCcw />{t("Review reinstall")}</Button> : null}
-          </section> : null}
+            }} />}
           {reinstallReview ? <SkillReinstallReview review={reinstallReview} busy={busy} confirmed={reinstallConfirmed} onConfirmedChange={setReinstallConfirmed}
             onCancel={() => { setReinstallReview(undefined); setReinstallConfirmed(false); }}
             onApply={() => {
@@ -214,26 +199,12 @@ export function SkillUpdates({ open, onOpenChange, returnFocus }: { open: boolea
                 await skillRepository.reinstall(reinstallReview);
               }, "Skill files saved and verified. Check that your AI tool recognizes the updated skill.");
             }} /> : null}
-          {backups.length ? <section className="space-y-3">
-            <h3 data-tour="skill-backups" className="text-sm font-semibold">{t("Skill backups")}</h3>
-            <p className="text-xs text-muted-foreground">{t("Total backup file contents: {{size}}.", { size: formatSkillBytes(backups.reduce((total, record) => total + skillBackupContentBytes(record), 0), i18n.language) })}</p>
-            <p className="text-xs text-muted-foreground">{t("Backups stay on this site in this browser and are not automatically deleted, even after restoring or disconnecting.")}</p>
-            <p className="text-xs text-muted-foreground">{t("Disconnecting keeps these backups. Export a copy before clearing browser data. Restore will stop if files have changed outside this app.")}</p>
-            <ul className="divide-y divide-border">{backups.map((record) => <li key={record.id} className="space-y-2 py-3">
-              <p className="text-sm">{new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.createdAt))} · {t(record.state === "pending" ? "Recovery required" : record.state === "restored" ? "Restored" : "Update verified")}</p>
-              <p className="text-xs text-muted-foreground">{t("Backup file contents: {{size}} (before and after).", { size: formatSkillBytes(skillBackupContentBytes(record), i18n.language) })}</p>
-              <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy || Boolean(candidate)} onClick={() => exportBackup(record)}><Download />{t("Export backup")}</Button>
-                {record.state !== "restored" ? <Button size="sm" variant="outline" disabled={busy || Boolean(candidate) || (pending && record.state !== "pending")} onClick={() => { setRestoreId(record.id); setReinstallReview(undefined); setReinstallConfirmed(false); }}><RotateCcw />{t("Restore backup")}</Button> : null}</div>
-              {restoreId === record.id ? <div data-tour="skill-restore" className="space-y-2">
-                <p className="text-sm">{t("Finish AI tasks using this skill before restoring. Only files matching the recorded copies will be replaced.")}</p>
-                <SkillReplacementNotice />
-                <div className="flex flex-wrap gap-2"><Button size="sm" disabled={busy || Boolean(candidate)} onClick={() => void action(async () => {
+          {backups.length > 0 && <SkillBackupList backups={backups} busy={busy || Boolean(candidate)} pending={pending} restoreId={restoreId}
+            onStart={id => { setRestoreId(id); setReinstallReview(undefined); setReinstallConfirmed(false); }}
+            exportBackup={exportBackup} onCancel={() => setRestoreId(undefined)} onRestore={record => void action(async () => {
                   if (await record.connection.handle.requestPermission({ mode: "readwrite" }) !== "granted") throw new Error("Allow access to the registered skill folder to continue.");
                   await skillRepository.restore(record.id);
-                }, "Original skill files restored and verified.")}><RotateCcw />{t("Confirm restore")}</Button><Button size="sm" variant="ghost" disabled={busy || Boolean(candidate)} onClick={() => setRestoreId(undefined)}>{t("Cancel")}</Button></div>
-              </div> : null}
-            </li>)}</ul>
-          </section> : null}
+                }, "Original skill files restored and verified.")} />}
           {__APP_RELEASE__.channel === "canary" ? <details className="space-y-3 text-sm">
             <summary className="ak-focus-ring cursor-pointer">{t("Return to the stable skill")}</summary>
             <p>{t("Finish AI tasks and skill changes in this app. Open the stable app, register the same installed skill folder, and review its provided skill before confirming replacement.")}</p>

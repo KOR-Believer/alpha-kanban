@@ -1,3 +1,4 @@
+import { ReconnectFolderButton } from "../components/ReconnectFolderButton";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorkspaceSummary } from "@alpha-kanban/shared";
@@ -149,9 +150,9 @@ export function BrowserReconnect({ workspaceId, mode = "readwrite" }: { workspac
   const actions = useBrowserActions();
   const connection = useQuery({ queryKey: ["browser-project-connection", workspaceId], queryFn: () => browserRepository.projectConnection(workspaceId), retry: false });
   return <div className="grid gap-2">
-    {connection.data ? <Button size="sm" variant="outline" disabled={actions.busy} onClick={() => void actions.run(async () => {
+    {connection.data ? <ReconnectFolderButton disabled={actions.busy} onClick={() => void actions.run(async () => {
       if (await connection.data!.handle.requestPermission({ mode }) !== "granted") throw new Error("Folder access was not granted.");
-    })}><Link2 />{t("Reconnect folder")}</Button> : <p className="text-xs text-muted-foreground">{t("Reconnect the original folder from Start.")}</p>}
+    })} /> : <p className="text-xs text-muted-foreground">{t("Reconnect the original folder from Start.")}</p>}
     <ErrorText message={actions.error} />
   </div>;
 }

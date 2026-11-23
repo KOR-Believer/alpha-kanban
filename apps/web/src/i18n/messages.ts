@@ -1,6 +1,15 @@
 // English source strings are translation keys. Keep complete sentences together.
 export const korean: Record<string, string> = {
+  "Example scenario": "예시 조건",
+  "Select the sample repository, or choose a folder directly to try its docs folder.": "예시 저장소를 선택해 보세요. ‘폴더 직접 선택’을 누르면 예시 저장소 안의 docs 폴더를 사용합니다.",
+  "Reading guide": "독서 안내",
+  "Keep a reading journal.": "읽은 책을 독서 일지에 기록하세요.",
+  "Access denied": "권한 거부",
   "Git revision": "Git 판본",
+  "Refund plan": "환불 정책 플랜",
+  "Refund deadline": "환불 기한 조항",
+  "Refunds are available for 7 days after approval.": "환불 기한은 승인 후 7일입니다.",
+  "Refunds are available for 10 days after approval.": "환불 기한은 승인 후 10일입니다.",
   "Cited revision": "기록 당시",
   "Current working file": "현재 작업 파일",
   "View cited revision": "기록 당시 보기",

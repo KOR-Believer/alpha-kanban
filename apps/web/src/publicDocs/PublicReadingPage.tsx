@@ -13,7 +13,7 @@ import { Button, buttonVariants } from "../components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { docHref, documentId, groups, publicDocuments } from "./catalog";
 import { DocsSearch } from "./DocsSearch";
-import { DocExample, exampleAfter } from "./DocExample";
+import { DocExample, exampleAfter, RevisionLinkExample } from "./DocExample";
 import skillComparisonKo from "./assets/skill-comparison-ko.png";
 import skillComparisonEn from "./assets/skill-comparison-en.png";
 import { releaseTitle } from "../pwa/releases";
@@ -140,6 +140,7 @@ export function PublicReadingPage() {
                 <MarkdownContent components={{ pre: ({ children }) => <CopyCode>{children}</CopyCode>, a: ({ href, children }) => href?.startsWith("/docs") ? <NavigationLink href={href} onNavigate={() => go(href)}>{children}</NavigationLink> : <a href={href}>{children}</a> }}>{section.body[language]}</MarkdownContent>
                 {id === "install" && section.id === "request" ? <SkillInstallPanel /> : null}
                 {id === "updates" && section.id === "skill" ? <SkillUpdatesButton /> : null}
+                {id === "local-links" && section.id === "revision" && <RevisionLinkExample />}
                 {id === "updates" && section.id === "skill" && appBrand.channel === "stable" ? <figure className="ak-docs-capture">
                   <a href={language === "ko" ? skillComparisonKo : skillComparisonEn} target="_blank" rel="noreferrer" aria-label={t("Open the example screenshot at full size (new tab)")}>
                     <img src={language === "ko" ? skillComparisonKo : skillComparisonEn} width={960} height={760} loading="lazy" decoding="async" alt={t("Skill updates comparing an installed release with the provided skill, with compatibility review required.")} />
