@@ -424,6 +424,18 @@ try {
   assert.equal((await workerInfo(page)).buildId, versions.a.release.buildId);
   await unresponsive.close();
   record("Unresponsive app client refuses activation instead of discarding work");
+  await page.getByRole("button", { name: "나중에", exact: true }).click();
+  await page.evaluate(async () => {
+    const root = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-skill");
+    const writer = await (await root.getFileHandle("personal.md", { create: true })).createWritable();
+    await writer.write("Local smoke customization"); await writer.close();
+  });
+  await openMenu(page);
+  await page.getByRole("button", { name: "업데이트 적용", exact: true }).click();
+  await page.getByText("personal.md", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "앱만 업데이트", exact: true }).waitFor();
+  assert(await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).isDisabled());
+  await page.getByRole("checkbox").check();
   await context.setOffline(true); networkUnavailable = true;
   await page.getByRole("button", { name: "백업 후 함께 업데이트", exact: true }).click();
   await until(async () => (await workerInfo(page))?.buildId === versions.b.release.buildId, "controlled activation");
@@ -437,6 +449,8 @@ try {
   const backup = newRows.find(([key]) => key.startsWith("skill-update:recovery:"))?.[1];
   assert.equal(approval?.state, "applied"); assert.equal(approval?.buildId, versions.b.release.buildId);
   assert.equal(backup?.state, "applied"); assert.equal(backup?.id, approval?.recoveryId);
+  assert.equal(backup.operation, "reinstall");
+  assert(backup.before.some(file => file.path === "personal.md" && file.content === "Local smoke customization"));
   assert.deepEqual(afterCombined.records.filter(([key]) => before.records.some(([oldKey]) => key === oldKey)), before.records);
   const installedFiles = await page.evaluate(async () => {
     const root = await (await navigator.storage.getDirectory()).getDirectoryHandle("pwa-smoke-skill");

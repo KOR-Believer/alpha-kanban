@@ -3,13 +3,14 @@ import { useLocation } from "@tanstack/react-router";
 import { BookOpen, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Button, buttonVariants } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { BrandIcon, ChannelBadge } from "../components/AppBrand";
 import { pwaClient } from "./client";
 import { appActivity } from "./activity";
 import { SkillUpdates } from "../skills/SkillUpdates";
 import { useAppSkillUpdate } from "../skills/useAppSkillUpdate";
-import { skillError } from "../skills/repository";
+import { skillError, type SkillReview } from "../skills/repository";
 import { SkillComparisonSummary } from "../skills/SkillComparisonSummary";
 import { SkillReplacementNotice } from "../skills/SkillReplacementNotice";
 import { SkillChanges } from "../skills/SkillChanges";
@@ -46,6 +47,11 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
   const confirmingRef = useRef(false);
   const [applyError, setApplyError] = useState("");
   const prepared = skill.prepared?.buildId === reading?.release.buildId ? skill.prepared : undefined;
+
+  const [approvedReview, setApprovedReview] = useState<SkillReview>();
+  const custom = prepared?.state === "update" && prepared.review?.state === "custom";
+  const needsPermission = prepared?.state === "permission";
+  const canKeepSkill = custom || needsPermission;
 
   useEffect(() => {
     if (enabled) observeRelease(release);
@@ -105,19 +111,37 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
   function close() {
     if (confirmingRef.current) return;
     if (reading && document.visibilityState === "visible") markReleasesRead(reading.records);
+    setApprovedReview(undefined);
     setReading(null); releaseLock.current?.(); releaseLock.current = null;
   }
-  async function apply() {
+  async function allowSkillAccess() {
+    if (!prepared?.handle || confirmingRef.current) return;
+    confirmingRef.current = true; setConfirming(true);
+    try {
+      const permission = await prepared.handle.requestPermission({ mode: "readwrite" });
+      if (permission === "granted") { setApplyError(""); skill.recheck(); }
+      else setApplyError("Allow access to the registered skill folder to continue.");
+    } catch (error) { setApplyError(skillError(error)); }
+    finally { confirmingRef.current = false; setConfirming(false); }
+  }
+
+  async function apply(appOnly = false) {
     if (!reading?.pending || changed || confirmingRef.current || !prepared || prepared.state === "checking") return;
+    if (appOnly && !canKeepSkill) return;
+    if (!appOnly && (prepared.state === "blocked" || needsPermission || (custom && approvedReview !== prepared.review))) return;
     confirmingRef.current = true; setConfirming(true); setApplyError("");
     let approval: string | undefined;
     try {
-      if (prepared.state === "update" && prepared.review) approval = await prepared.repository.approveAppUpdate(prepared.review, release.buildId, reading.release.buildId);
-      else await prepared.repository.cancelAppUpdate();
+      if (!appOnly && prepared.state === "update") {
+        if (!prepared.review) return;
+        approval = await prepared.repository.approveAppUpdate(prepared.review, release.buildId, reading.release.buildId, custom ? "reinstall" : "update");
+      } else await prepared.repository.cancelAppUpdate();
       markReleasesRead(reading.records);
       if (!await pwaClient.apply(reading.release.buildId) && approval) await prepared.repository.cancelAppUpdate(approval);
     } catch (error) {
       setApplyError(skillError(error));
+      setApprovedReview(undefined);
+      skill.recheck();
       if (approval) await prepared.repository.cancelAppUpdate(approval).catch(() => undefined);
     } finally { confirmingRef.current = false; setConfirming(false); }
   }
@@ -165,11 +189,13 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
               <p className="break-all text-sm">{t("Registered folder")}: <strong>{prepared.review.connection.name}</strong></p>
               <SkillComparisonSummary review={prepared.review} channel={reading.release.channel} />
               <SkillChanges review={prepared.review} />
+              {custom && <label className="flex items-start gap-2 text-sm"><Checkbox disabled={confirming} checked={approvedReview === prepared.review} onCheckedChange={checked => setApprovedReview(checked === true ? prepared.review : undefined)} /><span>{t("I have reviewed the changes and agree to replace this installation, including personal changes and extra files.")}</span></label>}
               <p className="text-sm text-muted-foreground">{t("After the app reloads, your skill will be backed up in this browser and updated. Keep the window open until it finishes. You can restore the backup in Skill updates.")}</p>
             </> : null}
+            {needsPermission && <p className="text-sm">{t("Allow access to the registered skill folder to continue.")}</p>}
             {prepared?.state === "blocked" ? <>
               <p role="status" className="text-sm">{t(prepared.error!, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p>
-              <p className="text-sm text-muted-foreground">{t("You can update only the app and manage your skill separately.")}</p>
+
               <Button size="sm" variant="outline" disabled={confirming} onClick={() => { resumeReading.current = reading; close(); }}>{t("Skill updates")}</Button>
             </> : null}
           </section> : null}
@@ -185,7 +211,18 @@ export function ReleaseCenter({ release = RUNNING_RELEASE, enabled = __PWA_ENABL
           {applyError ? <p role="alert" className="text-sm text-destructive">{t(applyError, { defaultValue: t("Skill operation failed. Review the backup before trying again.") })}</p> : null}
           <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" disabled={confirming} onClick={close}>{t(reading?.pending ? "Later" : "Close")}</Button>
-          {reading?.pending ? changed ? <Button disabled={!waiting || confirming} onClick={() => { setApplyError(""); if (waiting) setReading({ release: waiting, records: releaseRecords(waiting).slice().reverse(), pending: true, automatic: false }); }}><RefreshCw />{t("View update")}</Button> : <Button disabled={confirming || app.status === "applying" || !prepared || prepared.state === "checking"} onClick={() => void apply()}><RefreshCw />{t(prepared?.state === "update" ? "Back up skill and update both" : prepared?.state === "blocked" ? "Update app only" : "Apply update")}</Button> : null}
+          {reading?.pending && !changed && canKeepSkill && <Button variant="outline" disabled={confirming || app.status === "applying"} onClick={() => void apply(true)}>{t("Update app only")}</Button>}
+          {reading?.pending && !changed && needsPermission &&
+            <Button disabled={confirming} onClick={() => void allowSkillAccess()}>{t("Allow access again")}</Button>}
+          {reading?.pending && changed && <Button disabled={!waiting || confirming} onClick={() => {
+            if (!waiting) return;
+            setApplyError(""); setApprovedReview(undefined);
+            setReading({ release: waiting, records: releaseRecords(waiting).slice().reverse(), pending: true, automatic: false });
+          }}><RefreshCw />{t("View update")}</Button>}
+          {reading?.pending && !changed && prepared?.state !== "blocked" && !needsPermission &&
+            <Button disabled={confirming || app.status === "applying" || !prepared || prepared.state === "checking" || (custom && approvedReview !== prepared.review)} onClick={() => void apply()}>
+              <RefreshCw />{t(prepared?.state === "update" ? "Back up skill and update both" : "Apply update")}
+            </Button>}
           </div>
         </DialogFooter>
       </DialogContent>

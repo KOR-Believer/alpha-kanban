@@ -468,6 +468,18 @@ describe("PWA-bound skill consent", () => {
     expect((await repository.completeAppUpdate(b, async () => bundle))?.state).toBe("blocked");
     expect(existing.opens).toBe(0);
   });
+  it("backs up and restores a custom installation explicitly approved for replacement across reload", async () => {
+    const { repository, bundle, connection, existing, storage, lock, config } = await fixture();
+    const original = existing.content += " my rule";
+    await repository.approveAppUpdate(await repository.inspect(connection, bundle), a, b, "reinstall");
+    expect(existing.opens).toBe(0);
+    const reopened = new SkillRepository(storage, lock, config);
+    const result = await reopened.completeAppUpdate(b, async () => bundle);
+    expect(result?.state).toBe("applied");
+    expect((await reopened.recoveries())[0]?.operation).toBe("reinstall");
+    await reopened.restore(result!.recoveryId!);
+    expect(existing.content).toBe(original);
+  });
   it("rejects custom and incompatible installations before storing consent", async () => {
     const { repository, bundle, connection, existing, storage, lock, config } = await fixture();
     existing.content += " my rule";

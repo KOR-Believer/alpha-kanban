@@ -264,6 +264,22 @@
         }
       ],
       "guides": ["local-links"]
+    },
+    "2026-11-23-canary-combined-update": {
+      "sections": [
+        {
+          "id": "review-and-apply",
+          "title": {
+            "ko": "내가 수정한 스킬이 있다면",
+            "en": "If you customized your skill"
+          },
+          "body": {
+            "ko": "업데이트 창에서 파일 이름을 펼쳐 내 설치본과 카나리 제공본의 차이를 확인하세요. 내 변경을 유지하려면 **앱만 업데이트**를 선택하세요. 제공본으로 교체하려면 변경 내용을 확인했다는 항목을 체크하고 **백업 후 함께 업데이트**를 누르세요. 앱이 다시 열리면 기존 스킬 전체를 백업하고 새 스킬을 적용합니다. 완료 안내가 뜰 때까지 창을 열어 두세요.",
+            "en": "Expand a file in the update dialog to compare your copy with the Canary version. Choose **Update app only** to keep your changes. To replace your copy, confirm that you reviewed the changes and choose **Back up skill and update both**. When the app reopens, it backs up the entire previous installation and applies the new skill. Keep the window open until you see the completion notice."
+          }
+        }
+      ],
+      "guides": ["updates"]
     }
   }
 }

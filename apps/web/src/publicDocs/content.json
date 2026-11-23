@@ -828,8 +828,8 @@
             "en": "App updates and skill updates"
           },
           "body": {
-            "ko": "앱은 지금 읽고 있는 웹 화면이고, 스킬은 AI 도구가 읽는 `implementation-ledger` 폴더입니다. 둘은 업데이트 대상이 다릅니다.\n\n앱의 업데이트 알림에서 변경 내용을 읽고 적용하세요. 작성 중인 입력이나 저장 작업이 있다면 먼저 마무리합니다. **앱만 업데이트**하면 설치된 스킬 파일은 그대로입니다. 변경 내역을 열어 읽는 것만으로 적용되지는 않습니다.",
-            "en": "The app is the web interface you are reading. The skill is the `implementation-ledger` folder read by your AI tool. They are separate update targets.\n\nRead the changes in the app’s update notice before applying. Finish unsaved input or active saves first. An **app-only update** leaves installed skill files unchanged. Reading release notes does not apply anything."
+            "ko": "앱은 지금 읽고 있는 웹 화면이고, 스킬은 AI 도구가 읽는 `implementation-ledger` 폴더입니다. 둘은 업데이트 대상이 다릅니다.\n\n앱의 업데이트 알림에서 변경 내용을 읽고 적용하세요. 작성 중인 입력이나 저장 작업이 있다면 먼저 마무리합니다. 연결한 스킬에 변경이 있으면 **백업 후 함께 업데이트**를 누르세요. 개인 수정본이나 미확인 설치본은 파일별 차이를 보고 교체에 동의한 뒤 진행합니다. 내 수정본을 유지하거나 폴더 접근을 허용할 수 없으면 **앱만 업데이트**를 선택하세요. 변경 내역을 열어 읽는 것만으로 적용되지는 않습니다.",
+            "en": "The app is the web interface you are reading. The skill is the `implementation-ledger` folder read by your AI tool. They are separate update targets.\n\nRead the changes in the app’s update notice before applying. Finish unsaved input or active saves first. Choose **Back up skill and update both** to update your registered skill with the app. For a customized or unrecognized installation, review the file changes and confirm replacement first. Choose **Update app only** to keep your changes or when you cannot grant folder access. Reading release notes does not apply anything."
           }
         },
         {

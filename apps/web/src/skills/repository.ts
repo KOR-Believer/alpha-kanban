@@ -18,6 +18,7 @@ export type SkillRecovery = {
 };
 type Fingerprint = Pick<SnapshotFile, "path" | "sha256" | "mtime">;
 export type AppSkillUpdate = {
+  operation?: "update" | "reinstall";
   id: string; fromBuild: string; buildId: string; version: string; digest: string;
   connectionId: string; files: Fingerprint[];
   state: "approved" | "writing" | "applied" | "blocked";
@@ -151,7 +152,6 @@ export class SkillRepository {
   async apply(review: SkillReview) {
     return this.lock(LOCK, () => appActivity.run(() => this.applyReview(review), true));
   }
-  // Only the explicit reinstall flow calls this; normal and PWA updates still require a known snapshot.
   async reinstall(review: SkillReview) {
     return this.lock(LOCK, () => appActivity.run(() => this.applyReview(review, crypto.randomUUID(), "reinstall"), true));
   }
@@ -182,13 +182,13 @@ export class SkillRepository {
     await this.storage.set(RECOVERY + recovery.id, { ...recovery, state: "applied" });
     return recovery.id;
   }
-  async approveAppUpdate(review: SkillReview, fromBuild: string, buildId: string) {
+  async approveAppUpdate(review: SkillReview, fromBuild: string, buildId: string, operation: "update" | "reinstall" = "update") {
     return this.lock(LOCK, () => appActivity.run(async () => {
       if (this.target.compatible !== true || !this.target.digest || !/^[a-f0-9]{16}$/.test(buildId) || !/^[a-f0-9]{16}$/.test(fromBuild) || buildId === fromBuild) throw new Error("Ask your AI tool to review compatibility before changing your skill or documents.");
       const previous = await this.storage.get<AppSkillUpdate>(APP_UPDATE);
       if (previous?.state === "writing") throw new Error("Review the unfinished skill update before changing its connection.");
-      const current = await this.checkReview(review);
-      const approval: AppSkillUpdate = { id: crypto.randomUUID(), fromBuild, buildId, version: this.target.version, digest: this.target.digest,
+      const current = await this.checkReview(review, operation);
+      const approval: AppSkillUpdate = { id: crypto.randomUUID(), fromBuild, buildId, operation, version: this.target.version, digest: this.target.digest,
         connectionId: current.connection.id, files: current.files.map(({ path, sha256, mtime }) => ({ path, sha256, mtime })), state: "approved" };
       await this.storage.set(APP_UPDATE, approval);
       return approval.id;
@@ -225,11 +225,12 @@ export class SkillRepository {
         if (!connection || connection.id !== approval.connectionId) throw new Error(CHANGED);
         const review = await this.inspect(connection, await load());
         if (!unchanged(review.files, approval.files)) throw new Error(CHANGED);
-        await this.checkReview(review);
+        const operation = approval.operation === "reinstall" ? "reinstall" : "update";
+        await this.checkReview(review, operation);
         // Claim once under the shared skill lock. A crash here requires explicit review, never an automatic retry.
         approval = { ...approval, state: "writing", recoveryId: crypto.randomUUID() };
         await this.storage.set(APP_UPDATE, approval);
-        await this.applyReview(review, approval.recoveryId);
+        await this.applyReview(review, approval.recoveryId, operation);
         approval = { ...approval, state: "applied" };
       } catch (error) {
         approval = { ...approval, state: "blocked", error: skillError(error) };

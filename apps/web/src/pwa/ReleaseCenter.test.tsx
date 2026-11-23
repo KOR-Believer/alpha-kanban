@@ -17,7 +17,7 @@ vi.mock("@tanstack/react-router", () => ({ useLocation: () => mock.path }));
 vi.mock("./client", () => ({ pwaClient: { getSnapshot: () => mock.state, subscribe: (listener: () => void) => { mock.listeners.add(listener); return () => mock.listeners.delete(listener); }, apply: mock.apply } }));
 vi.mock("../skills/repository", async (original) => ({ ...await original<typeof import("../skills/repository")>(), skillRepository: { connection: async () => undefined, recoveries: async () => [] } }));
 vi.mock("../skills/useAppSkillUpdate", () => ({ useAppSkillUpdate: (_: ReleaseInfo, target?: ReleaseInfo) => ({
-  result: skills.result, dismissResult: skills.dismiss,
+  recheck: vi.fn(), result: skills.result, dismissResult: skills.dismiss,
   prepared: target ? { buildId: target.buildId, state: skills.state, review: skills.review, error: skills.error, repository: { approveAppUpdate: skills.approve, cancelAppUpdate: skills.cancel } } : undefined,
 }) }));
 function release(n: number): ReleaseInfo {
@@ -192,7 +192,7 @@ describe("one confirmation for app and registered skill", () => {
   it("durably approves the exact target before applying, and cancels when the app is blocked", async () => {
     await open(); mock.apply.mockResolvedValue(false);
     await click("백업 후 함께 업데이트");
-    expect(skills.approve).toHaveBeenCalledWith(skills.review, release(1).buildId, release(2).buildId);
+    expect(skills.approve).toHaveBeenCalledWith(skills.review, release(1).buildId, release(2).buildId, "update");
     expect(mock.apply).toHaveBeenCalledWith(release(2).buildId);
     expect(skills.approve.mock.invocationCallOrder[0]).toBeLessThan(mock.apply.mock.invocationCallOrder[0]!);
     expect(skills.cancel).toHaveBeenCalledWith("approval");
@@ -202,8 +202,23 @@ describe("one confirmation for app and registered skill", () => {
     await click("백업 후 함께 업데이트");
     expect(mock.apply).not.toHaveBeenCalled(); expect(document.querySelector('[role="alert"]')).not.toBeNull();
   });
+  it("requires separate consent to replace a custom installation in the combined update", async () => {
+    await open(); skills.review = { ...skills.review!, state: "custom" };
+    await render(release(1));
+    await click("백업 후 함께 업데이트"); expect(skills.approve).not.toHaveBeenCalled();
+    await act(async () => dialog()!.querySelector<HTMLElement>('[role="checkbox"]')!.click());
+    await click("백업 후 함께 업데이트");
+    expect(skills.approve).toHaveBeenCalledWith(skills.review, release(1).buildId, release(2).buildId, "reinstall");
+  });
+  it("keeps a custom skill when the secondary app-only action is chosen", async () => {
+    await open(); skills.review = { ...skills.review!, state: "custom" };
+    await render(release(1)); await click("앱만 업데이트");
+    expect(skills.approve).not.toHaveBeenCalled();
+    expect(skills.cancel).toHaveBeenCalled();
+    expect(mock.apply).toHaveBeenCalledWith(release(2).buildId);
+  });
   it("allows an explicitly app-only update when the skill cannot be replaced", async () => {
-    await open(); skills.state = "blocked"; skills.error = "Personal or unrecognized files will not be overwritten. Ask your agent to compare them.";
+    await open(); skills.state = "permission";
     await render(release(1)); await click("앱만 업데이트");
     expect(skills.approve).not.toHaveBeenCalled(); expect(mock.apply).toHaveBeenCalledWith(release(2).buildId);
   });
