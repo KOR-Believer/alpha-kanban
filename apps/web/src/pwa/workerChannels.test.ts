@@ -14,7 +14,14 @@ function workerSource(channel: Channel) {
     plugins: [{ name: "workbox-fixture", setup(builder) {
       builder.onResolve({ filter: /^workbox-/ }, (args) => ({ path: args.path, namespace: "fixture" }));
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: `
-        export class PrecacheController { addToCacheList() {} getURLsToCacheKeys() { return new Map(); } createHandlerBoundToURL() { return () => {}; } install() {} activate() {} }
+        export class PrecacheController {
+          strategy = { plugins: [] };
+          addToCacheList() {}
+          getURLsToCacheKeys() { return new Map(); }
+          createHandlerBoundToURL() { return () => {}; }
+          install() {}
+          activate() {}
+        }
         export class PrecacheRoute { match() {} handler() {} }
         export class NavigationRoute { constructor(handler, options) { self.navigationAllowlist = options.allowlist; } }
         export function registerRoute() {}
