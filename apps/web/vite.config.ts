@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import { browserPwa, releaseInfo } from "./pwa.config";
@@ -21,13 +22,18 @@ export default defineConfig(({ command }) => {
       next();
     });
   } }, react(), tailwindcss(), browserBrand(release.channel), {
-    name: "font-licenses",
+    name: "distribution-licenses",
     generateBundle() {
       this.emitFile({
         type: "asset",
         fileName: "fonts/OFL.txt",
         source: readFileSync(new URL("./licenses/OFL.txt", import.meta.url), "utf8"),
       });
+      const resolvePackage = createRequire(import.meta.url);
+      const bufferRequire = createRequire(resolvePackage.resolve("buffer/package.json"));
+      const gitNotices = ["LICENSE.md", "index.umd.min.js.LICENSE.txt"].map(name => new URL("./node_modules/isomorphic-git/" + name, import.meta.url));
+      const bufferNotices = [resolvePackage.resolve("buffer/LICENSE"), bufferRequire.resolve("base64-js/LICENSE"), bufferRequire.resolve("ieee754/LICENSE")];
+      this.emitFile({ type: "asset", fileName: "licenses/git-reader.txt", source: [...gitNotices, ...bufferNotices].map(path => readFileSync(path, "utf8")).join("\n\n") });
     },
   }, ...(pwa ? browserPwa(release) : [])],
   publicDir: "public-browser",
@@ -41,6 +47,8 @@ export default defineConfig(({ command }) => {
       // Dev serves workers through the client optimizer. Use the equivalent
       // DOM-free decoder there; production changes only the worker bundle.
       ...(command === "serve" ? markdownWorkerAliases : {}),
+      "@alpha-kanban/shared/revisionLinks": fileURLToPath(new URL("../../packages/shared/src/revisionLinks.mjs", import.meta.url)),
+      "@alpha-kanban/shared/revisionHeadings": fileURLToPath(new URL("../../packages/shared/src/revisionHeadings.mjs", import.meta.url)),
       "@alpha-kanban/shared/documentSettings": fileURLToPath(new URL("../../packages/shared/src/documentSettings.mjs", import.meta.url)),
       "@alpha-kanban/shared/smokeMarkdown": fileURLToPath(new URL("../../packages/shared/src/smokeMarkdown.mjs", import.meta.url)),
       "@alpha-kanban/shared/smokeRun": fileURLToPath(new URL("../../packages/shared/src/smokeRun.mjs", import.meta.url)),

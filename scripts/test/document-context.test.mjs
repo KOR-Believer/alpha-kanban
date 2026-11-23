@@ -58,6 +58,101 @@ test("no settings preserves the existing basic location and creates nothing", as
   ok(await f.resolve({ home: path.join(f.root, "unavailable-home") }));
 });
 
+test("artifacts uses the existing filename, physical directory and this record's UUID without writing anything", async t => {
+  const f = await fixture(t);
+  const resolve = target => f.resolve({ operation: "artifacts", target });
+  const id = idHeader.slice("Document-ID: ".length);
+  const markdown = "# Run\n\n" + idHeader + "\n";
+  await put(path.join(f.project, "docs/01_Sample-v2_a_plan.md"), markdown);
+  const before = await snapshot(f.root);
+  assert.deepEqual(ok(await resolve("docs/01_Sample-v2_a_plan.md")).artifacts, {
+    slug: "Sample-v2_a", fixtures: "docs/assets/Sample-v2_a/fixtures", references: "docs/assets/Sample-v2_a/references",
+    runEvidence: null, output: ".output/alpha-kanban/Sample-v2_a/" + id,
+  });
+  assert.deepEqual(await snapshot(f.root), before);
+  await put(path.join(f.project, ".ak.config"), "[documents]\nroot = team/records\n");
+  const folder = "team/records/@outer/billing/@alice/qa";
+  const run = folder + "/142_settlement_qa_smoke_run.md";
+  await put(path.join(f.project, run), markdown + "\nSmoke-Document-ID: 11111111-1111-4111-8111-111111111111\n");
+  await put(path.join(f.project, "team/records/@bob/142_settlement_qa_smoke_run.md"), "# Other\n\nDocument-ID: 22222222-2222-4222-8222-222222222222\n");
+  const paths = ok(await resolve(run)).artifacts;
+  assert.equal(paths.runEvidence, folder + "/assets/settlement_qa/runs/142_settlement_qa_smoke_run");
+  assert.equal(paths.output, ".output/alpha-kanban/settlement_qa/" + id);
+  assert.notEqual(ok(await resolve("team/records/@bob/142_settlement_qa_smoke_run.md")).artifacts.output, paths.output);
+  await put(path.join(f.project, folder, "143_settlement_qa_tickets.md"), "# Legacy\n");
+  const legacy = ok(await resolve(folder + "/143_settlement_qa_tickets.md"));
+  assert.equal(legacy.document.documentIdStatus, "missing");
+  assert.equal(legacy.artifacts.fixtures, paths.fixtures);
+  assert.equal(legacy.artifacts.output, null);
+  error(await resolve("docs/01_Sample-v2_a_plan.md"), "ARTIFACT_SOURCE");
+});
+
+test("attachment and temporary paths cannot own a new record; fixtures do not consume document numbers", async t => {
+  const f = await fixture(t);
+  const owner = "docs/@alice";
+  const file = owner + "/07_notes_smoke.md";
+  const fixtures = owner + "/assets/notes/fixtures";
+  await put(path.join(f.project, file), "# Notes\n\n" + idHeader + "\n");
+  await put(path.join(f.project, fixtures, "999_fake_tickets.md"), "# Fixture\n");
+  assert.equal(ok(await f.resolve({ target: owner })).numbering.next, "08");
+  error(await f.resolve({ target: fixtures }), "ARTIFACT_DIRECTORY");
+  error(await f.resolve({ target: ".output" }), "ARTIFACT_DIRECTORY");
+  error(await f.resolve({ target: ".output/alpha-kanban/notes" }), "ARTIFACT_DIRECTORY");
+  error(await f.resolve({ operation: "check-new", target: fixtures + "/999_fake_tickets.md" }), "ARTIFACT_DIRECTORY");
+  error(await f.resolve({ operation: "artifacts", target: fixtures + "/999_fake_tickets.md" }), "ARTIFACT_SOURCE");
+  for (const name of ["01_.._plan.md", "02_CON_smoke.md"]) {
+    await put(path.join(f.project, owner, name), "# Unusable slug\n");
+    error(await f.resolve({ operation: "artifacts", target: owner + "/" + name }), "ARTIFACT_SLUG");
+  }
+  if (process.platform !== "win32") {
+    const output = path.join(f.project, ".output");
+    await symlink(f.home, output, "dir");
+    error(await f.resolve({ operation: "artifacts", target: file }), "SYMLINK_TARGET");
+    assert.deepEqual(await readdir(f.home), []);
+  }
+});
+
+test("removing the scratch subtree preserves the tracked run and evidence and allows the exact input to be regenerated", async t => {
+  const f = await fixture(t);
+  const run = "docs/@alice/142_upload_limits_smoke_run.md";
+  await put(path.join(f.project, run), "# Upload smoke\n\n" + idHeader + "\n");
+  const options = { operation: "artifacts", target: run };
+  assert.equal(ok(await f.resolve(options)).outputIgnore, "rule-needed");
+  await put(path.join(f.project, ".git/info/exclude"), "/.output/\n");
+  assert.equal(ok(await f.resolve(options)).outputIgnore, "rule-needed");
+  await put(path.join(f.project, ".gitignore"), "/.output/\n!/.output/\n");
+  assert.equal(ok(await f.resolve(options)).outputIgnore, "rule-needed");
+  await put(path.join(f.project, ".gitignore"), await readFile(path.join(repo, ".gitignore")));
+  const { artifacts, outputIgnore } = ok(await f.resolve(options));
+  assert.equal(outputIgnore, "ignored");
+  const generated = path.join(f.project, artifacts.output, "oversize.bin");
+  const generator = path.join(artifacts.fixtures, "make-large.mjs");
+  const evidence = path.join(artifacts.runEvidence, "observed.txt");
+  const payloadSize = 10 * 1024 * 1024 + 1024;
+  await put(path.join(f.project, generator), 'import { writeFileSync } from "node:fs";\nwriteFileSync(process.argv[2], Buffer.alloc(Number(process.argv[3]), 42));\n');
+  await put(path.join(f.project, evidence), "The app displayed the size limit.\n");
+  const evidenceLink = path.relative(path.dirname(run), evidence).split(path.sep).join("/");
+  await put(path.join(f.project, run), "# Upload smoke\n\n" + idHeader + "\n\n[Observation](" + evidenceLink + ")\n");
+  const generate = async () => {
+    await mkdir(path.dirname(generated), { recursive: true });
+    execFileSync(process.execPath, [generator, generated, String(payloadSize)], { cwd: f.project });
+    const contents = await readFile(generated);
+    assert.equal(contents.length, payloadSize);
+    return createHash("sha256").update(contents).digest("hex");
+  };
+  const originalHash = await generate();
+  git(f.project, "add", ".");
+  const tracked = git(f.project, "ls-files").split("\n");
+  assert.ok([generator, evidence, run].every(file => tracked.includes(file.split(path.sep).join("/"))));
+  assert.equal(git(f.project, "check-ignore", "--", artifacts.output + "/oversize.bin"), artifacts.output + "/oversize.bin");
+  await put(path.join(f.project, ".output/another-tool/state"), "keep");
+  await rm(path.join(f.project, ".output/alpha-kanban"), { recursive: true });
+  assert.equal(await readFile(path.join(f.project, path.dirname(run), evidenceLink), "utf8"), "The app displayed the size limit.\n");
+  assert.equal(await readFile(path.join(f.project, ".output/another-tool/state"), "utf8"), "keep");
+  assert.equal(await generate(), originalHash);
+  assert.equal(git(f.project, "diff", "--name-only"), "");
+});
+
 test("home user, invalid user, existing @ folders and unbound ancestor settings do not opt in", async t => {
   const f = await fixture(t);
   await put(path.join(f.home, ".ak.user"), user("@alice"));

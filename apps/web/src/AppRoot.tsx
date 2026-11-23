@@ -6,6 +6,7 @@ import { AllProjectsBoard } from "./AllProjectsBoard";
 import { IntroPage } from "./IntroPage";
 import { browserRepository } from "./browser/repository";
 import { ReleaseCenter } from "./pwa/ReleaseCenter";
+import { GitRevisionPage } from "./browser/GitRevisionPage";
 import { LinkedNavigationProvider } from "./browser/linkedNavigation";
 import { useTranslation } from "./i18n";
 
@@ -14,13 +15,14 @@ const PublicReadingPage = lazy(() => import("./publicDocs/PublicReadingPage").th
 export function AppRoot() {
   const queryClient = useQueryClient();
   const pathname = useLocation({ select: (location) => location.pathname });
+  const externalRevision = useLocation({ select: location => location.pathname === "/" && location.hash.startsWith("revision=") });
   const { t } = useTranslation();
   const isIntroduction = pathname === "/about" || pathname === "/intro";
   const isPublicReading = pathname === "/docs" || pathname.startsWith("/docs/") || pathname === "/releases" || pathname.startsWith("/releases/");
   const [allowStartupAutoOpen, setAllowStartupAutoOpen] = useState(pathname === "/");
   useEffect(() => {
-    if (pathname !== "/") setAllowStartupAutoOpen(false);
-  }, [pathname]);
+    if (pathname !== "/" || externalRevision) setAllowStartupAutoOpen(false);
+  }, [pathname, externalRevision]);
   useEffect(() => {
     if (isIntroduction || isPublicReading) return;
     return browserRepository.subscribe(() => {
@@ -33,7 +35,7 @@ export function AppRoot() {
   if (isPublicReading) return <Suspense fallback={<p role="status" className="p-6">{t("Loading page…")}</p>}><PublicReadingPage /></Suspense>;
   // Introduction and its legacy redirect never start workspace discovery or reopening.
   return <LinkedNavigationProvider>
-    {isIntroduction ? <IntroPage /> : pathname === "/all" ? <AllProjectsBoard /> : <App allowStartupAutoOpen={allowStartupAutoOpen} />}
+    {externalRevision ? <main className="h-dvh"><GitRevisionPage /></main> : isIntroduction ? <IntroPage /> : pathname === "/all" ? <AllProjectsBoard /> : <App allowStartupAutoOpen={allowStartupAutoOpen} />}
     <ReleaseCenter />
   </LinkedNavigationProvider>;
 }

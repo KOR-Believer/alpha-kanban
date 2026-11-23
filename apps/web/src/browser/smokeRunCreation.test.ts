@@ -21,6 +21,7 @@ describe("guarded smoke run creation",()=>{
   it("uses the physical owner number scope including hidden folders, excludes nested owners and keeps the source untouched",async()=>{
     const f=await fixture(); f.owner.file("22_other_plan.md","# Other"); f.owner.directory(".hidden").file("33_old.md","# Old");
     f.owner.directory("@bob").file("999_foreign.md","# Foreign");
+    f.folder.directory("assets").directory("notes").directory("fixtures").file("9999_sample_smoke_run.md", sourceText);
     const plan=await f.prepare(); expect(plan.path).toBe("docs/@alice/feature/34_notes_smoke_run.md");
     expect(plan.owner).toBe("@alice");
     const result=await f.repository.createSmokeRun(plan,fields), run=parseSmokeDocument(result.markdown,"smoke-run",{newRun:true});

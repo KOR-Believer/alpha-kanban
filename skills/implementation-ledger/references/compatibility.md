@@ -2,7 +2,7 @@
 
 ## Sources of truth
 
-`scripts/lib/ledger-contract.mjs` declares skill revision **3**, readable/writable document formats **unversioned and 1**, and the new-document default **unversioned**. SKILL.md metadata and packaged manifest must agree with it. Revision 1 is the first declared revision, not a version retroactively assigned to older bundles. No previous semantic versions are inferred from bundle hashes.
+`scripts/lib/ledger-contract.mjs` declares skill revision **4**, readable/writable document formats **unversioned and 1**, and the new-document default **unversioned**. SKILL.md metadata and packaged manifest must agree with it. Revision 1 is the first declared revision, not a version retroactively assigned to older bundles. No previous semantic versions are inferred from bundle hashes.
 
 | Identifier | Meaning |
 | --- | --- |
@@ -43,6 +43,7 @@ A release record identifies its revision, supported read/write formats, new-docu
 
 | Revision | Change / affected earlier installations | Recommendation / document migration |
 | --- | --- | --- |
+| 4 | Adds Git revision citations for committed policies and code, and deterministic directories for document fixtures, retained evidence and disposable output. | Recommended for authors citing past decisions or creating attachments. Existing documents require no migration. |
 | 3 (local, not yet published) | Each new plan/tickets/inventory file receives its own UUID by default; `check-new` requires it. Revisions 2 and earlier allowed omission. Existing document grammar, rendering and ordinary edits remain unchanged. | Recommended for automatic new-document identity; no existing document migration required by an update. |
 | 2 (local, not yet published) | Optional ID assignment, legacy Progress Board cleanup, standalone guarded document CLI and explicit installation provenance. Affects revisions 1 and undeclared installations only when these capabilities are wanted. | Recommended for these optional operations; no document migration required by an update. |
 | 1 (local, not yet published) | First explicit contract; preserves undeclared legacy documents and optional Owner. Previous undeclared bundles have unknown capabilities until compared. Adds shared format guards and read-only identity analysis. | Use when format checks/identity analysis are needed; no automatic document migration. Installation replacement still requires separate verification and consent. |

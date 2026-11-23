@@ -9,7 +9,7 @@ import "./file-preview.css";
 
 const HtmlPreview = lazy(() => import("./HtmlPreview"));
 export type PreviewResourceReader = (sourcePath: string, href: string, signal: AbortSignal) => Promise<{ file: File; path: string }>;
-export default function FilePreview({ file, path, readResource }: { file: File; path: string; readResource: PreviewResourceReader }) {
+export default function FilePreview({ file, path, readResource, range }: { range?: { start: number; end: number }; file: File; path: string; readResource: PreviewResourceReader }) {
   const { t } = useTranslation();
   const [data, setData] = useState<FilePreviewData>(), [error, setError] = useState("");
   const [url, setUrl] = useState("");
@@ -31,7 +31,7 @@ export default function FilePreview({ file, path, readResource }: { file: File; 
   return <div className="ak-file-preview" data-tour="file-preview">
     <div className="ak-file-preview-tools"><span className="truncate" title={path}>{file.name}</span><span>{t("{{size}} B", { size: Intl.NumberFormat().format(file.size) })}</span><span>{t("Read-only")}</span>{download}</div>
     {error ? <div className="ak-file-preview-message" role="alert">{t(error)}</div> : !data ? <p className="ak-file-preview-message" role="status">{t("Loading file…")}</p>
-      : data.kind === "text" ? <SourceReader text={data.text!} truncated={data.truncated} />
+      : data.kind === "text" || (data.kind === "html" && range) ? <SourceReader range={range} text={data.text!} truncated={data.truncated} />
       : data.kind === "html" ? <Suspense fallback={<p>{t("Loading file…")}</p>}><HtmlPreview text={data.text!} path={path} readResource={readResource} /></Suspense>
       : data.kind === "image" ? <>
         <div className="ak-file-preview-tools"><Button size="iconSm" variant="ghost" aria-label={t("Zoom out")} onClick={() => changeZoom(-25)}><Minus /></Button>

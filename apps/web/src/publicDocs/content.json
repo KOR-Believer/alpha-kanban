@@ -297,6 +297,17 @@
           }
         },
         {
+          "id": "artifacts",
+          "title": {
+            "ko": "다시 쓸 자료와 지워도 되는 파일",
+            "en": "Keep the evidence and clear temporary files"
+          },
+          "body": {
+            "ko": "팀원이 새로 체크아웃해도 같은 TC를 수행하려면 작은 입력 파일이나 생성기를 문서와 함께 커밋하세요. 예를 들어 `docs/@alice/142_upload_limits_smoke_run.md`의 슬러그는 `upload_limits`입니다. 소유자 없이 쓰거나 문서 폴더를 `contexts`로 정했어도 아래 첨부 경로는 해당 Markdown 파일 옆에서 시작합니다.\n\n| 남길 자료 | 문서 기준 상대 경로 |\n| --- | --- |\n| 테스트 입력과 생성기 | `assets/upload_limits/fixtures/` |\n| 여러 회차에서 볼 기준 화면·참고 자료 | `assets/upload_limits/references/` |\n| 이번 회차의 결과를 보여 주는 캡처 | `assets/upload_limits/runs/142_upload_limits_smoke_run/` |\n\n예를 들어 용량 제한을 확인할 때는 10 MiB + 1 KiB 파일을 만드는 명령과 인수를 사전조건에 적으세요. 생성한 10,486,784바이트 파일은 저장소 루트의 `.output/alpha-kanban/upload_limits/<실행 기록의 Document-ID>/`에 둡니다. 실패 화면이 결과를 이해하는 데 필요하면 그 캡처만 회차 첨부로 골라 실행 기록에서 링크하세요.\n\n저장소 루트의 `.gitignore`에 `/.output/`을 한 번 넣으면 모든 소유자에게 적용됩니다. 실행과 파일 전달이 끝나면 그 회차의 임시 폴더를 통째로 지울 수 있습니다. 사용 중인 회차가 하나도 없다면 `.output/alpha-kanban/` 전체를 비워도 됩니다. 첨부는 **파일 탐색**에서 열 수 있습니다.",
+            "en": "Commit small inputs or their generators alongside the document so a teammate can run the same case from a fresh checkout. For example, the slug of `docs/@alice/142_upload_limits_smoke_run.md` is `upload_limits`. These attachment paths start beside that Markdown file, including when using a custom root such as `contexts` or working without an owner folder.\n\n| What to keep | Path relative to the document |\n| --- | --- |\n| Test inputs and generators | `assets/upload_limits/fixtures/` |\n| A reference image or specification used across runs | `assets/upload_limits/references/` |\n| A capture that explains this run’s result | `assets/upload_limits/runs/142_upload_limits_smoke_run/` |\n\nFor a size limit test, record the command and arguments for generating a 10 MiB + 1 KiB input in the prerequisites. Put the generated 10,486,784-byte file in `.output/alpha-kanban/upload_limits/<run Document-ID>/` at the repository root. If a screenshot explains a failure, save that capture with the run’s attachments and link to it from the record.\n\nAdd `/.output/` to the repository-root `.gitignore` once for all owners. After a run and any handoff have finished, you can remove its whole temporary directory. When no run is using it, you can clear the entire `.output/alpha-kanban/` subtree. Open the retained attachments in **File explorer**."
+          }
+        },
+        {
           "id": "sheets",
           "title": {
             "ko": "시트와 새 회차 사용하기",
@@ -584,6 +595,17 @@
           "body": {
             "ko": "문서 링크를 눌렀는데 현재 폴더에서 열 수 없으면 **로컬 링크 연결**에서 대상을 확인합니다. 허용한 workspace 아래에서 Git 정보로 repo 후보를 찾으며, 확실한 대응과 실제 파일 경로가 확인되면 연결해 엽니다. 후보가 여러 개이거나 확인할 수 없으면 직접 고릅니다. 검색 중에도 폴더 선택을 쓸 수 있습니다.\n\nrepo 이름이나 clone 폴더 이름이 같다는 이유만으로 연결하지 않습니다. 대상 repo 또는 폴더를 고른 뒤 **연결할 원래 폴더**, **선택한 폴더 안에서 열 파일**, 실제 열릴 파일을 확인하세요. 이름이 비슷한 여러 폴더가 있다면 사용할 폴더를 직접 확인합니다.\n\nrepo 루트를 연결하면 같은 이전 repo 앞 경로를 공유하는 다른 링크에도 재사용됩니다. `docs` 폴더만 연결하면 그 앞 경로 아래만 연결됩니다. 처음부터 넓게 재사용하려면 repo 루트를 선택하고 남은 경로가 `docs/guide.md`처럼 맞는지 보세요.\n\n확인한 연결은 현재 사이트의 이 브라우저에 저장합니다. 원본 Markdown·Git 설정·agent 설정은 바뀌지 않습니다. 다른 프로젝트나 PC·브라우저·채널에는 자동으로 복사되지 않습니다. 저장된 연결이 열리지 않으면 [연결 변경·해제](/docs/connections)에서 폴더와 경로를 다시 확인하세요.\n\n연결한 Markdown은 같은 뷰어의 읽기 전용 페이지로 엽니다. 연결을 바꾸려면 [연결 변경·해제](/docs/connections)를 보세요.",
             "en": "When a document link cannot open from the current folder, use **Connect local link** to check its destination. The app searches granted workspaces for repository candidates using Git information. It can connect and open a link when a unique correspondence and the actual file path are verified. Otherwise, choose the destination yourself. Manual folder selection remains available during discovery.\n\nA matching repository or clone folder name alone is not enough. After choosing a repo or folder, check the **Old folder to replace**, **File to open inside the selected folder**, and the actual destination file. If several folders could match, confirm which one you intend to use.\n\nConnecting a repo root reuses the mapping for other links with the same old repo prefix. Connecting only `docs` covers that prefix alone. For broader reuse, choose the repo root and check that the remaining path, such as `docs/guide.md`, is correct.\n\nThe confirmed mapping stays on this site in this browser. It does not change Markdown, Git, or agent settings, and is not automatically copied to another project, PC, browser, or channel. If a saved connection stops opening, check the folder and path in [Manage connections](/docs/connections).\n\nConnected Markdown opens as a read-only page in the same reader. See [Manage connections](/docs/connections) to change it."
+          }
+        },
+        {
+          "id": "revision",
+          "title": {
+            "ko": "결정을 내릴 당시의 파일 읽기",
+            "en": "Read the file behind a decision"
+          },
+          "body": {
+            "ko": "근거 링크를 누르면 **기록 당시**의 파일이 열립니다. 예를 들어 환불 기한이 7일에서 10일로 바뀌어도, 7일을 기준으로 작성한 플랜에서는 당시 조항을 읽을 수 있습니다. 그 문서 안의 상대 링크와 그림도 같은 커밋에서 열립니다. 당시 내용을 읽다가 **현재와 비교**를 누르면 왼쪽에는 기록 당시 원문, 오른쪽에는 디스크에 저장된 현재 파일이 나옵니다. 커밋하기 전의 수정도 보입니다. 이미지 두 장은 나란히 볼 수 있습니다. 당시 티켓은 보드로, 스모크와 실행 기록은 시트로 열립니다.\n\n저장소를 확인해야 하면 읽던 문서 위에 선택 창이 열립니다. 목록에서 해당 폴더를 누르면 판본으로 이동하고, 취소하면 읽던 곳에 머뭅니다. 목록에 없으면 폴더 선택창에서 직접 고를 수 있습니다. 선택한 저장소는 **로컬 폴더 → 링크 연결**에서 확인하거나 해제할 수 있습니다. 작성자가 함께 기록한 **웹 원문**으로 GitHub나 GitLab에서 열 수도 있습니다.",
+            "en": "Open a citation to see the **Cited revision**. If a refund window changed from seven days to ten, a plan written under the seven-day policy still opens that clause. Relative links and images in the document use the same commit. Select **Compare with current** to see the cited text on the left and the file saved on disk on the right, including uncommitted edits. Images appear side by side. Ticket citations open as boards, and smoke definitions and runs open as sheets.\n\nIf a repository is needed, a picker opens over the document. Select a listed repository or choose its folder on your computer to open the revision. Cancel to keep reading where you were. You can see or remove the saved repository under **Local folders → Link connections**. When the citation includes a **Web original**, you can also open it on GitHub or GitLab."
           }
         }
       ]

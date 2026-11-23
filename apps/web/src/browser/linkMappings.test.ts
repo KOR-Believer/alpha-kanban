@@ -62,6 +62,7 @@ describe("conservative Git discovery", () => {
   it("normalizes transport and strips credentials, preserving forks and remote roles", () => {
     for (const value of ["git@example.com:team/product.git", "ssh://git@example.com:22/team/product.git", "https://user:secret@example.com/team/product.git"]) expect(normalizeRemote(value)).toBe("example.com/team/product");
     expect(normalizeRemote("git@work-alias:team/product.git")).toBeUndefined();
+    expect(normalizeRemote("ssh://git@example.com/team/@archives/project.git")).toBe("example.com/team/@archives/project");
     expect(normalizeRemote("/local/repo")).toBeUndefined();
     expect(normalizeRemote("https://example.com/team/product?token=secret")).toBeUndefined();
     expect(gitRemotes(config() + '[remote "upstream"]\nurl=https://example.com/upstream/product.git')).toEqual(["origin=example.com/team/product", "upstream=example.com/upstream/product"]);
@@ -99,6 +100,40 @@ describe("conservative Git discovery", () => {
     expect((await discovery.scan(f.roots, { refresh: true, signal: controller.signal })).reasons).toContain("cancelled");
     f.target.folder.read = "denied";
     expect((await discovery.scan(f.roots, { refresh: true })).complete).toBe(false);
+  });
+  it.each(["directories", "entries", "time"] as const)("continues from the same iterator after a %s batch", async (reason) => {
+    const root = new FakeDirectory("workspace"), shallow = repo(root, "early");
+    const inputs = Array.from({length: 7}, (_, i) => root.file("ordinary-" + i, ""));
+    const deep = repo(root.directory("nested"), "late");
+    const roots = [{id:"w", name:root.name, handle:root.handle()}];
+    const discovery = new RepoDiscovery({ depth: 20, directories: reason === "directories" ? 2 : 100,
+      entries: reason === "entries" ? 3 : 1000, milliseconds: reason === "time" ? 3 : 8000 });
+    let tick = 1000;
+    const clock = reason === "time" ? vi.spyOn(Date, "now").mockImplementation(() => tick++) : undefined;
+    try {
+      expect((await discovery.scan(roots)).reasons).toContain(reason);
+      const listed = vi.spyOn(root, "values"), events: {names: string[]; complete: boolean}[] = [];
+      const result = await discovery.scan(roots, { continuous: true, onProgress: scan =>
+        events.push({names:scan.repos.map(repo => repo.handle.name), complete:scan.complete}) });
+      expect(result.complete).toBe(true);
+      expect(result.repos.map(repo => repo.handle.name)).toEqual([shallow.folder.name, deep.folder.name]);
+      expect(events.some(event => event.names.join() === "early")).toBe(true);
+      expect(events.every((event, i) => !event.complete && (!i || event.names.length >= events[i-1]!.names.length))).toBe(true);
+      expect(listed).toHaveBeenCalledTimes(1);
+      expect(inputs.every(file => file.reads === 0)).toBe(true);
+    } finally { clock?.mockRestore(); }
+  });
+  it("stops a continuous scan without losing a discovered checkout or reusing an unfinished result", async () => {
+    const f = fixture(), controller = new AbortController();
+    const discovery = new RepoDiscovery({depth:20, directories:2, entries:4, milliseconds:8000});
+    const stopped = await discovery.scan(f.roots, {continuous:true, signal:controller.signal,
+      onProgress: scan => { if (scan.repos.length) controller.abort(); }});
+    expect(stopped.complete).toBe(false);
+    expect(stopped.reasons).toContain("cancelled");
+    expect(stopped.repos.map(repo => repo.handle.name)).toEqual(["harness"]);
+    const finished = await discovery.scan(f.roots, {continuous:true});
+    expect(finished.complete).toBe(true);
+    expect(finished.repos).toHaveLength(2);
   });
 });
 

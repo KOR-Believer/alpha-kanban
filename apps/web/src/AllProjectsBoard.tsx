@@ -2,6 +2,7 @@ import { VirtualTicketList } from "./components/tickets/VirtualTicketList";
 import { TicketSearchInput, TicketSearchExcerpt, SearchHighlight } from "./components/tickets/TicketSearch";
 import { browserRepository } from "./browser/repository";
 import { useLinkedNavigation } from "./browser/linkedNavigation";
+import { GitRevisionPage } from "./browser/GitRevisionPage";
 import { LinkedDocumentPage } from "./browser/LinkedDocumentPage";
 import { BrowserFilesMenu } from "./browser/BrowserConnections";
 import { documentIdentity, documentRouteId } from "./appRoute";
@@ -99,7 +100,7 @@ export function AllProjectsBoard() {
   const visible = useMemo(() => filterBoardTickets(tickets, { ...filters, search }, ownerPreferences.selected), [tickets, filters.hideDone, filters.projectIds, search, ownerPreferences.selected]);
   const statuses = BOARD_STATUSES.filter((status) => !(filters.hideDone && status === "DONE"));
   const tour = useScreenTour("all", {
-    enabled: !linked.id && ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
+    enabled: !linked.id && !linked.revision && ticketsQuery.isSuccess && !detail && !pendingMove && !isWriting && !draggingKey,
     eligible: visible.length > 0,
   });
   const detailTicket = detail?.document.response.document.tickets.find((ticket) => ticket.id === detail.ticketId);
@@ -242,7 +243,7 @@ export function AllProjectsBoard() {
           </Button>
         </div>
       </header>
-      <div className={`${linked.id ? "hidden" : "grid"} min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,1fr)]`}>
+      <div className={`${linked.id || linked.revision ? "hidden" : "grid"} min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,1fr)]`}>
       <div className="ak-all-board-toolbar min-w-0">
         <div data-tour="project-filters" className="ak-all-board-project-filters ak-scroll-area flex items-center gap-1 overflow-x-auto" role="group" aria-label={t("Project filters")}>
           <Button aria-pressed={!filters.projectIds.length} onClick={() => setFilters({ ...filters, projectIds: [] })} size="xs" variant={!filters.projectIds.length ? "secondary" : "ghost"}>{t("All projects")}</Button>
@@ -325,7 +326,7 @@ export function AllProjectsBoard() {
         )}
       </main>
       </div>
-      {linked.id ? <div className="min-h-0 flex-1"><LinkedDocumentPage key={linked.id} /></div> : null}
+      {linked.revision || linked.id ? <div className="min-h-0 flex-1">{linked.revision ? <GitRevisionPage /> : <LinkedDocumentPage key={linked.id} />}</div> : null}
       {detail && detailTicket ? (
         <TicketDetailDrawer key={`${documentIdentity(detail.document.response.file)}#${detail.ticketId}`} ticket={detailTicket} searchQuery={search}
           file={currentDetail?.response.file ?? detail.document.response.file}

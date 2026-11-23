@@ -95,7 +95,7 @@ export function LinkedDocumentPage() {
       {resource ? <Button size="sm" variant="ghost" className="ml-auto" onClick={() => downloadLinkedResource(resource)}><Download />{t("Download file")}</Button> : null}
       {record ? <p className="basis-full break-all text-xs text-muted-foreground">{record.context.label} / {record.context.path}</p> : null}
     </header>
-    <div className={`ak-scroll-area min-h-0 min-w-0 flex-1 ${generic || (smoke && !raw) ? "overflow-hidden" : "overflow-auto p-5"}`}>
+    <div className={`ak-scroll-area min-h-0 min-w-0 flex-1 ${generic || (smoke && !raw) ? "overflow-hidden" : "ak-document-reader-viewport"}`}>
         {error ? <div className="grid justify-items-start gap-3"><p role="alert" className="break-words text-sm text-destructive">{t(error)}</p>
           <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => setRetry((value) => value + 1)}><RefreshCw />{t("Retry")}</Button>
             {record && !unreadable ? <Button size="sm" disabled={busy} onClick={() => {

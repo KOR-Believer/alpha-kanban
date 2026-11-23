@@ -1,5 +1,7 @@
 import { Fragment, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { SmokeCase, SmokeDocument, SmokeLog, SmokeSection } from "@alpha-kanban/shared/smokeMarkdown";
+import { parseRevisionLink } from "@alpha-kanban/shared/revisionLinks";
+import type { Components } from "react-markdown";
 import { SMOKE_RESULTS } from "@alpha-kanban/shared/smokeMarkdown";
 import { normalizeDocumentOwner } from "@alpha-kanban/shared/documents";
 import { ChevronDown, ChevronRight, Search, ListChecks, Pencil } from "lucide-react";
@@ -11,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { MarkdownContent } from "../MarkdownContent";
 import type { ReaderFile } from "../MarkdownDocumentReader";
 import { NavigationLink } from "../NavigationLink";
-import { localLinkUrlTransform, useBrowserMarkdownComponents } from "../../browser/MarkdownResources";
+import { rehypeRevisionPairs } from "../../browser/revisionPairs";
+import { BrowserMarkdownLink, localLinkUrlTransform, useBrowserMarkdownComponents } from "../../browser/MarkdownResources";
 import type { LinkContext } from "../../browser/linkMappings";
 import { resultLabel, resultVariant, type SmokeSheetTab } from "./smokeSheets";
 import "./smoke-sheets.css";
@@ -123,10 +126,12 @@ export type FragmentProps = { file?: ReaderFile; context?: LinkContext; unavaila
 export function MarkdownFragment({ content, file, context, unavailable }: FragmentProps & { content: string }) {
   const { t } = useTranslation();
   const resources = useBrowserMarkdownComponents(file, context);
-  const components = useMemo(() => unavailable ? { ...resources, a: (props: { href?: string; children?: ReactNode }) => /^(https?:|mailto:)/i.test(props.href ?? "")
+  const components = useMemo<Components>(() => unavailable ? { ...resources, a: props => parseRevisionLink(props.href ?? "")
+    ? <BrowserMarkdownLink href={props.href} webOriginal={props.node?.properties.dataRevisionWeb === "true"}>{props.children}</BrowserMarkdownLink>
+    : /^(https?:|mailto:)/i.test(props.href ?? "")
     ? <a href={props.href} target="_blank" rel="noopener noreferrer">{props.children}</a>
     : <span title={t("Open the source project to follow this snapshot link.")}>{props.children} <code className="break-all">{props.href}</code></span> } : resources, [unavailable, resources, t]);
-  return <MarkdownContent components={components} urlTransform={localLinkUrlTransform}>{content}</MarkdownContent>;
+  return <MarkdownContent rehypePlugins={[rehypeRevisionPairs]} components={components} urlTransform={localLinkUrlTransform}>{content}</MarkdownContent>;
 }
 const MEMO_PREVIEW_HEIGHT = 80;
 

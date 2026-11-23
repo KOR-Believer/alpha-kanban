@@ -61,7 +61,7 @@ export function tourSteps(kind: TourKind, t: TFunction): DriveStep[] {
   ];
   if (kind === "connections") return [
     step("folder-connections", "Manage access to your folders", "Reconnect a folder here when access expires. Disconnecting removes its browser connection without deleting files."),
-    step("link-connections", "Reuse and adjust local links", "Each connection maps an old path to a local folder for its source project. Change the target or remove a mapping here without editing Markdown."),
+    step("link-connections", "Reuse and adjust local links", "See which local folders open old paths and Git citations. You can remove a saved connection here."),
     step("folder-recovery", "Review an interrupted save", "If a document save could not be verified, inspect its recovery record before continuing. Restoration is a separate action you confirm.")
   ];
   if (kind === "skill") return [

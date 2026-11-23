@@ -10,6 +10,7 @@ import { parseSettings } from "./document-settings.mjs";
 import { checkNewOwner, ownerFromPath } from "./document-owner.mjs";
 import { readDocumentMetadata } from "./document-metadata.mjs";
 import { DEFAULT_DOCUMENT_ROOT } from "./document-root.mjs";
+import { artifactDirectories, artifactOutput, isArtifactOutputPath, isDocumentAssetPath } from "./document-artifacts.mjs";
 
 const exec = promisify(execFile);
 const unused = () => ({ status: "not-needed", value: null, source: null });
@@ -161,13 +162,33 @@ async function ownerDirectory(root, owner, parent = "docs") {
   return safeTarget(root, path.join(parent, matches[0]?.name ?? owner), "directory");
 }
 
-async function nextNumber(scope) {
+function assertRecordLocation(relativePath, documentRoot) {
+  if (isDocumentAssetPath(relativePath, documentRoot) || isArtifactOutputPath(relativePath)) {
+    throw new ContextError("ARTIFACT_DIRECTORY", "Create work records in their document folder. These directories hold attachments or disposable output.", { source: relativePath });
+  }
+}
+
+async function outputIgnoreStatus(context) {
+  if (context.gitStatus === "none") return "no-git";
+  requireGitContext(context);
+  try {
+    const match = await git(context.projectRoot, ["check-ignore", "--verbose", "--", ".output/"]);
+    // A private .git/info/exclude or a negated rule cannot protect teammates' checkouts.
+    return /^\.gitignore:\d+:(?!!)/.test(match) ? "ignored" : "rule-needed";
+  } catch (error) {
+    if (error.code === 1) return "rule-needed";
+    throw new ContextError("IGNORE_CHECK_FAILED", "Git could not verify whether .output/ is ignored.", { source: context.projectRoot });
+  }
+}
+
+async function nextNumber(scope, projectRoot, documentRoot) {
   let maximum = 0;
   let visited = 0;
   async function scan(dir, depth) {
     if (depth > 64) throw new ContextError("NUMBER_SCAN_LIMIT", "Cannot determine the next number from an incomplete directory scan.", { source: dir });
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const target = path.join(dir, entry.name);
+      if (entry.isDirectory() && isDocumentAssetPath(relative(projectRoot, target), documentRoot)) continue;
       if (++visited > 20000) throw new ContextError("NUMBER_SCAN_LIMIT", "Cannot determine the next number from an incomplete directory scan.", { source: dir });
       // Each nested @ directory starts its own numbering scope, including malformed names.
       if (entry.isDirectory() && entry.name.startsWith("@")) continue;
@@ -192,8 +213,8 @@ async function nextNumber(scope) {
 export async function resolveDocumentContext({ operation = "new", cwd = process.cwd(), target, baseDir, home = os.homedir(), withId } = {}) {
   const result = { ok: false, operation, context: null, policy: unused(), documentRoot: unused(), user: unused(), document: null, numbering: null, diagnostics: [] };
   try {
-    if (!["new", "edit", "actor", "root", "check-new"].includes(operation)) throw new ContextError("INVALID_REQUEST", "Unknown operation.");
-    if (["edit", "check-new"].includes(operation) && !target) throw new ContextError("INVALID_REQUEST", "This operation requires --target.");
+    if (!["new", "edit", "artifacts", "actor", "root", "check-new"].includes(operation)) throw new ContextError("INVALID_REQUEST", "Unknown operation.");
+    if (["edit", "artifacts", "check-new"].includes(operation) && !target) throw new ContextError("INVALID_REQUEST", "This operation requires --target.");
     if (["actor", "root"].includes(operation) && target) throw new ContextError("INVALID_REQUEST", "This operation does not accept a document target.");
     if (withId !== undefined && (withId !== true || operation !== "new")) throw new ContextError("INVALID_REQUEST", "New documents always receive an ID; withId: true is accepted only for legacy new calls.");
     const context = result.context = await projectContext(cwd);
@@ -235,11 +256,24 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
       await actor();
     } else if (operation === "root") {
       // Pure settings lookup, shared by native operation planning and guards.
+    } else if (operation === "artifacts") {
+      const file = await safeTarget(context.projectRoot, target, "file");
+      const source = relative(context.projectRoot, file);
+      const directories = artifactDirectories(source, documentRoot);
+      const metadata = readDocumentMetadata(await readText(file));
+      const paths = { ...directories, output: artifactOutput(directories.slug, metadata.documentId.value) };
+      for (const dir of [paths.fixtures, paths.references, paths.runEvidence, paths.output]) {
+        if (dir) await safeTarget(context.projectRoot, dir, "directory");
+      }
+      result.document = { relativePath: source, documentId: metadata.documentId.value, documentIdStatus: metadata.documentId.status };
+      result.outputIgnore = await outputIgnoreStatus(context);
+      result.artifacts = paths;
     } else if (operation === "edit" || operation === "check-new") {
       const file = await safeTarget(context.projectRoot, target, "file");
       const owner = ownerFromPath(relative(context.projectRoot, file), { documentRoot });
       result.document = { path: file, relativePath: relative(context.projectRoot, file), pathOwner: owner, createDirectory: false, ownerAction: "preserve", ownerHeader: null };
       if (operation === "check-new") {
+        assertRecordLocation(result.document.relativePath, documentRoot);
         if (owner.status === "invalid") throw new ContextError("INVALID_OWNER", "The target has an invalid owner folder.", { source: file });
         if (owner.value) await ownerDirectory(context.projectRoot, owner.value, path.dirname(owner.folderPath));
         const markdown = await readText(file);
@@ -263,6 +297,7 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
         result.policy = policy ?? { status: "known", value: false, source: { scope: "default", path: null } };
         destination = result.policy.value ? await ownerDirectory(context.projectRoot, await actor(), documentRoot) : await safeTarget(context.projectRoot, baseDir ?? documentRoot, "directory");
       }
+      assertRecordLocation(relative(context.projectRoot, destination), documentRoot);
       let owner = ownerFromPath(relative(context.projectRoot, destination), { kind: "directory", documentRoot });
       if (owner.status === "invalid") throw new ContextError("INVALID_OWNER", "The target has an invalid owner folder.", { source: destination });
       if (owner.value && target === undefined && result.policy.value === false) throw new ContextError("EXPLICIT_OWNER_TARGET", "Use --target only when the owner folder was explicitly requested; an existing @ folder does not enable ownerFolders.", { source: destination });
@@ -271,7 +306,7 @@ export async function resolveDocumentContext({ operation = "new", cwd = process.
         // Use the existing Unicode spelling, without renaming the folder.
         destination = path.join(scope, ...owner.descendants);
         await safeTarget(context.projectRoot, destination, "directory");
-        result.numbering = await nextNumber(scope);
+        result.numbering = await nextNumber(scope, context.projectRoot, documentRoot);
         owner = ownerFromPath(relative(context.projectRoot, destination), { kind: "directory", documentRoot });
       } else result.numbering = { mode: "existing-convention", scope: destination };
       result.document = {

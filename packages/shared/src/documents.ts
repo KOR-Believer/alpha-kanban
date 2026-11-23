@@ -1,5 +1,6 @@
 import type { DocumentPathOwner, DocumentSetSummary, DocumentSetTicketProgress, MarkdownFileSummary, MarkdownFileType, MarkdownHeading } from "./index.js";
 import { normalizeOwner, ownerFromPath } from "../../../skills/implementation-ledger/scripts/lib/document-owner.mjs";
+export { inferSlug, isDocumentAssetPath } from "../../../skills/implementation-ledger/scripts/lib/document-artifacts.mjs";
 
 /** Same identifier contract as the standalone ledger tool; never an OS/Git identity. */
 export function normalizeDocumentOwner(value: string): string | null {
@@ -81,12 +82,6 @@ export function inferMarkdownFileType(filePath: string): MarkdownFileType {
     return "inventory";
   }
   return "markdown";
-}
-
-export function inferSlug(filePath: string): string {
-  return (filePath.split(/[\\/]/).at(-1) ?? filePath).replace(/\.md$/, "")
-    .replace(/^\d+_/, "")
-    .replace(/_(smoke_run|smoke|tickets|plan|inventory)$/, "");
 }
 
 export function inferSequenceNumber(filePath: string): number | undefined {

@@ -94,6 +94,12 @@ test("isolated smoke templates and checker validate new runs without editing the
   const report=JSON.parse(execFileSync(process.execPath,[executable,...args],{cwd:f.base,encoding:"utf8"}));
   assert.equal(report.ok,true);assert.equal(report.relations.runs[0].status,"linked");assert.equal(report.files[1].counts.NOT_RUN,1);
   assert.equal(await readFile(runPath,"utf8"),run);assert.equal(await readFile(sourcePath,"utf8"),source);
+  const docs = path.join(f.base, "docs");
+  await mkdir(docs);
+  await writeFile(path.join(docs, "02_notes_smoke_run.md"), run);
+  const context = JSON.parse(execFileSync(process.execPath, [path.join(f.target, "scripts/document-context.mjs"), "artifacts", "--cwd", f.base, "--target", "docs/02_notes_smoke_run.md"], { encoding: "utf8" }));
+  assert.equal(context.artifacts.runEvidence, "docs/assets/notes/runs/02_notes_smoke_run");
+  assert.equal(context.artifacts.output, ".output/alpha-kanban/notes/" + runId);
   const invalid=run.replace("Result: NOT_RUN","Result: PASS");await writeFile(runPath,invalid);
   assert.throws(()=>execFileSync(process.execPath,[executable,...args],{cwd:f.base,encoding:"utf8",stdio:"pipe"}),error=>error.status===1);
   assert.equal(await readFile(runPath,"utf8"),invalid);

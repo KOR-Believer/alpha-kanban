@@ -2,7 +2,7 @@ import type {
   MarkdownDocumentResponse, MarkdownFileSummary, TicketDocumentResponse, TicketInstructionKind,
   TicketProgress, TicketStatus, WorkspaceSummary, WorkspacesResponse, BoardOrder, DocumentSetTicketProgress, DocumentSetsResponse,
 } from "@alpha-kanban/shared";
-import { buildDocumentSets, inferDocumentPathOwner, inferMarkdownFileType, inferSequenceNumber, inferSlug, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
+import { buildDocumentSets, inferDocumentPathOwner, inferMarkdownFileType, inferSequenceNumber, inferSlug, isDocumentAssetPath, parseMarkdownOutline, sumDocumentSetTicketProgress } from "@alpha-kanban/shared/documents";
 import { appendUserInstruction, parseTicketDocument, updateTicketStatusAndProgress } from "@alpha-kanban/shared/ticketMarkdown";
 import { readDocumentMetadata, indexDocumentIds } from "@alpha-kanban/shared/documentMetadata";
 import { parseSmokeDocument, buildSmokeIndex, type SmokeDocument } from "@alpha-kanban/shared/smokeMarkdown";
@@ -399,6 +399,8 @@ export class BrowserRepository {
           if (documentRootBranch(relative, documentRoot) || (!handle.name.startsWith(".") && !ignoredDirectories.has(handle.name))) await walk(handle, relative, depth + 1);
         } else if (/\.md$/i.test(handle.name)) {
           documentCount++;
+          // Count attachment names, but do not read fixture bodies or index them as work.
+          if (isDocumentAssetPath(relative, documentRoot)) continue;
           if (ticketsOnly && inferMarkdownFileType(relative) !== "tickets") continue;
           if (entries.length >= 5000) throw new BrowserFileError("SCAN_LIMIT", "Too many Markdown files. Connect a smaller project folder.");
           entries.push({ path: relative, handle });
@@ -498,7 +500,8 @@ export class BrowserRepository {
     if (documentRoot === undefined) documentRoot = (await this.documentRoot(await this.project(record.workspaceId))).value;
     const blob = await record.handle.getFile();
     const indexed = this.index.get(record.id);
-    if (!force && indexed && indexed.file.workspaceId === record.workspaceId && indexed.file.workspaceRelativePath === record.path && indexed.file.mtimeMs === blob.lastModified && indexed.size === blob.size) {
+    if (!force && indexed && indexed.file.workspaceId === record.workspaceId && indexed.file.workspaceRelativePath === record.path && indexed.file.mtimeMs === blob.lastModified && indexed.size === blob.size &&
+        isDocumentAssetPath(record.path, indexed.file.documentRoot) === isDocumentAssetPath(record.path, documentRoot)) {
       indexed.file = { ...indexed.file, documentRoot, pathOwner: inferDocumentPathOwner(record.path, documentRoot) };
       return indexed.file;
     }
@@ -510,7 +513,9 @@ export class BrowserRepository {
     blob ??= await record.handle.getFile();
     if (blob.size > MAX_DOCUMENT_BYTES) throw new BrowserFileError("FILE_TOO_LARGE", "Markdown files larger than 10 MiB are not supported.");
     const cached = this.snapshots.get(record.id);
-    if (!force && cached && cached.file.workspaceId === record.workspaceId && cached.file.workspaceRelativePath === record.path && cached.file.mtimeMs === blob.lastModified && cached.size === blob.size) {
+    const attachment = isDocumentAssetPath(record.path, documentRoot);
+    if (!force && cached && cached.file.workspaceId === record.workspaceId && cached.file.workspaceRelativePath === record.path && cached.file.mtimeMs === blob.lastModified && cached.size === blob.size &&
+        isDocumentAssetPath(record.path, cached.file.documentRoot) === attachment) {
       cached.file = { ...cached.file, documentRoot, pathOwner: inferDocumentPathOwner(record.path, documentRoot) };
       this.snapshots.delete(record.id); this.snapshots.set(record.id, cached);
       return cached;
@@ -519,7 +524,7 @@ export class BrowserRepository {
     const markdown = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await blob.arrayBuffer());
     const metadata = readDocumentMetadata(markdown);
     const file: MarkdownFileSummary = {
-      id: record.id, workspaceId: record.workspaceId, type: inferMarkdownFileType(record.path), filename: blob.name,
+      id: record.id, workspaceId: record.workspaceId, type: attachment ? "markdown" : inferMarkdownFileType(record.path), filename: blob.name,
       directory: record.path.split("/").slice(0, -1).join("/"), relativePath: record.path, workspaceRelativePath: record.path,
       hash: await contentHash(markdown), mtimeMs: blob.lastModified, slug: inferSlug(record.path), sequenceNumber: inferSequenceNumber(record.path),
       documentRoot, pathOwner: inferDocumentPathOwner(record.path, documentRoot),
@@ -590,7 +595,7 @@ export class BrowserRepository {
         if (path === createdPath) continue;
         if (entry.name === ".git" && (owner || depth > 0)) throw new BrowserFileError("NUMBER_SCOPE_UNAVAILABLE", "Document numbering cannot cross a repository boundary.");
         if (entry.kind === "directory") {
-          if (owner && !entry.name.startsWith("@")) { await this.assertOwnedPath(project, path); await scan(entry as FileSystemDirectoryHandle, path, depth + 1); }
+          if (owner && !entry.name.startsWith("@") && !isDocumentAssetPath(path, root.value)) { await this.assertOwnedPath(project, path); await scan(entry as FileSystemDirectoryHandle, path, depth + 1); }
         } else if (/^\d+_.*\.md$/i.test(entry.name)) {
           const value = Number(entry.name.match(/^\d+/)![0]);
           if (!Number.isSafeInteger(value) || value >= Number.MAX_SAFE_INTEGER) throw new BrowserFileError("NUMBER_OVERFLOW", "The next document number cannot be represented exactly.");
@@ -728,6 +733,7 @@ export class BrowserRepository {
     if (!relative?.length) throw new BrowserFileError("FILE_NOT_FOUND", "The document moved or was removed.");
     const path = relative.join("/");
     if (!/\.md$/i.test(path)) throw new BrowserFileError("FILE_NOT_FOUND", "The selected document is unavailable.");
+    if (isDocumentAssetPath(path, documentRoot.value)) throw new BrowserFileError("INVALID_DOCUMENT_TYPE", "Attachments are read-only.");
     if (outside(path)) throw new BrowserFileError("RECONNECT_REQUIRED", "This document belongs to a more specific folder connection.");
     for (let i = 0; i < relative.length - 1; i++) {
       const name = relative[i]!, parent = relative.slice(0, i + 1).join("/");
@@ -844,6 +850,7 @@ export class BrowserRepository {
       const record = await this.document(workspaceId, fileId);
       if (await record.handle.queryPermission({ mode: "readwrite" }) !== "granted") throw new BrowserFileError("PERMISSION_REQUIRED", "Grant write access from the folder connections menu.");
       const before = await this.snapshot(record, true);
+      if (isDocumentAssetPath(record.path, before.file.documentRoot)) throw new BrowserFileError("INVALID_DOCUMENT_TYPE", "Attachments are read-only.");
       if (before.file.hash !== guard.expectedHash || before.file.mtimeMs !== guard.expectedMtimeMs) throw new BrowserFileError("STALE_FILE", "The Markdown file changed externally. Reload it before saving.");
       const intended = await transform(before.markdown);
       if (intended === before.markdown) return before;

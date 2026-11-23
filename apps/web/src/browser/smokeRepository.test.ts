@@ -25,6 +25,34 @@ async function fixture() {
 }
 
 describe("browser smoke reading and project relationships", () => {
+  it("keeps fixture Markdown available in the explorer without loading it into boards or smoke relationships", async () => {
+    const f = await fixture();
+    const documents = await f.repository.documentCount(f.workspaceId);
+    const assetDir = "docs/@alice/assets/notes/fixtures";
+    const fixtures = f.alice.directory("assets").directory("notes").directory("fixtures");
+    const example = fixtures.file("999_sample_tickets.md", smokeSource);
+    const sampleRun = fixtures.file("99_notes_smoke_run.md", smokeFirstRun);
+    f.project.directory(".output").directory("alpha-kanban").file("04_temporary_tickets.md", ledger);
+    const files = await f.repository.files(f.workspaceId, true);
+    expect(files).toHaveLength(documents);
+    expect(await f.repository.documentCount(f.workspaceId)).toBe(documents + 2);
+    expect((await f.repository.ticketFiles(f.workspaceId)).map(file => file.filename)).toEqual([f.tickets.name]);
+    const index = await f.repository.smokeIndex(f.workspaceId);
+    expect(index.duplicates).toEqual([]);
+    expect(index.runs).toHaveLength(2);
+    expect(example.bodyReads + sampleRun.bodyReads).toBe(0);
+    const entry = await f.repository.projectFiles.entry(f.workspaceId, assetDir + "/" + example.name);
+    const opened = await f.repository.markdown(f.workspaceId, entry.id!);
+    expect(opened.file.type).toBe("markdown");
+    expect(opened.markdown).toBe(smokeSource);
+    await expect(f.repository.previewMigration(f.workspaceId, entry.id!, { assignId: true })).rejects.toMatchObject({ code: "INVALID_DOCUMENT_TYPE" });
+    expect(example.writes).toBe(0);
+    // Reconfiguring the root must reclassify the same handle even when its bytes have not changed.
+    f.project.file(".ak.config", "[documents]\nroot = contexts\n");
+    expect((await f.repository.file(f.workspaceId, entry.id!)).type).toBe("tickets");
+    f.project.file(".ak.config", "[documents]\nroot = docs\n");
+    expect((await f.repository.file(f.workspaceId, entry.id!)).type).toBe("markdown");
+  });
   it("discovers both types without changing grouping, ticket progress, ownership, full-text search or document bytes", async () => {
     const f = await fixture();
     const files = await f.repository.files(f.workspaceId);

@@ -6,6 +6,14 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./revisionLinks": {
+      "types": "./src/revisionLinks.d.mts",
+      "import": "./src/revisionLinks.mjs"
+    },
+    "./revisionHeadings": {
+      "types": "./src/revisionHeadings.d.mts",
+      "import": "./src/revisionHeadings.mjs"
+    },
     "./smokeComparison": {
       "types": "./src/smokeComparison.d.mts",
       "import": "./src/smokeComparison.mjs"

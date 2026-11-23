@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import type { OwnerFilter } from "../ownerFilters";
 import type { BoardOwnerSelection } from "../allBoardOwnerFilters";
 
-export function DocumentOwnerBadge({ file, tourAnchor }: { file?: MarkdownFileSummary; tourAnchor?: string }) {
+export function DocumentOwnerBadge({ file, tourAnchor }: { file?: Pick<MarkdownFileSummary, "relativePath" | "documentRoot">; tourAnchor?: string }) {
   const { t } = useTranslation();
   const owner = file && documentPathOwner(file).value;
   if (!owner) return null;

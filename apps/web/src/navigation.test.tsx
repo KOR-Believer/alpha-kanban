@@ -12,6 +12,7 @@ import { browserRepository, browserLinkMappings } from "./browser/repository";
 import { setLanguage } from "./i18n";
 import { FakeDirectory, MemoryStorage, testLocks } from "./browser/browserFixtures";
 import { LinkMappings } from "./browser/linkMappings";
+import { revisionRoute } from "./browser/revisionNavigation";
 import { linkedRoute } from "./browser/linkedNavigation";
 import { appActivity } from "./pwa/activity";
 
@@ -319,7 +320,7 @@ describe("application navigation history", () => {
     expect(router.history.length).toBe(1);
   });
 
-  it("preserves the source ticket draft through connected pages and confirms leaving its source", async () => {
+  it.each(["linked", "revision"])("preserves the source ticket draft through %s pages and confirms leaving its source", async kind => {
     const target = new FakeDirectory("target"); target.file("linked.md", "# Linked page\n\nRead only\n");
     const service = new LinkMappings(new MemoryStorage(), async () => [], { lock: testLocks() });
     const context = { scopeId: workspace.id, label: workspace.label, root: new FakeDirectory("source").handle(), path: "docs/source.md", documentId: response.file.id };
@@ -334,9 +335,11 @@ describe("application navigation history", () => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(appActivity.unloadRisk).toBe(true);
-    await act(async () => { await router.navigate({ href: linkedRoute(source, opened.context.documentId) }); }); await settle();
+    const preview = kind === "revision" ? revisionRoute(source, { path: "linked.md", commit: "a".repeat(40) }, false) : linkedRoute(source, opened.context.documentId);
+    await act(async () => { await router.navigate({ href: preview }); }); await settle();
     expect(document.querySelector('.ak-ticket-detail-shell')).toBeNull();
-    expect(container.querySelector('[data-linked-document]')?.textContent).toContain("Linked page");
+    if (kind === "linked") expect(container.querySelector('[data-linked-document]')?.textContent).toContain("Linked page");
+    else expect(container.querySelector('section[aria-label="Git 판본"]')).not.toBeNull();
     expect(appActivity.unloadRisk).toBe(true); expect(appActivity.prepare()).toBe(false);
     await travel("back");
     expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe("Keep this draft");

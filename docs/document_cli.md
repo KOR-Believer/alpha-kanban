@@ -7,6 +7,8 @@
 
 저장소 내 Node CLI와 독립 동봉 CLI가 공유하는 분석·적용 계약이다. 현재 worktree의 명시한 문서 보관 범위만 쓰며, 다른 repo는 사용자가 지정한 현재 위치의 참조 대상만 검사한다. 독립 설치본은 Node.js 24와 Git만 필요하며 pnpm·원본 저장소·node_modules를 요구하지 않는다. 설치본 계약은 `skills/implementation-ledger/references/document-operations.md`에 있다.
 
+정책이나 소스의 당시 판본을 인용할 때는 `revision-link --repo <대상 저장소> --file <저장소 안 경로>`를 사용한다. 출력의 `markdown`을 붙여 넣으면 된다. [줄·절 선택과 두 주소의 생성 조건](../skills/implementation-ledger/references/revision-links.md)
+
 ## 명령 순서
 
 Node.js 24와 저장소 의존성을 준비한 뒤 현재 작업할 Git worktree에서 실행한다. 이 저장소에서는 `pnpm document-cli`를 사용한다. 다른 격리 저장소를 검증할 때는 그 저장소를 현재 디렉터리로 두고 이 저장소의 `scripts/document-cli.mjs` 절대 경로를 `node`로 실행한다. `--cwd`·checkout·branch 선택 옵션은 없다.

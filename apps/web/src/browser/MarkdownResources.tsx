@@ -1,6 +1,9 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
+import { parseRevisionLink } from "@alpha-kanban/shared/revisionLinks";
+import { NavigationLink } from "../components/NavigationLink";
+import { relativeRevisionTarget, revisionRoute, RevisionFileContext } from "./revisionNavigation";
 import { ExternalLink, Image } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Button } from "../components/ui/button";
@@ -23,7 +26,7 @@ export function isLocalResource(source: string): boolean {
 
 // Only anchors handled by BrowserMarkdownLink may retain local file schemes.
 // Images keep react-markdown's default policy and their separate consent flow.
-export const localLinkUrlTransform: UrlTransform = (url, key, node) => key === "href" && node.tagName === "a" && /^(?:file:|[a-z]:[\\/])/i.test(url) ? url : defaultUrlTransform(url);
+export const localLinkUrlTransform: UrlTransform = (url, key, node) => key === "href" && node.tagName === "a" && (/^(?:file:|[a-z]:[\\/])/i.test(url) || (/^web\+akgit:/i.test(url) && parseRevisionLink(url))) ? url : defaultUrlTransform(url);
 
 export function useBrowserMarkdownComponents(file?: FileReference, context?: LinkContext): Components {
   const fileId = file?.id; const workspaceId = file?.workspaceId;
@@ -32,7 +35,7 @@ export function useBrowserMarkdownComponents(file?: FileReference, context?: Lin
   return useMemo(() => {
     const reference = fileId && workspaceId ? { id: fileId, workspaceId } : undefined;
     return {
-      a: ({ href, children }) => <BrowserMarkdownLink href={href} file={reference} context={context}>{children}</BrowserMarkdownLink>,
+      a: ({ href, children, node }) => <BrowserMarkdownLink href={href} webOriginal={node?.properties.dataRevisionWeb === "true"} file={reference} context={context}>{children}</BrowserMarkdownLink>,
       img: ({ src, alt }) => <BrowserMarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} file={reference} context={context} />,
     };
   }, [fileId, workspaceId, context]);
@@ -50,12 +53,15 @@ export function BrowserMarkdownImage({ src, alt, file, context }: { src?: string
   const [localUrl, setLocalUrl] = useState<string>();
   const [error, setError] = useState("");
   const external = isExternalImage(src ?? "");
+  const revision = useContext(RevisionFileContext);
   useEffect(() => {
     let active = true;
     let url: string | undefined;
     setLocalUrl(undefined); setAllowedSource(undefined); setError("");
-    if (!external && src && (file || context) && isLocalResource(src)) {
-      const resource = context ? Promise.resolve().then(() => {
+    const controller = new AbortController();
+    if (!external && src && (revision || file || context) && isLocalResource(src)) {
+      const child = revision && relativeRevisionTarget(revision.target, src);
+      const resource = revision ? child ? revision.read(child.path, controller.signal).then(file => ({ file })) : Promise.reject(new Error("Invalid image path")) : context ? Promise.resolve().then(() => {
         const path = normalizeLink(src, context.path);
         if (path.absolute || path.path.startsWith("./../")) throw new Error("Outside image folder");
         return readLinkedFile(context.root, path.path.slice(2));
@@ -66,8 +72,8 @@ export function BrowserMarkdownImage({ src, alt, file, context }: { src?: string
         url = URL.createObjectURL(resource.file); setLocalUrl(url);
       }).catch(() => { if (active) setError("The local image is unavailable. Check the folder connection."); });
     }
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [src, file?.id, file?.workspaceId, context, external]);
+    return () => { active = false; controller.abort(); if (url) URL.revokeObjectURL(url); };
+  }, [src, file?.id, file?.workspaceId, context, external, revision]);
   if (localUrl || (external && allowedSource === src)) return <img src={localUrl ?? src} alt={alt ?? ""} referrerPolicy="no-referrer" loading="lazy" />;
   return <span className="inline-flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
     <Image aria-hidden="true" className="size-4" /><span>{alt}</span>
@@ -75,11 +81,12 @@ export function BrowserMarkdownImage({ src, alt, file, context }: { src?: string
   </span>;
 }
 
-export function BrowserMarkdownLink({ href = "", children, file, context }: { href?: string; children?: ReactNode; file?: FileReference; context?: LinkContext }) {
+export function BrowserMarkdownLink({ href = "", children, file, context, webOriginal = false }: { webOriginal?: boolean; href?: string; children?: ReactNode; file?: FileReference; context?: LinkContext }) {
   const { t } = useTranslation();
   const revealFolder = useContext(RevealProjectFolder);
   const navigate = useNavigate();
   const navigation = useLinkedNavigation();
+  const revision = useContext(RevisionFileContext);
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState<{ context: LinkContext; attempt: LinkAttempt }>();
   const pending = useRef(false);
@@ -96,19 +103,33 @@ export function BrowserMarkdownLink({ href = "", children, file, context }: { hr
   }
   useEffect(() => {
     let current = true; setPrepared(undefined);
-    if (file && isLocalResource(href) && !href.startsWith("#")) {
+    if (!revision && file && isLocalResource(href) && !href.startsWith("#")) {
       void browserRepository.localFileEntry(file.workspaceId, file.id, href).then(entry => {
         if (!current || entry.kind === "directory") return;
         setPrepared({ source: href, href: targetRoute(entry) });
       }).catch(() => { /* Explicit link connection handles missing/foreign paths. */ });
     }
     return () => { current = false; };
-  }, [file?.id, file?.workspaceId, href, navigation.href]);
+  }, [file?.id, file?.workspaceId, href, navigation.href, revision]);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const open = (resource: LinkedResource) => {
     setConnecting(undefined);
     void navigate({ href: linkedRoute(navigation.href, resource.context.documentId, resource.fragment, file?.id), resetScroll: false });
   };
+  if (!href) return <span>{children}</span>;
+  const pinned = parseRevisionLink(href);
+  const child = !pinned && revision ? relativeRevisionTarget(revision.target, href) : undefined;
+  const target = pinned ?? child;
+  if (target) {
+    const route = revisionRoute(navigation.href, target, pinned ? webOriginal || /^https:/i.test(href) : revision!.web, Boolean(child && revision?.current));
+    return <NavigationLink href={route} onClick={e => {
+      if (!navigation.previewing && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) navigation.rememberSource(e.currentTarget);
+    }} onNavigate={() => {
+      if (navigation.openRevision && !(child && child.path === revision?.target.path)) navigation.openRevision(route);
+      else void navigate({ href: route, resetScroll: false });
+    }}>{children}</NavigationLink>;
+  }
+  if (revision && !/^(https?:|mailto:)/i.test(href)) return <span title={t("This link is outside the cited repository.")}>{children}</span>;
   if (/^(https?:|mailto:)/i.test(href)) return <a href={href} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{children}<ExternalLink className="ml-1 inline size-3" aria-hidden="true" /></a>;
   return <span><a href={href.startsWith("#") ? href : prepared?.source === href ? prepared.href : "#"} onClick={(event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

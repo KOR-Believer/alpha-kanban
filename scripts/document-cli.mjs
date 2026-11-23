@@ -5,11 +5,12 @@ import path from "node:path";
 import { analyzeDocumentOperation, applyDocumentPlan, continueDocumentOperation, verifyDocumentOperation, listDocumentOperations } from "./lib/document-transaction.mjs";
 import { operationDirectory, lockInfo, unlockInterruptedOperation } from "./lib/document-journal.mjs";
 import { fail, worktreeContext } from "./lib/document-fs.mjs";
+import { createRevisionCitation } from "./lib/revision-citation.mjs";
 
 const commandFlags = {
   analyze: ["request"], apply: ["plan", "approve"], verify: ["id"],
   resume: ["id", "approve"], recover: ["id", "approve"],
-  list: [], "lock-info": [], unlock: ["token"], help: [],
+  list: [], "lock-info": [], unlock: ["token"], "revision-link": ["file", "repo", "rev", "remote", "lines", "heading", "label", "web-label"], help: [],
 };
 const invalid = new Set(["INVALID_ARGUMENTS", "INVALID_JSON", "INPUT_TOO_LARGE", "INVALID_REQUEST", "INVALID_PATH", "INVALID_PLAN", "INVALID_OPERATION_ID"]);
 const recovery = new Set(["OPERATION_INTERRUPTED", "RECOVERY_REQUIRED", "OPERATION_LOCKED", "UNCERTAIN_STEP", "JOURNAL_DAMAGED", "JOURNAL_BOUNDARY", "LOCK_DAMAGED", "ROLLBACK_IN_PROGRESS"]);
@@ -42,7 +43,8 @@ function argumentsFor(argv) {
     if (!commandFlags[command].includes(name) || Object.hasOwn(flags, name) || !value || value.startsWith("--")) fail("INVALID_ARGUMENTS", "Unknown, repeated or missing command argument.");
     flags[name] = value;
   }
-  if (commandFlags[command].some(name => !Object.hasOwn(flags, name))) fail("INVALID_ARGUMENTS", "Missing required command arguments.", { required: commandFlags[command] });
+  const required = command === "revision-link" ? ["file"] : commandFlags[command];
+  if (required.some(name => !Object.hasOwn(flags, name))) fail("INVALID_ARGUMENTS", "Missing required command arguments.", { required });
   return { command, flags };
 }
 
@@ -50,7 +52,8 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     const { command, flags } = argumentsFor(argv);
     let result, exitCode = 0;
-    if (command === "help") result = { schema: 1, commands: commandFlags, guide: "references/document-operations.md", runtime: "Node.js 24 and Git; bundled runtime needs no pnpm or node_modules", input: "UTF-8 JSON file or - for stdin", scope: "Current worktree only; no checkout or cwd option", exits: { success: 0, invalidInput: 2, review: 3, blocked: 4, recoveryRequired: 5 } };
+    if (command === "help") result = { schema: 1, commands: commandFlags, guide: "references/document-operations.md", citationGuide: "references/revision-links.md", runtime: "Node.js 24 and Git; bundled runtime needs no pnpm or node_modules", input: "UTF-8 JSON file or - for stdin", scope: "Document mutations use the current worktree. revision-link reads the target file repository or --repo.", exits: { success: 0, invalidInput: 2, review: 3, blocked: 4, recoveryRequired: 5 } };
+    else if (command === "revision-link") result = createRevisionCitation(flags);
     else if (command === "analyze") {
       result = await analyzeDocumentOperation(await jsonInput(flags.request));
       exitCode = result.decision === "review" ? 3 : result.decision === "blocked" ? 4 : 0;

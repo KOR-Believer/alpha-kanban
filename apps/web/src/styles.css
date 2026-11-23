@@ -379,6 +379,14 @@
     box-shadow: var(--ak-shadow-soft);
   }
 
+  .ak-document-reader-viewport { @apply overflow-auto p-5; }
+
+  @media (min-width: 960px) {
+    .ak-document-reader-viewport:has(.ak-markdown-reader) {
+      scrollbar-gutter: auto;
+    }
+  }
+
   .ak-panel {
     background: var(--ak-surface);
     border: 1px solid var(--ak-hairline);

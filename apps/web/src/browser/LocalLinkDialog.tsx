@@ -1,27 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, FolderOpen, RefreshCw, Trash2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "../i18n";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { browserLinkMappings } from "./repository";
+import { FolderIdentity, RepositoryFolderPicker, RepositoryPickerDialog, useRepositoryFilters } from "./RepositoryFolderPicker";
 import { folderPrefixes, relativeToPrefix, LocalLinkError } from "./linkPaths";
 import type { LinkAttempt, LinkContext, LinkedResource, LinkMapping, LinkTarget, LinkProposal, LinkPreview } from "./linkMappings";
-import type { RepoCandidate, RepoScan } from "./gitDiscovery";
-
-function FolderIdentity({ target }: { target: LinkTarget }) {
-  const { t } = useTranslation();
-  return <span className="grid min-w-0 gap-1 text-sm">
-    <span className="flex flex-wrap items-center gap-2 font-medium"><FolderOpen className="size-4 shrink-0" />{target.handle.name}
-      {target.repo?.kind === "worktree" ? <Badge variant="muted">{t("Worktree")}</Badge> : null}</span>
-    <span className="break-all text-xs font-normal text-muted-foreground">{target.repo ? target.label : t("Directly selected folder")}</span>
-    {target.repo ? <span className="break-all text-xs font-normal text-muted-foreground">{target.repo.remotes.length ? target.repo.remotes.join(" · ") : t("Repository identity unavailable; check the folder location.")}</span> : null}
-  </span>;
-}
+import type { RepoScan } from "./gitDiscovery";
+import { linkConnectionsQueryKey, listRevisionConnections, updateRevisionConnection, type RevisionConnection } from "./revisionConnections";
 
 export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = false }: {
   context: LinkContext; attempt: LinkAttempt; onClose: () => void; onOpen: (resource: LinkedResource) => void; manage?: boolean;
@@ -32,8 +24,7 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
   const [target, setTarget] = useState<LinkTarget>();
   const [proposals, setProposals] = useState<LinkProposal[]>([]);
   const [preview, setPreview] = useState<LinkPreview>();
-  const [search, setSearch] = useState("");
-  const [rootFilter, setRootFilter] = useState("all");
+  const filters = useRepositoryFilters();
   const [scan, setScan] = useState<RepoScan>();
   const [scanning, setScanning] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -53,9 +44,9 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
   useEffect(() => {
     const controller = new AbortController(); abort.current = controller;
     const autoController = new AbortController(); automaticAbort.current = autoController;
-    setScanning(true);
+    setScanning(true); setScan(undefined);
     const preferred = manage && attempt.mapping ? { ...context, label: attempt.mapping.label } : context;
-    void browserLinkMappings.scan({ preferred, signal: controller.signal, refresh: refresh > 0, onProgress: (value) => { if (!controller.signal.aborted) setScan(value); } }).then(async (value) => {
+    void browserLinkMappings.scan({ preferred, signal: controller.signal, refresh: refresh > 0, continuous: true, onProgress: (value) => { if (!controller.signal.aborted) setScan(value); } }).then(async (value) => {
       if (controller.signal.aborted) return;
       setScan(value); setScanning(false);
       if (!touched.current && !attempt.mapping) {
@@ -71,7 +62,14 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
     try { await fn(); } catch (failure) { if (!(failure instanceof Error && failure.name === "AbortError")) setError(browserLinkMappings.error(failure).message); }
     finally { setBusy(false); }
   };
+  const stopScan = () => {
+    touch(); abort.current?.abort();
+    if (!scanning) return;
+    setScanning(false);
+    setScan(value => ({ repos: value?.repos ?? [], visited: value?.visited ?? 0, complete: false, reasons: ["cancelled"] }));
+  };
   const choose = async (selected: LinkTarget) => {
+    stopScan();
     selectionAbort.current?.abort(); const controller = new AbortController(); selectionAbort.current = controller;
     setTarget(selected); setPreview(undefined); setPrefix(""); setProposals([]);
     const found = await browserLinkMappings.propose(attempt.location, selected, controller.signal);
@@ -89,13 +87,16 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
     for (const candidate of scan?.repos ?? []) if (await candidate.handle.isSameEntry(handle)) { known = candidate; break; }
     await choose({ handle, label: known?.label ?? handle.name, repo: known });
   });
-  const roots = [...new Map(scan?.repos.map((repo) => [repo.rootId, repo.rootName ?? repo.label.split("/")[0]!])).entries()];
-  const matches = scan?.repos.filter((repo) => (rootFilter === "all" || repo.rootId === rootFilter) && (repo.label + " " + repo.remotes.join(" ")).toLowerCase().includes(search.toLowerCase())) ?? [];
   const remaining = prefix ? relativeToPrefix(attempt.location.path, prefix) : undefined;
   const review = () => run(async () => setPreview(await browserLinkMappings.preview(context, attempt.location, prefix, target!, existing?.prefix === prefix ? existing : undefined)));
-  return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><DialogContent ref={tourContainer} className="flex max-h-[min(760px,calc(100dvh-2rem))] w-[min(680px,calc(100vw-2rem))] flex-col [&>div:first-child]:shrink-0" onEscapeKeyDown={(event) => { if (busy || tour.active) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy || tour.active) event.preventDefault(); }}>
-    <DialogHeader className="pr-12"><DialogTitle>{t(preview ? "Review link connection" : existing ? "Change link connection" : "Connect local link")}</DialogTitle><DialogDescription>{t("Choose a local repository or folder, then check which old path it replaces.")}</DialogDescription><TourButton tour={tour} labelKey="Tour this dialog" /></DialogHeader>
-    <DialogBody className="min-h-0 flex-auto overflow-y-auto overscroll-contain"><div className="grid min-w-0 gap-4 text-sm">
+  return <RepositoryPickerDialog contentRef={tourContainer} onClose={onClose} lockDismiss={busy || tour.active}
+    title={t(preview ? "Review link connection" : existing ? "Change link connection" : "Connect local link")}
+    description={t("Choose a local repository or folder, then check which old path it replaces.")}
+    headerAction={<TourButton tour={tour} labelKey="Tour this dialog" />}
+    footer={<>{preview ? <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setPreview(undefined); setError(""); }}><ArrowLeft />{t("Back")}</Button> : null}<Button variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button data-tour="link-apply" disabled={!target || !remaining || busy} onClick={() => void (preview ? run(async () => {
+      const resource = await browserLinkMappings.save(context, attempt.location, prefix, target!, preview.expected, undefined, undefined, preview);
+      onOpen(resource);
+    }) : review())}>{t(preview ? manage ? "Save link connection" : existing?.prefix === prefix ? "Replace connection and open" : "Connect and open" : "Review selected folder")}</Button></>}>
       <details className="min-w-0"><summary data-tour="link-original" className="cursor-pointer font-medium">{t("Original link path")}</summary><code className="mt-2 block break-all text-xs text-muted-foreground">{attempt.location.path}</code></details>
       {error ? <p role="alert" className="text-sm text-destructive">{t(error)}</p> : null}
       {preview ? <>
@@ -118,16 +119,10 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
             onOpen(await browserLinkMappings.retry(existing, attempt.location));
           })}>{t(manage ? "Check folder access" : "Allow access and retry")}</Button>
         </div> : null}
-        <div data-tour="link-folders" className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{t("Folder on this computer")}</h3><Button variant="outline" size="sm" disabled={busy} onClick={() => void chooseFolder()}><FolderOpen />{t("Choose folder directly")}</Button></div>
-        {browserLinkMappings.autoDiscover ? <>
-          <div className="flex min-w-0 flex-wrap gap-2"><Input className="min-w-0 flex-1" aria-label={t("Search discovered repositories")} placeholder={t("Search discovered repositories")} value={search} onChange={(event) => { touch(); setSearch(event.target.value); }} />
-            {roots.length > 1 ? <Select value={rootFilter} onValueChange={setRootFilter}><SelectTrigger size="field" className="max-w-full" aria-label={t("Connected root")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("All connected roots")}</SelectItem>{roots.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select> : null}
-            <Button variant="outline" size="icon" aria-label={t("Refresh repositories")} disabled={busy || scanning} onClick={() => { touch(); setRefresh((value) => value + 1); }}><RefreshCw /></Button></div>
-          {scanning ? <div className="flex items-center justify-between gap-2"><p role="status" className="text-xs text-muted-foreground">{t("Looking for repositories in connected folders…")}</p><Button size="xs" variant="ghost" onClick={() => { touch(); abort.current?.abort(); setScanning(false); setScan((value) => ({ repos: value?.repos ?? [], visited: value?.visited ?? 0, complete: false, reasons: ["cancelled"] })); }}>{t("Stop search")}</Button></div> : null}
-          {!scanning && scan && !scan.complete ? <p className="text-xs text-muted-foreground">{t(scan.reasons.some((reason) => ["limit", "depth"].includes(reason)) ? "Search reached its limit. Choose a result, select a folder directly, or search again." : "Some folders could not be searched. You can choose a folder directly or search again.")}</p> : null}
-          <div className="grid gap-1">{matches.slice(0, 30).map((repo) => <Button key={repo.id} variant={target?.repo?.id === repo.id ? "secondary" : "ghost"} className="h-auto justify-start whitespace-normal py-3 text-left" aria-pressed={target?.repo?.id === repo.id} disabled={busy} onClick={() => void run(() => choose({ handle: repo.handle, label: repo.label, repo }))}><span className="min-w-0 flex-1"><FolderIdentity target={{ handle: repo.handle, label: repo.label, repo }} /></span>{target?.repo?.id === repo.id ? <Check className="shrink-0" /> : null}</Button>)}</div>
-          {matches.length > 30 ? <p className="text-xs text-muted-foreground">{t("Narrow the search to see more repositories.")}</p> : !scanning && !matches.length ? <p className="text-sm text-muted-foreground">{t("No matching repositories. Choose a folder directly.")}</p> : null}
-        </> : null}
+        <RepositoryFolderPicker scan={scan} filters={filters} scanning={scanning} busy={busy} discover={browserLinkMappings.autoDiscover}
+          selectedId={target?.repo?.id} touch={touch} onRefresh={() => setRefresh(value => value + 1)}
+          onStop={stopScan}
+          onPick={() => void chooseFolder()} onSelect={repo => void run(() => choose({ handle: repo.handle, label: repo.label, repo }))} />
         {target ? <section data-tour="link-selection" className="grid min-w-0 gap-3 border-t border-border pt-4">
           <p className="break-all font-medium">{t("Selected folder: {{folder}}", { folder: target.label })}</p>
           {proposals.length > 1 ? <p>{t("Several paths exist in this folder. Choose the intended file.")}</p> : null}
@@ -135,36 +130,47 @@ export function LocalLinkDialog({ context, attempt, onClose, onOpen, manage = fa
           <div className="grid gap-1"><span className="text-xs text-muted-foreground">{t("File to open inside the selected folder")}</span><code className="break-all">{remaining ?? "—"}</code></div>
         </section> : null}
       </>}
-    </div></DialogBody>
-    <DialogFooter className="shrink-0 flex-wrap">{preview ? <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setPreview(undefined); setError(""); }}><ArrowLeft />{t("Back")}</Button> : null}<Button variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button data-tour="link-apply" disabled={!target || !remaining || busy} onClick={() => void (preview ? run(async () => {
-      const resource = await browserLinkMappings.save(context, attempt.location, prefix, target!, preview.expected, undefined, undefined, preview);
-      onOpen(resource);
-    }) : review())}>{t(preview ? manage ? "Save link connection" : existing?.prefix === prefix ? "Replace connection and open" : "Connect and open" : "Review selected folder")}</Button></DialogFooter>
-  </DialogContent></Dialog>;
+  </RepositoryPickerDialog>;
 }
 
 export function LinkConnectionManager() {
   const { t } = useTranslation();
-  const [mappings, setMappings] = useState<LinkMapping[]>([]);
+  const client = useQueryClient();
+  const paths = useQuery({ queryKey: [...linkConnectionsQueryKey, "paths"], queryFn: () => browserLinkMappings.list(), refetchOnWindowFocus: true });
+  const revisions = useQuery({ queryKey: [...linkConnectionsQueryKey, "revisions"], queryFn: listRevisionConnections, refetchOnWindowFocus: true });
   const [editing, setEditing] = useState<{ context: LinkContext; attempt: LinkAttempt }>();
   const [error, setError] = useState("");
-  const [removing, setRemoving] = useState<LinkMapping>();
+  const [removing, setRemoving] = useState<LinkMapping | RevisionConnection>();
   const [busy, setBusy] = useState(false);
-  const refresh = () => browserLinkMappings.list().then(setMappings).catch((failure) => setError(browserLinkMappings.error(failure).message));
-  useEffect(() => { void refresh(); }, []);
+  const refresh = () => client.invalidateQueries({ queryKey: linkConnectionsQueryKey });
+  async function remove() {
+    if (!removing) return;
+    setBusy(true); setError("");
+    try {
+      if ("key" in removing) await updateRevisionConnection(removing.key, removing.handle);
+      else await browserLinkMappings.remove(removing);
+    } catch (failure) { setError(browserLinkMappings.error(failure).message); }
+    finally { setRemoving(undefined); await refresh(); setBusy(false); }
+  }
   return <section data-tour="link-connections" className="grid gap-2">
     <h3 className="text-sm font-semibold">{t("Link connections")}</h3>
     {error ? <p role="alert" className="text-sm text-destructive">{t(error)}</p> : null}
-    {!mappings.length ? <p className="text-sm text-muted-foreground">{t("No saved link connections. Open a missing local link to connect its folder.")}</p> : mappings.map((mapping) => <div key={mapping.id} className="grid gap-2 border-b border-border py-2 text-sm">
+    {(paths.isError || revisions.isError) && <p role="alert" className="text-sm text-destructive">{t("Saved link connections could not be read. Try again before changing a connection.")}</p>}
+    {paths.isSuccess && revisions.isSuccess && !paths.isFetching && !revisions.isFetching && !paths.data.length && !revisions.data.length && <p className="text-sm text-muted-foreground">{t("No saved link connections.")}</p>}
+    {paths.data?.map((mapping) => <div key={mapping.id} className="grid gap-2 border-b border-border py-2 text-sm">
       <p className="break-all">{mapping.sourceLabel}: {mapping.prefix} → {mapping.label}</p>
       <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditing({ context: { scopeId: mapping.scopeId, label: mapping.sourceLabel, root: mapping.handle, path: "", documentId: "" }, attempt: { location: { path: mapping.example, fragment: "", absolute: !mapping.example.startsWith("./") }, mapping } })}>{t("Change link connection")}</Button><Button size="sm" variant="ghost" onClick={() => setRemoving(mapping)}>{t("Remove link connection")}</Button></div>
+    </div>)}
+    {revisions.data?.map(connection => <div key={connection.key} className="grid min-w-0 gap-2 border-b border-border py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2"><Badge variant="muted">{t("Git revision link")}</Badge>
+        <span className="break-all text-muted-foreground">{connection.projectName ?? t(connection.scope === "/all" ? "All tickets" : "Outside a project")}</span></div>
+      <p className="break-all"><code>{connection.repository}</code> → {connection.folder}</p>
+      <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => setRemoving(connection)}>{t("Remove link connection")}</Button>
     </div>)}
     {editing ? <LocalLinkDialog {...editing} manage onClose={() => { setEditing(undefined); void refresh(); }} onOpen={() => { setEditing(undefined); void refresh(); }} /> : null}
     <Dialog open={Boolean(removing)} onOpenChange={(open) => { if (!open && !busy) setRemoving(undefined); }}><DialogContent>
       <DialogHeader><DialogTitle>{t("Remove link connection")}</DialogTitle><DialogDescription>{t("Remove this saved connection? Files and Markdown links will stay unchanged.")}</DialogDescription></DialogHeader>
-      <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setRemoving(undefined)}>{t("Cancel")}</Button><Button disabled={busy} onClick={() => {
-        setBusy(true); void browserLinkMappings.remove(removing!).then(() => { setRemoving(undefined); return refresh(); }).catch((failure) => setError(browserLinkMappings.error(failure).message)).finally(() => setBusy(false));
-      }}>{t("Remove link connection")}</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setRemoving(undefined)}>{t("Cancel")}</Button><Button disabled={busy} onClick={() => void remove()}>{t("Remove link connection")}</Button></DialogFooter>
     </DialogContent></Dialog>
   </section>;
 }

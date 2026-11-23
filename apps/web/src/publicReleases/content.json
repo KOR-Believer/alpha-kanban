@@ -226,6 +226,44 @@
         }
       ],
       "guides": []
+    },
+    "2026-11-23-canary-git-revision-links": {
+      "sections": [
+        {
+          "id": "read-a-revision",
+          "title": {
+            "ko": "결정 당시의 조항 다시 읽기",
+            "en": "Revisit the clause behind a decision"
+          },
+          "body": {
+            "ko": "환불 기한이 7일이던 시점에 플랜을 작성했다면, 나중에 정책이 바뀌어도 근거 링크는 7일이라고 적힌 조항을 엽니다. **기록 당시** 옆에서 커밋과 파일 경로를 확인하세요. 저장소를 처음 연결할 때는 해당 커밋이 들어 있는 로컬 폴더를 고르면 됩니다.\n\n그 문서에서 같은 저장소의 상대 링크를 따라가거나 그림을 볼 때도 같은 커밋을 사용합니다. 당시 티켓은 보드로, 스모크와 실행 기록은 시트로 읽을 수 있습니다.",
+            "en": "If a plan cited a seven-day refund window, its link still opens the seven-day clause after the policy changes. The **Cited revision** header shows the commit and file path. If asked to connect a repository, choose a local checkout that contains that commit.\n\nRelative links and images within the same repository open at that commit too. Read historical tickets as a board and smoke cases or runs as sheets."
+          }
+        },
+        {
+          "id": "compare-working-file",
+          "title": {
+            "ko": "지금 저장된 파일과 비교하기",
+            "en": "Compare with the file on disk"
+          },
+          "body": {
+            "ko": "**현재와 비교**를 누르면 왼쪽에는 기록 당시 원문, 오른쪽에는 로컬에 저장된 파일이 나옵니다. 환불 기한을 10일로 고쳐 저장했다면 커밋하기 전에도 ‘7일 → 10일’ 변경을 확인할 수 있습니다. 이미지라면 두 판본을 나란히 봅니다. **기록 당시 보기**를 누르면 원래 읽던 판본으로 돌아갑니다.",
+            "en": "Select **Compare with current** to see the cited text on the left and the saved local file on the right. If you changed the refund window to ten days and saved it, you can see the seven-to-ten-day change before committing. Images appear side by side. Select **View cited revision** to return to the historical file."
+          }
+        },
+        {
+          "id": "create-a-citation",
+          "title": {
+            "ko": "플랜이나 인벤토리에 근거 남기기",
+            "en": "Cite a revision in a plan or inventory"
+          },
+          "body": {
+            "ko": "스킬을 업데이트한 뒤 AI 도구에 “환불 정책의 기한 조항을 지금 커밋 기준으로 플랜에 링크해 줘”라고 요청하세요. 스킬의 `revision-link` 명령이 커밋과 위치를 확인해 Markdown 링크를 만듭니다. GitHub나 GitLab의 웹 원문도 만들 수 있으면 두 주소를 문서에 함께 적습니다. 칸반에서는 근거 링크 하나로 읽고, 필요할 때 **웹 원문**을 열 수 있습니다.",
+            "en": "After updating the skill, ask your AI tool to cite the refund deadline in your plan at the current commit. The skill’s `revision-link` command verifies the commit and location and generates the Markdown. When a GitHub or GitLab permalink is available, the document includes both addresses. In Kanban they appear as one citation with a **Web original** link in the reader."
+          }
+        }
+      ],
+      "guides": ["local-links"]
     }
   }
 }

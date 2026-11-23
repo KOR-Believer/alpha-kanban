@@ -17,3 +17,4 @@ coverage/
 .alpha-kanban/
 .playwright-cli/
 output/
+/.output/

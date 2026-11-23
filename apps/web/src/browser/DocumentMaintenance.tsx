@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileCog, Loader2 } from "lucide-react";
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
+import { isDocumentAssetPath } from "@alpha-kanban/shared/documents";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { useTranslation } from "../i18n";
@@ -12,6 +13,7 @@ import { TourButton, useScreenTour } from "../onboarding/ScreenTour";
 import { CodeDiff } from "../components/CodeDiff";
 
 export function DocumentMaintenance({ file }: { file: MarkdownFileSummary }) {
+  if (isDocumentAssetPath(file.workspaceRelativePath, file.documentRoot)) return null;
   return <DocumentMaintenanceForFile key={`${file.workspaceId}:${file.id}`} file={file} />;
 }
 

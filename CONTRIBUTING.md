@@ -37,7 +37,7 @@ The first command checks channel selection and deployment guards. The second cap
 
 Successful channel checks remove their two temporary checkouts after saving reports and logs. Successful PWA smoke checks remove their generated app builds; the entry-route smoke also removes its closed test profile. Captures, reports and fixtures remain. Failed runs retain build artifacts for diagnosis. Set `AK_KEEP_SMOKE_ARTIFACTS=1` to retain these temporary directories explicitly; the PWA suite's existing `PWA_KEEP_PROFILE=1` separately controls its profile. Externally supplied `PWA_SMOKE_BUILD_DIR` builds are never removed.
 
-For manual smoke work, keep evidence separate from disposable builds and browser profiles. Remove owned scratch directories after closing their server/browser; retain only necessary failure reproductions and pending handoff ZIPs. Do not delete active profiles, connected fixtures, release archives or user data. Review old failed runs periodically instead of retaining every build indefinitely.
+For manual smoke work tracked by a Ledger record, use `node skills/implementation-ledger/scripts/document-context.mjs artifacts --target <record.md>` for the [fixture, evidence and scratch paths](skills/implementation-ledger/references/document-artifacts.md). Keep the committed recipe and any irreplaceable observations with the record. Once its consumers have closed and a pending handoff is safely delivered or stored, the run's entire scratch directory can be removed. For the existing standalone test kits under `output/`, retain failed-run evidence and handoff ZIPs until reviewed; their legacy directories mix evidence and scratch. Do not remove active profiles, connected fixtures, release archives or user data.
 
 ## Validate changes
 

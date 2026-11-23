@@ -11,12 +11,13 @@ import type { DocumentSetSummary, MarkdownDocumentResponse, MarkdownFileSummary,
 import { t, useTranslation } from "../i18n";
 import { Badge } from "./ui/badge";
 import { localLinkUrlTransform, useBrowserMarkdownComponents } from "../browser/MarkdownResources";
+import { rehypeRevisionPairs } from "../browser/revisionPairs";
 import type { LinkContext } from "../browser/linkMappings";
 
 const MARKDOWN_HEADING_HIGHLIGHT_CLASS = "ak-markdown-heading-highlight";
 export type ReaderFile = Pick<MarkdownFileSummary, "id" | "workspaceId" | "type" | "filename" | "slug" | "sequenceNumber" | "workspaceRelativePath" | "relativePath">;
 
-export function MarkdownDocumentReader({ document, documentSet, file, onFileSelect, fileHref, linkContext, bodyRef, titleRef, headingPrefix, searchQuery = "", fragment = "" }: {
+export function MarkdownDocumentReader({ document, documentSet, file, onFileSelect, fileHref, linkContext, bodyRef, titleRef, headingPrefix, revisionHeadingIds, searchQuery = "", fragment = "" }: {
   document: Pick<MarkdownDocumentResponse, "markdown" | "outline">;
   documentSet?: DocumentSetSummary;
   file: ReaderFile;
@@ -26,11 +27,12 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
   bodyRef?: RefObject<HTMLDivElement | null>;
   titleRef?: RefObject<HTMLHeadingElement | null>;
   headingPrefix?: string;
+  revisionHeadingIds?: Record<number, string>;
   searchQuery?: string;
   fragment?: string;
 }) {
   const { t } = useTranslation();
-  const headingIdsByLine = useMemo(() => createHeadingIdsByLine(document.outline, headingPrefix), [document.outline, headingPrefix]);
+  const headingIdsByLine = useMemo(() => revisionHeadingIds ?? createHeadingIdsByLine(document.outline, headingPrefix), [document.outline, headingPrefix, revisionHeadingIds]);
   const presentation = useMemo(() => documentPresentation(document.markdown), [document.markdown]);
   const ownBodyRef = useRef<HTMLDivElement>(null);
   const readerRef = bodyRef ?? ownBodyRef;
@@ -49,12 +51,12 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
   }, [file.id, document.markdown, searchQuery, readerRef]);
   useEffect(() => {
     if (!fragment) return;
-    const target = [...readerRef.current?.querySelectorAll<HTMLElement>("[id]") ?? []].find(element => element.id === fragment || element.id.endsWith("-" + fragment));
+    const target = [...readerRef.current?.querySelectorAll<HTMLElement>("[id]") ?? []].find(element => element.id === fragment || (!revisionHeadingIds && element.id.endsWith("-" + fragment)));
     target?.scrollIntoView({ block: "start" });
-  }, [file.id, document.markdown, fragment, readerRef]);
+  }, [file.id, document.markdown, fragment, readerRef, revisionHeadingIds]);
 
   return (
-    <div className="grid h-full min-h-0 min-w-[840px] grid-cols-[260px_minmax(0,1fr)] items-stretch gap-4 max-[960px]:h-auto max-[960px]:min-w-0 max-[960px]:grid-cols-1">
+    <div className="ak-markdown-reader grid h-full min-h-0 min-w-[840px] grid-cols-[260px_minmax(0,1fr)] items-stretch gap-4 max-[960px]:h-auto max-[960px]:min-w-0 max-[960px]:grid-cols-1">
       <aside className="ak-panel flex min-h-0 flex-col overflow-hidden max-[960px]:max-h-[40dvh]">
         <div className="shrink-0 border-b border-[var(--ak-hairline)] px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -155,7 +157,7 @@ export function MarkdownDocumentReader({ document, documentSet, file, onFileSele
           <span className="font-medium">{t("Line {{line}}", { line: match.line })} · </span><SearchHighlight text={match.excerpt} query={searchQuery} />
         </div> : null}
         <div ref={readerRef} className="ak-scroll-area min-h-0 flex-1 overflow-auto px-5 py-4">
-          <MarkdownMessage content={presentation.markdown} headingIdsByLine={headingIdsByLine} file={linkContext ? undefined : file} context={linkContext} searchLine={match?.line} />
+          <MarkdownMessage content={presentation.markdown} headingIdsByLine={headingIdsByLine} file={linkContext || revisionHeadingIds ? undefined : file} context={linkContext} searchLine={match?.line} />
         </div>
       </article>
     </div>
@@ -179,7 +181,7 @@ const MarkdownMessage = memo(function MarkdownMessage({
   const remarkPlugins = [...(headingIdsByLine ? [remarkHeadingIds(headingIdsByLine)] : []), ...(searchLine ? [remarkSearchLine(searchLine)] : [])];
 
   return (
-    <MarkdownContent remarkPlugins={remarkPlugins} urlTransform={localLinkUrlTransform} components={resources}>{content}</MarkdownContent>
+    <MarkdownContent rehypePlugins={[rehypeRevisionPairs]} remarkPlugins={remarkPlugins} urlTransform={localLinkUrlTransform} components={resources}>{content}</MarkdownContent>
   );
 });
 

@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useBrowserMarkdownComponents, localLinkUrlTransform } from "./MarkdownResources";
 import { LinkConnectionManager } from "./LocalLinkDialog";
-import { browserLinkMappings } from "./repository";
+import { browserLinkMappings, browserRepository } from "./repository";
 import { LinkMappings, type LinkContext } from "./linkMappings";
 import { FakeDirectory, MemoryStorage, testLocks } from "./browserFixtures";
 import { setLanguage, t, useTranslation } from "../i18n";
@@ -38,6 +39,13 @@ describe("local link connection UI", () => {
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => undefined);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  async function renderManager() {
+    for (const method of ["entries", "get", "set", "delete"] as const) vi.spyOn(browserRepository.storage, method).mockImplementation(storage[method].bind(storage) as never);
+    vi.stubGlobal("navigator", { ...navigator, locks: { request: testLocks() } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0, networkMode: "always" } } });
+    await act(async () => root.render(<QueryClientProvider client={client}><LinkConnectionManager /></QueryClientProvider>));
+    await ready(() => client.isFetching() === 0 && Boolean(document.querySelector('[data-tour="link-connections"] button')));
+  }
   async function render(href = "file:///old/repo/report.md#section", initial = "/w/source?doc=d_source", dirty = false) {
     history = createMemoryHistory({ initialEntries: [initial] });
     function Page() {
@@ -223,18 +231,44 @@ describe("local link connection UI", () => {
   it("lists saved connections in folder management and confirms removal without file writes", async () => {
     const at = await service.attempt(context, "/old/repo/report.md");
     await service.save(context, at.location, "/old/repo", { handle: target.handle(), label: "local-docs" });
-    await act(async () => root.render(<LinkConnectionManager />));
+    await renderManager();
     expect(document.body.textContent).toContain("Source project: /old/repo → local-docs");
     await click("Remove link connection"); await click("Cancel"); expect(await service.list()).toHaveLength(1);
     await click("Remove link connection");
     const confirm = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((item) => item.textContent === t("Remove link connection"))!;
     await act(async () => confirm.click()); expect(await service.list()).toEqual([]);
   });
+  it("shows previously saved Git handles beside path mappings and forgets only the confirmed project binding", async () => {
+    const folder = new FakeDirectory("workspace"), demo = folder.directory("demo"), policy = demo.directory("policy");
+    const key = "git-revision:v1:%2Fw%2Fsource:github.com%2Fexample%2Fpolicy";
+    const standalone = "git-revision:v1:%2F:github.com%2Fexample%2Fpolicy";
+    await storage.set(key, policy.handle()); await storage.set(standalone, policy.handle());
+    await storage.set("project:source", { label: "evidence", parent: "demo" });
+    for (const root of [folder, demo]) await storage.set("connection:" + root.name, { id:root.name, name:root.name, handle:root.handle(), kind:"root" });
+    const at = await service.attempt(context, "/old/repo/report.md");
+    await service.save(context, at.location, "/old/repo", { handle: target.handle(), label: "local-docs" });
+    const permission = vi.spyOn(policy, "requestPermission");
+    await renderManager();
+    expect(container.textContent).not.toContain(t("No saved link connections."));
+    expect(container.textContent).toContain("Source project: /old/repo → local-docs");
+    const badge = [...container.querySelectorAll("span")].find(tag => tag.textContent === t("Git revision link") && tag.parentElement?.textContent?.includes("evidence"))!;
+    const row = badge.parentElement!.parentElement!;
+    expect(row.textContent).toContain("github.com/example/policy → demo/policy");
+    const remove = row.querySelector("button")!;
+    await act(async () => remove.click()); await click("Cancel"); expect(await storage.get(key)).toBe(policy.handle());
+    await act(async () => remove.click());
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === t("Remove link connection"))!;
+    await act(async () => confirm.click());
+    await ready(() => !container.textContent?.includes("evidence"));
+    expect(await storage.get(key)).toBeUndefined(); expect(await storage.get(standalone)).toBe(policy.handle());
+    expect(await service.list()).toHaveLength(1); expect(await storage.get("connection:demo")).toBeDefined();
+    expect(picker).not.toHaveBeenCalled(); expect(permission).not.toHaveBeenCalled();
+  });
   it("labels the mapped repository by its target folder while preserving the source project on replacement", async () => {
     target.directory(".git").file("config", '[remote "origin"]\nurl = https://example.invalid/team/product.git\n');
     const at = await service.attempt(context, "/old/repo/report.md");
     await service.save(context, at.location, "/old/repo", { handle: target.handle(), label: "workspace/renamed-product" });
-    await act(async () => root.render(<LinkConnectionManager />));
+    await renderManager();
     await click("Change link connection");
     await ready(() => Boolean(document.querySelector('[role="dialog"] button[aria-pressed]')));
     const candidate = document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-pressed]')!;

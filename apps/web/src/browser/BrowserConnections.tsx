@@ -17,6 +17,7 @@ import { appActivity } from "../pwa/activity";
 import { usePwaDraft } from "../pwa/usePwaDraft";
 import { TourButton, TourHelp, useScreenTour } from "../onboarding/ScreenTour";
 import { LinkConnectionManager } from "./LocalLinkDialog";
+import { linkConnectionsQueryKey } from "./revisionConnections";
 
 const connectionKey = ["browser-connections"];
 const recoveryKey = ["browser-recoveries"];
@@ -30,6 +31,7 @@ function useBrowserActions() {
     browserRepository.invalidateListings();
     await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     await queryClient.invalidateQueries({ queryKey: connectionKey });
+    await queryClient.invalidateQueries({ queryKey: linkConnectionsQueryKey });
     await queryClient.invalidateQueries({ queryKey: recoveryKey });
     await queryClient.invalidateQueries({ queryKey: ["browser-folder-permission"] });
     await queryClient.invalidateQueries({ queryKey: ["document-sets"] });

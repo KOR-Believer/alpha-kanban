@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDown, ChevronRight, Code, File, FileImage, FileText, Folder, Loader2, RefreshCw, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Code, File, FileImage, FileText, Folder, FolderOpen, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { MarkdownFileSummary } from "@alpha-kanban/shared";
 import { browserRepository } from "../../browser/repository";
@@ -144,7 +144,7 @@ export function FileExplorer({ projectId, enabled, expanded, onExpanded, query, 
     setRevealed(true); setFocused(entry.path);
   }
   return <div className="ak-file-explorer" data-tour="file-tree">
-    <div className="ak-explorer-scope">{t(searching ? "Project files · names, paths and Markdown contents" : "Connected project")}
+    <div className="ak-explorer-scope" aria-current={!searching && folderRequest?.path === "" ? "location" : undefined}>{t(searching ? "Project files · names, paths and Markdown contents" : "Connected project")}
       {revealed ? <Button size="xs" variant="link" onClick={() => setRevealed(false)}>{t("Back to search results")}</Button> : null}
     </div>
     {searching && (busy || bodyBusy) ? <div className="ak-explorer-state" role="status"><Loader2 className="size-3 animate-spin" />{t("Searching files · {{count}} folders", { count: result.directories })}
@@ -157,9 +157,10 @@ export function FileExplorer({ projectId, enabled, expanded, onExpanded, query, 
     <div ref={list} role={searching ? "list" : "tree"} aria-label={t("Project files")} className="ak-file-tree" aria-busy={busy} style={{ height: virtual.getTotalSize(), position: "relative" }}>
       {virtual.getVirtualItems().map(item => {
         const entry = rows[item.index]!, folder = entry.kind === "directory", open = expanded.includes(entry.path);
-        const Icon = folder ? Folder : entry.preview === "image" ? FileImage : ["text", "html"].includes(entry.preview ?? "") ? Code : entry.preview === "markdown" ? FileText : File;
+        const destination = !searching && folder && entry.path === folderRequest?.path;
+        const Icon = folder ? (destination && open ? FolderOpen : Folder) : entry.preview === "image" ? FileImage : ["text", "html"].includes(entry.preview ?? "") ? Code : entry.preview === "markdown" ? FileText : File;
         const rowProps = { "data-file-path": entry.path, role: searching ? "listitem" : "treeitem", "aria-level": searching ? undefined : entry.depth + 1,
-          "aria-expanded": folder ? open : undefined, "aria-selected": entry.id ? entry.id === selectedId : undefined,
+          "aria-current": destination ? "location" as const : undefined, "aria-expanded": folder ? open : undefined, "aria-selected": entry.id ? entry.id === selectedId : undefined,
           tabIndex: tabStop === entry.path ? 0 : -1, title: entry.path,
           onFocus: () => setFocused(entry.path), onKeyDown: (event: KeyboardEvent<HTMLElement>) => keyboard(event, item.index),
           className: "ak-file-tree-row" + (entry.id === selectedId ? " ak-row-active" : ""),

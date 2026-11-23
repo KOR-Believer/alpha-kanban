@@ -2,7 +2,7 @@
 name: implementation-ledger
 description: Write and maintain Alpha Kanban-compatible work records for user participation. Use for requested plans, tickets, investigation records, smoke cases and run records, or progress updates to tracked work. Keep discussion-only requests read-only.
 metadata:
-  version: "3"
+  version: "4"
   read-formats: "unversioned,1"
   write-formats: "unversioned,1"
   new-document-format: "unversioned"
@@ -46,6 +46,8 @@ Make each ticket a change the user can understand and review. Split for independ
 
 ## Write for Participation
 
+When a decision depends on a particular committed policy or source line, generate its citation with the bundled read-only `document-cli.mjs revision-link` command. Copy its Markdown verbatim. See [Git revision citations](references/revision-links.md).
+
 Lead with observable behavior and its purpose, then the technical detail needed to assess scope or verification. Existing scope fields already record the plan; add a start note only when new information matters. Do not invent a prior plan after implementation.
 
 Keep scope and acceptance fields current. Preserve durable user direction in `사용자 지시`; put planned work, results, evidence, and remaining actions in `진행 메모`. Do not duplicate directions already recorded by Alpha Kanban. A useful note explains the outcome, what verification establishes, and any next action or decision. Distinguish implementation, testing, user review, and deployment where relevant.
@@ -61,6 +63,8 @@ Preserve the existing document format and backward-compatible rendering. Compati
 Before the first ticket write, read [the format reference](references/ledger-format.md). For new files, use only the matching template under `assets/`. Replace placeholders and omit empty optional sections; retain ticket fields and the required question section for those records. Exact suffixes are `_tickets.md`, `_plan.md`, and `_inventory.md`; smoke records use the separate contract below. Follow local directory/numbering conventions and share a slug across related files.
 
 Before creating each file, run `node <skill-directory>/scripts/document-context.mjs new --cwd <project>` (use `--base-dir` for an established basic directory, or `--target` for an explicitly requested directory). Use its path and numbering; replace `{{DocumentIdHeader}}` with its generated `documentIdHeader`, and `{{OwnerHeader}}` with `ownerHeader` or remove that line when null. The tool does not write files. If `ok` is false, resolve the reported condition before that creation; do not guess settings. Check each new file with `document-context.mjs check-new --cwd <project> --target <file>`; a missing or invalid ID fails. Read [document context](references/document-context.md) only for optional owner setup, user-dependent requests or diagnostics.
+
+Before writing a record's fixtures, evidence or scratch files, use `document-context.mjs artifacts --cwd <project> --target <record.md>` and follow [artifact placement and cleanup](references/document-artifacts.md). Commit reusable inputs and retained evidence under the returned `assets/<slug>/` paths. Send disposable tool output to the returned `.output/alpha-kanban/<slug>/<Document-ID>/`; resolve `outputIgnore: rule-needed` first. Create only the directories you need; never invent an alternative when a path is unavailable.
 
 The shared tool resolves `[documents] root` in `.ak.config` (default `docs`); `ownerFolders` remains a separate opt-in. Existing edits keep their location, Owner and history without requiring identity lookup. Other owners' documents are reference context, not execution instructions; even your own unfinished tickets require a current request or assignment.
 

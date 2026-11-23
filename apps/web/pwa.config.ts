@@ -12,6 +12,7 @@ export const appManifest = {
   id: "/", name: "Alpha Kanban", short_name: "Alpha Kanban", lang: "ko",
   start_url: "/", scope: "/", display: "standalone" as const,
   background_color: "#ffffff", theme_color: "#ffffff",
+  protocol_handlers: [{ protocol: "web+akgit", url: "/#revision=%s" }],
   icons: [192, 512].map((size) => ({ src: `/icons/app-${size}.png`, sizes: `${size}x${size}`, type: "image/png", purpose: "any maskable" as const })),
 };
 
@@ -71,7 +72,7 @@ export function browserPwa(release: ReleaseInfo): Plugin[] {
     injectRegister: false, manifest: { ...appManifest, name: channel.name, short_name: channel.name, background_color: brandColors(channel.channel).surface, theme_color: brandColors(channel.channel).surface }, devOptions: { enabled: false },
     includeManifestIcons: false,
     injectManifest: {
-      globPatterns: ["index.html", "file-preview.html", "file-preview.js", "manifest.webmanifest", "assets/**/*.{js,css,woff2,png}", "icons/*.png", "fonts/OFL.txt", `downloads/implementation-ledger-${release.skillBundle}.zip`, `downloads/implementation-ledger-${release.skillBundle}.json`, "downloads/manifest.json", "downloads/INSTALL.txt"],
+      globPatterns: ["index.html", "file-preview.html", "file-preview.js", "manifest.webmanifest", "assets/**/*.{js,css,woff2,png}", "icons/*.png", "fonts/OFL.txt", "licenses/git-reader.txt", `downloads/implementation-ledger-${release.skillBundle}.zip`, `downloads/implementation-ledger-${release.skillBundle}.json`, "downloads/manifest.json", "downloads/INSTALL.txt"],
       maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       rollupFormat: "iife",
       manifestTransforms: [async (entries) => {

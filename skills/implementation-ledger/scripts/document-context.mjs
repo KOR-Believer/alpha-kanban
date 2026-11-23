@@ -7,6 +7,7 @@ const usage = `Read-only document context (JSON; no settings, folders or Markdow
 node <skill>/scripts/document-context.mjs new [--cwd PROJECT] [--base-dir DIRECTORY]
 node <skill>/scripts/document-context.mjs new --target DIRECTORY [--cwd PROJECT]
 node <skill>/scripts/document-context.mjs edit --target FILE [--cwd PROJECT]
+node <skill>/scripts/document-context.mjs artifacts --target FILE [--cwd PROJECT]
 node <skill>/scripts/document-context.mjs actor [--cwd PROJECT]
 node <skill>/scripts/document-context.mjs root [--cwd PROJECT]
 node <skill>/scripts/document-context.mjs check-new --target FILE [--cwd PROJECT]
@@ -16,6 +17,7 @@ new without target uses documents.root (default: docs); base-dir preserves an ex
 An explicit target bypasses the default policy and user lookup. edit always preserves metadata.
 actor is only for requests that need the current user. check-new requires a valid Document-ID and checks Owner.
 new always allocates one UUID header for one new file. Run separately for each file; never reuse it.
+artifacts returns project-relative fixture, reference, run evidence and disposable output directories for an existing document.
 --with-id is still accepted with new for older callers, but is no longer needed.
 --home DIRECTORY selects an isolated home for tests/isolated environments; normally the OS home is used.
 Exit codes: 0 success; 2 invalid request; 3 context/settings/read/validation failure. Consult diagnostics.code.
@@ -28,7 +30,7 @@ try {
   if (values.help) process.stdout.write(usage);
   else {
     const operation = positionals[0] ?? "new";
-    if (positionals.length > 1 || !["new", "edit", "actor", "root", "check-new"].includes(operation)
+    if (positionals.length > 1 || !["new", "edit", "artifacts", "actor", "root", "check-new"].includes(operation)
       || (values["base-dir"] !== undefined && (operation !== "new" || values.target !== undefined))
       || Object.values(values).some(value => typeof value === "string" && value.length === 0)) throw new Error("Invalid arguments. Use --help for usage.");
     const result = await resolveDocumentContext({ operation, cwd: values.cwd, target: values.target, baseDir: values["base-dir"], home: values.home, withId: values["with-id"] });

@@ -11,9 +11,12 @@ node <skill-directory>/scripts/document-context.mjs new --cwd <project>
 node <skill-directory>/scripts/document-context.mjs new --cwd <project> --base-dir notes
 node <skill-directory>/scripts/document-context.mjs new --cwd <project> --target docs/@alice/research
 node <skill-directory>/scripts/document-context.mjs check-new --cwd <project> --target docs/@alice/01_search_plan.md
+node <skill-directory>/scripts/document-context.mjs artifacts --cwd <project> --target docs/@alice/01_search_plan.md
 ```
 
 `new` returns JSON with `ok`, `context`, `policy`, `documentRoot`, `user`, `document`, `numbering` and `diagnostics`. It does not write settings, directories or documents. `document.createDirectory` describes what the requested new-document work needs; it is not evidence that anything was created. Use the returned path, `documentIdHeader` and optional `ownerHeader` with the existing templates, then validate the newly written file with `check-new`. Re-resolve before writing if settings, destination or numbering changed; never overwrite an existing file to resolve a collision.
+
+`artifacts` reads an existing record and returns its [attachment and output paths](document-artifacts.md) without reading the personal user setting. Exclude fixtures, references, run exhibits and scratch from document numbering in both basic and owner mode.
 
 Relative targets are relative to the resolved current project/worktree root. `--base-dir` explicitly preserves an established basic location; otherwise `[documents] root` selects it (default `docs`); it does not opt an existing @ folder into automatic ownership. Use `--target` only for a destination the user actually specified. Explicit targets take precedence over default policy and need no user lookup. New document creation remains an agent action, not a CLI write command.
 
